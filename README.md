@@ -22,7 +22,7 @@ Copyright Amar Djulovic 2024
 
 ## fshell instructions:
 
-* ls
+* **ls**
   * ls - list the contents of a directory
   * synopsis: `ls [options(s)] [file]`
   * description - list files and information about them, by default it goes to the current working directory and in alphabetic order.
