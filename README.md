@@ -2,7 +2,7 @@
 
 Copyright Amar Djulovic 2024
 
-## Premise:
+## Overview:
 * Simple and lightweight command line operating system
 * Custom bootloader
 * Custom command line scripting language (fshell)
