@@ -24,7 +24,7 @@
 #define WHITE        15
 #define YELLOW       14
 
-extern unsigned short *terminal_buffer; // Declaration only, no definition here
-extern unsigned int vga_index;          // Declaration only, no definition here
+extern unsigned short *terminal_buffer; // Declare
+extern unsigned int vga_index;          // Declare
 
 #endif // VGACOLORS_H

@@ -1,6 +1,6 @@
 #include "echo.h"
 #include "vgacolors.h"
-#include "keyboard.h" // Ensure your keyboard read functions are correct
+#include "keyboard.h" 
 #include <stdint.h>
 
 #define VGA_WIDTH 80
