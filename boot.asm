@@ -1,20 +1,20 @@
-; boot.asm
-bits 16                        ; We are in 16-bit mode
+bits 32
 
-extern boot_main               ; Declare the C function as external
+section .multiboot               ; Multiboot header
+    dd 0x1BADB002                ; Magic number for bootloader
+    dd 0x0                       ; Flags
+    dd -(0x1BADB002 + 0x0)       ; Checksum
 
-section .text                  ; Code section
-    global start               ; Make start function visible to linker
+section .text
+global start
+extern main                      ; Declared in C file
 
 start:
-    cli                        ; Disable interrupts
-    xor ax, ax                 ; Clear AX register
-    mov ds, ax                 ; Set DS segment register to 0
-    mov es, ax                 ; Set ES segment register to 0
-    mov ss, ax                 ; Set SS segment register to 0
-    mov sp, 0x7C00             ; Stack pointer at 0x7C00
+    cli                          ; Disable interrupts
+    mov esp, stack_space         ; Set up stack
+    call main                    ; Call C main
+    hlt                          ; Halt if returned
 
-    call boot_main             ; Call the C function boot_main()
-
-hang:
-    jmp hang                   ; Infinite loop to halt execution
+section .bss
+resb 8192                        ; Reserve 8KB stack space
+stack_space:

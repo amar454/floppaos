@@ -4,26 +4,35 @@ Copyright Amar Djulovic 2024
 
 ## Overview:
 * Simple and lightweight command line operating system
-* Custom bootloader
 * Custom command line scripting language (fshell)
-* Built in ASCII art
-* Limited command line 3D capability... to be announced
-* User accounts
-* Ability to set and encrypt passwords
-* Automatic user folder encryption
+* Built in ASCII art... TBA
+* Limited command line 3D capability... TBA
+* User accounts... TBA
+* Ability to set and encrypt passwords... TBA
+* Automatic user folder encryption... TBA
 * Basic file system
-* Custom application API
+* Custom application API... TBA
   
 
 ## Usage instructions:
 
-* Requires a cross compiler, such as i386-elf-gcc
 * fshell instructions below
 
 ## fshell instructions:
 
-* **ls**
-  * ls - list the contents of a directory
-  * synopsis: `ls [options(s)] [file]`
-  * description - list files and information about them, by default it goes to the current working directory and in alphabetic order.
+* **list**
+  * synopsis: `list [options(s)] [file]`
+  * description - list files
+
+* **create**
+  * synopsis: `create [options(s)] [file]`
+  * description - create a file
+
+* **remove**
+  * synopsis: `create [options(s)] [file]`
+  * description - create a file
+
+* **help**
+  * synopsis: `help`
+  * description - show commands
 
