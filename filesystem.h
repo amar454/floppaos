@@ -4,7 +4,7 @@
 // Structure representing a file
 struct File {
     char name[50]; // Example file name
-    // Add other file attributes if necessary
+   
 };
 
 // Structure representing the file system

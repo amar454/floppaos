@@ -52,7 +52,7 @@ void read_input(char *buffer, int max_len, unsigned char color) {
         }
     }
 }
-// Function to echo a string to the terminal with a specified color
+// Function to echo a string to the terminal with vga color
 void echo(const char *str, unsigned char color) {
     while (*str) {
         put_char(*str++, color);
