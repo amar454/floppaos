@@ -1,6 +1,6 @@
 #include "echo.h"
 #include "filesystem.h"  
-#include "strutils.h"  
+#include "utils/strutils.h"  
 #include "vgacolors.h"
 #include <stdint.h>
 
@@ -37,17 +37,30 @@ void fshell(struct FileSystem *fs) {
         // Command processing logic
         if (flopstrcmp(arguments[0], "list") == 0) {
             list_files(fs, 0); // List files without color
+        } else if (flopstrcmp(arguments[0], "listc") == 0) {
+            list_files(fs, 1); // List files with color
         } else if (flopstrcmp(arguments[0], "create") == 0 && arg_count > 1) {
             create_file(fs, arguments[1]); // Create file
+        } else if (flopstrcmp(arguments[0], "mkdir") == 0 && arg_count > 1) {
+            create_directory(fs, arguments[1]); // Create directory
+        } else if (flopstrcmp(arguments[0], "write") == 0 && arg_count > 2) {
+            write_file(fs, arguments[1], arguments[2], flopstrlen(arguments[2])); // Write data to file
         } else if (flopstrcmp(arguments[0], "remove") == 0 && arg_count > 1) {
             remove_file(fs, arguments[1]); // Remove file
         } else if (flopstrcmp(arguments[0], "help") == 0) {
             // Display help information
             echo("Commands:\n", WHITE);
-            echo(" - list\n", WHITE);
-            echo(" - create <filename>\n", WHITE);
-            echo(" - remove <filename>\n", WHITE);
-            echo(" - help\n", WHITE);
+            echo(" - list                  List files without color\n", WHITE);
+            echo(" - listc                 List files with color\n", WHITE);
+            echo(" - create <filename>     Create file\n", WHITE);
+            echo(" - mkdir <dirname>       Create directory\n", WHITE);
+            echo(" - write <filename> <data>  Write data to file\n", WHITE);
+            echo(" - remove <filename>     Remove file\n", WHITE);
+            echo(" - help                  Display this help message\n", WHITE);
+            echo(" - exit                  Exit the shell\n", WHITE);
+        } else if (flopstrcmp(arguments[0], "exit") == 0) {
+            echo("Exiting shell...\n", YELLOW);
+            break; // Exit the shell loop
         } else {
             echo("Unknown command. Type 'help' for assistance.\n", RED); // Unknown command message
         }

@@ -1,57 +1,124 @@
 #include "filesystem.h"
 #include "echo.h"
-#include "strutils.h"
+#include "utils/strutils.h"
 #include "vgacolors.h"
+#include "utils/timeutils.h"
+#include "utils/fileutils.h" // Ensure this header has the definition for FileDescriptor
+#include <stdint.h>
+#include <stdio.h>
 
-// Define the maximum number of files, adjust as needed
-#define MAX_FILES 100  
+#define DISK_SIZE (1024 * 1024)  // 1 MB simulated disk size
+#define DISK_FILENAME "virtual_disk.bin"
 
-// Function to create a file
-void create_file(struct FileSystem *fs, char *filename) {
+// Initialize the filesystem
+void init_filesystem(struct FileSystem *fs) {
+    fs->file_count = 0;
+    fs->next_free_offset = 0;
+    flopstrcopy(fs->root_directory, "root");
+
+    // Initialize virtual disk
+    FileDescriptor *disk = flop_open(DISK_FILENAME, FILE_MODE_WRITE);
+    if (disk == NULL) {
+        echo("Failed to initialize virtual disk!\n", RED);
+        return;
+    }
+
+    // Allocate 1 MB space
+    flop_seek(disk, DISK_SIZE - 1);
+    flop_putc(disk, 0);
+    flop_close(disk);
+
+    echo("Filesystem initialized!\n", GREEN);
+}
+
+// Create a directory (Note: Directories are logical in this system)
+void create_directory(struct FileSystem *fs, const char *dirname) {
     if (fs->file_count < MAX_FILES) {
-        // Store the filename in the file system
-        flopstrcopy(fs->files[fs->file_count].name, filename);
-        fs->files[fs->file_count].name[sizeof(fs->files[fs->file_count].name) - 1] = '\0'; // Ensure null termination
-        fs->file_count++;
+        struct File *dir = &fs->files[fs->file_count++];
+        flopstrcopy(dir->name, dirname);
+        dir->size = 0; // Size 0 for directories
+        dir->data_offset = 0; // No data for directories
+        time_get_current(&dir->created);
+        
+        echo("Directory created successfully!\n", GREEN);
+    } else {
+        echo("Max file limit reached. Cannot create directory.\n", RED);
+    }
+}
+
+// Create a file within the filesystem
+void create_file(struct FileSystem *fs, const char *filename) {
+    if (fs->file_count < MAX_FILES) {
+        struct File *file = &fs->files[fs->file_count++];
+        flopstrcopy(file->name, filename);
+        file->size = 0; // File size initially zero
+        file->data_offset = fs->next_free_offset;
+        time_get_current(&file->created);
+
         echo("File created successfully!\n", GREEN);
     } else {
         echo("File limit reached!\n", RED);
     }
 }
 
-// Function to remove a file
-void remove_file(struct FileSystem *fs, char *filename) {
+// Write data to a file
+void write_file(struct FileSystem *fs, const char *filename, const char *data, uint32_t size) {
     for (int i = 0; i < fs->file_count; i++) {
-        if (flopstrcmp(fs->files[i].name, filename) == 0) {
-            // Shift files left
-            for (int j = i; j < fs->file_count - 1; j++) {
-                fs->files[j] = fs->files[j + 1];
+        struct File *file = &fs->files[i];
+        if (flopstrcmp(file->name, filename) == 0) {
+            file->size = size;
+
+            // Write data to virtual disk
+            FileDescriptor *disk = flop_open(DISK_FILENAME, FILE_MODE_WRITE);
+            if (disk == NULL) {
+                echo("Failed to open virtual disk for writing!\n", RED);
+                return;
             }
-            fs->file_count--;
-            echo("File removed successfully!\n", GREEN);
+            flop_seek(disk, file->data_offset);
+            flop_write(disk, data, size);
+            flop_close(disk);
+
+            // Update next free offset
+            fs->next_free_offset += size;
+
+            echo("File data written to disk.\n", GREEN);
             return;
         }
     }
     echo("File not found!\n", RED);
 }
 
-// Function to list files with optional coloring
-void list_files(struct FileSystem *fs, int colored) {
-    // Seed the random number generator
-    flopsrand(floptime());
+// Remove a file
+void remove_file(struct FileSystem *fs, const char *filename) {
+    for (int i = 0; i < fs->file_count; i++) {
+        if (flopstrcmp(fs->files[i].name, filename) == 0) {
+            // Shift files in the array
+            for (int j = i; j < fs->file_count - 1; j++) {
+                fs->files[j] = fs->files[j + 1];
+            }
+            fs->file_count--;
+            echo("File removed from filesystem.\n", GREEN);
+            return;
+        }
+    }
+    echo("File not found!\n", RED);
+}
 
+// List all files in the filesystem
+void list_files(struct FileSystem *fs, int colored) {
+    char time_buffer[20];
     for (int i = 0; i < fs->file_count; i++) {
         const char *filename = fs->files[i].name;
+        time_to_string(&fs->files[i].created, time_buffer, sizeof(time_buffer));
 
         if (colored) {
-            // Randomly assign a color for each file
-            unsigned char color = floprand() % 16; // Random color (0-15)
+            unsigned char color = floprand() % 16;
             echo(filename, color);
         } else {
             echo(filename, WHITE);
         }
-
-        // Print a newline after each filename
+        echo(" | Created: ", WHITE);
+        echo(time_buffer, WHITE);
         echo("\n", WHITE);
     }
 }
