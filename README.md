@@ -29,7 +29,7 @@ Copyright Amar Djulovic 2024
   * description - create a file
 
 * **mdkir**
-  * synopsis `mkdir [options(s)] [dirname]
+  * synopsis `mkdir [options(s)] [dirname]`
   * description - create a directory
 
 * **write** 
