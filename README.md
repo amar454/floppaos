@@ -21,12 +21,20 @@ Copyright Amar Djulovic 2024
 ## fshell instructions:
 
 * **list**
-  * synopsis: `list [options(s)] [file]`
+  * synopsis: `list [options(s)] [dir]`
   * description - list files
 
 * **create**
-  * synopsis: `create [options(s)] [file]`
+  * synopsis: `create [options(s)] [filename]`
   * description - create a file
+
+* **mdkir**
+  * synopsis `mkdir [options(s)] [dirname]
+  * description - create a directory
+
+* **write** 
+  * synopsis `write [file]`
+  * description - wrute to a file
 
 * **remove**
   * synopsis: `create [options(s)] [file]`
