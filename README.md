@@ -34,7 +34,7 @@ Copyright Amar Djulovic 2024
 
 * **write** 
   * synopsis `write [file]`
-  * description - wrute to a file
+  * description - write to a file
 
 * **remove**
   * synopsis: `create [options(s)] [file]`
