@@ -12,6 +12,7 @@ Copyright Amar Djulovic 2024
 * Automatic user folder encryption... TBA
 * Basic file system
 * Custom application API... TBA
+* Bible and Quran programs... TBA
   
 
 ## Usage instructions:
