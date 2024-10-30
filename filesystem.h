@@ -30,5 +30,5 @@ void create_file(struct FileSystem *fs, const char *filename);
 void write_file(struct FileSystem *fs, const char *filename, const char *data, uint32_t size);
 void remove_file(struct FileSystem *fs, const char *filename);
 void list_files(struct FileSystem *fs, int colored);
-
+void read_file(struct FileSystem *fs, const char *filename, char *buffer, uint32_t size);
 #endif // FILESYSTEM_H

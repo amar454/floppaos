@@ -5,6 +5,6 @@
 char key_to_char(unsigned char key);
 
 // Reads a key scan code from the keyboard
-unsigned char read_key(void);
+unsigned char read_key(void); 
 
 #endif // KEYBOARD_H

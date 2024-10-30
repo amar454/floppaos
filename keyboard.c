@@ -1,3 +1,12 @@
+/* 
+
+keyboard.c
+
+Keyboard driver using inb to convert interrupts into text on the screen.
+
+Copyright Amar Djulovic 2024
+
+*/
 #include "keyboard.h"
 #include <stdint.h>
 

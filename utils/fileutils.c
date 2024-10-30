@@ -67,3 +67,16 @@ size_t flop_write(FileDescriptor *file, const void *buffer, size_t size) {
     }
     return bytes_to_write;
 }
+
+size_t flop_read(FileDescriptor *file, void *buffer, size_t size) {
+    if (file->mode != FILE_MODE_READ) return 0;
+
+    size_t bytes_to_read = size;
+    if (file->position + size > file->size) {
+        bytes_to_read = file->size - file->position;  // Adjust to available data
+    }
+
+    flop_memcpy(buffer, &file->data[file->position], bytes_to_read); // Use flop equivalent for memcpy
+    file->position += bytes_to_read; // Move the file position forward
+    return bytes_to_read; // Return the number of bytes read
+}

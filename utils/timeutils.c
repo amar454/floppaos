@@ -53,7 +53,7 @@ void time_to_string(struct Time *time, char *buffer, size_t size) {
              time->day, time->month, time->year, time->hour, time->minute, time->second);
 
     } else {
-        flopsnprintf(buffer, size, "Invalid time");
+        flopsnprintf(buffer, size, "Invalid time"); // Throw error for weird stuff.
         echo(buffer, RED);
         echo("\n", RED);
     }

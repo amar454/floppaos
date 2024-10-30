@@ -88,6 +88,39 @@ void write_file(struct FileSystem *fs, const char *filename, const char *data, u
     echo("File not found!\n", RED);
 }
 
+// Read data from a file
+void read_file(struct FileSystem *fs, const char *filename, char *buffer, uint32_t size) {
+    for (int i = 0; i < fs->file_count; i++) {
+        struct File *file = &fs->files[i];
+        if (flopstrcmp(file->name, filename) == 0) {
+            // Read data from virtual disk
+            FileDescriptor *disk = flop_open(DISK_FILENAME, FILE_MODE_READ);
+            if (disk == NULL) {
+                echo("Failed to open virtual disk for reading!\n", RED);
+                return;
+            }
+
+            // Ensure the provided buffer is large enough
+            if (size < file->size) {
+                echo("Provided buffer is too small!\n", RED);
+                flop_close(disk);
+                return;
+            }
+
+            flop_seek(disk, file->data_offset);
+            flop_read(disk, buffer, file->size);
+            flop_close(disk);
+
+            buffer[file->size] = '\0'; // Null-terminate the buffer
+
+            echo("File contents:\n", GREEN); // Print header
+            echo(buffer, WHITE); // Print the file contents
+            echo("\n", WHITE);
+            return;
+        }
+    }
+    echo("File not found!\n", RED);
+}
 // Remove a file
 void remove_file(struct FileSystem *fs, const char *filename) {
     for (int i = 0; i < fs->file_count; i++) {
