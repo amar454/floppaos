@@ -2,6 +2,8 @@
 
 Copyright Amar Djulovic 2024
 
+<img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTL81LrvyEx79VxoCVMJpF5LpkmemGReVSYuA&amp;s" alt="Who Wins (Big floppa and Bingus Vs....) : r/PowerScaling"/>
+
 ## Overview:
 * Simple and lightweight command line operating system
 * Custom command line scripting language (fshell)
@@ -44,4 +46,5 @@ Copyright Amar Djulovic 2024
 * **help**
   * synopsis: `help`
   * description - show commands
+
 
