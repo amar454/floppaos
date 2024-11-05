@@ -1,7 +1,7 @@
 bits 32
 
 section .multiboot               ; multiboot header
-    dd 0x1BADB002                ; magic bootloader number idfk
+    dd 0x1BADB002                ; magic bootloader number 
     dd 0x0                       ; flags
     dd -(0x1BADB002 + 0x0)       ; chksum
 
