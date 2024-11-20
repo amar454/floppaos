@@ -9,6 +9,6 @@ extern unsigned short *terminal_buffer; // External declaration
 extern unsigned int vga_index; // External declaration
 
 void clear_screen(void);
-void main(void);
+int main(void);
 
 #endif // KERNEL_H
