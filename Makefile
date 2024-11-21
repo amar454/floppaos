@@ -3,6 +3,7 @@
 CP := cp
 RM := rm -rf
 MKDIR := mkdir -pv
+FIND := find
 
 BIN = kernel
 CFG = grub.cfg
@@ -26,7 +27,6 @@ bootloader: boot.asm
 kernel: kernel.c apps/echo.c fshell/fshell.c fs/flopfs/flopfs.c fs/tmpflopfs/tmpflopfs.c lib/str.c drivers/vga/vgacolors.c drivers/keyboard/keyboard.c drivers/time/floptime.c fs/tmpflopfs/fileutils.c mem/memutils.c drivers/io/io.c task/task_handler.c
 	gcc $(CFLAGS) -c kernel.c apps/echo.c fshell/fshell.c fs/flopfs/flopfs.c fs/tmpflopfs/tmpflopfs.c lib/str.c drivers/vga/vgacolors.c drivers/keyboard/keyboard.c drivers/time/floptime.c fs/tmpflopfs/fileutils.c mem/memutils.c drivers/io/io.c task/task_handler.c
 
-
 linker: linker.ld $(OBJ_FILES)
 	ld $(LD_FLAGS) -o $(BIN) $(OBJ_FILES)
 
@@ -37,8 +37,10 @@ iso: $(BIN)
 	grub-file --is-x86-multiboot $(BOOT_PATH)/$(BIN)
 	grub-mkrescue -o floppaOS-alpha.iso $(ISO_PATH)
 
-.PHONY: clean
+.PHONY: clean cleanobj
 clean:
-	$(RM) *.o  $(BIN) *.iso $(ISO_PATH)
+	$(RM) $(BIN) *.iso $(ISO_PATH)
+	$(FIND) . -name "*.o" -exec $(RM) {} \;
+
 cleanobj:
-	$(RM) *.o $(BIN)
+	$(FIND) . -name "*.o" -exec $(RM) {} \;
