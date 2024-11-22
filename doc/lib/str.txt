@@ -1,0 +1,128 @@
+str.h is a collection of functions from <string.h> with a custom floppa naming convention for each functions.
+
+As of November 2024, str.h does not support all of the functions in the standard C library file <string.h>
+For example, strcmp(...) in FloppaOS would be flopstrcmp(...)
+
+Here is a comprehensive description of every function in the file. 
+
+Functions
+----------------------------------------------------------------------------------------------
+void flopstrcopy(char *dst, const char *src, size_t len)
+  Description:
+    Copies the source string src into the destination string dst, ensuring that the destination string is null-terminated. It copies up to len - 1 characters to avoid overflow, and null-terminates the destination string.
+  Parameters:
+    dst (char*): The destination string where the content of src will be copied.
+    src (const char*): The source string to be copied.
+    len (size_t): The maximum length to copy, ensuring the destination buffer does not overflow.
+
+size_t flopstrlen(const char *str)
+  Description:
+    Returns the length of the string str, excluding the null-terminating character.
+  Parameters:
+    str (const char*): The string whose length is to be determined.
+  Returns:
+    The length of the string str.
+  
+int flopstrcmp(const char *s1, const char *s2)
+  Description:
+    Compares two strings, s1 and s2, and returns an integer indicating the result of the comparison. It returns 0 if the strings are equal, a negative value if s1 is lexicographically less than s2, and a positive value if s1 is greater than s2.
+  Parameters:
+    s1 (const char*): The first string to compare.
+    s2 (const char*): The second string to compare.
+  Returns:
+    0 if the strings are equal.
+    A negative integer if s1 is less than s2.
+    A positive integer if s1 is greater than s2.
+    
+int flopstrncmp(const char *s1, const char *s2, size_t n)
+  Description:
+    Compares the first n characters of two strings s1 and s2, and returns an integer indicating the result of the comparison.
+  Parameters:
+    s1 (const char*): The first string to compare.
+    s2 (const char*): The second string to compare.
+    n (size_t): The number of characters to compare.
+  Returns:
+    0 if the first n characters of the strings are equal.
+    A negative integer if the first n characters of s1 are less than those of s2.
+    A positive integer if the first n characters of s1 are greater than those of s2.
+    
+unsigned int floprand(void) 
+  Description:
+    Generates a pseudo-random number. The random number is generated using a linear congruential generator with a fixed seed. It returns a number in the range [0, 32767].
+  Returns:
+    A pseudo-random number.
+
+void flopsrand(unsigned int seed)
+  Description:
+    Sets the seed for the random number generator used by floprand. This function allows you to initialize the random number sequence with a specific seed value.
+  Parameters:
+    seed (unsigned int): The seed value for the random number generator.
+
+unsigned int floptime(void)
+  Description:
+    Returns a pseudo time value, incrementing each time the function is called. This is useful for environments where a time API is not available. It can be modified to return a time value based on system uptime if needed.
+  Returns:
+    A pseudo time value that increments with each call.
+
+char *flopstrtok(char *str, const char *delim)
+  Description:
+    Tokenizes a string, splitting it into tokens based on the delimiter delim. The function maintains state across multiple calls to split a string into tokens sequentially.
+  Parameters:
+    str (char*): The string to be tokenized. On subsequent calls, this should be NULL to continue from the previous position.
+    delim (const char*): The delimiters used to split the string into tokens.
+  Returns:
+    A pointer to the next token or NULL if there are no more tokens.
+  
+char *flopstrchr(const char *str, int c)
+  Description:
+  Finds the first occurrence of the character c in the string str. If the character is found, a pointer to it is returned. If not, NULL is returned.
+  Parameters:
+    str (const char*): The string to search in.
+    c (int): The character to search for (converted to a char).
+  Returns:
+    A pointer to the first occurrence of the character c in str, or NULL if not found.
+
+int flopitoa(int value, char *buffer, int width)
+  Description:
+    Converts an integer value to a string representation with optional zero-padding. The buffer is populated with the resulting string, and the conversion respects the specified width.
+  Parameters:
+    value (int): The integer value to convert.
+    buffer (char*): The buffer where the string representation of value will be stored.
+    width (int): The minimum width of the resulting string. If the string is shorter, it will be padded with zeros.
+  Returns:
+    The length of the resulting string (including the null-terminator).
+    
+int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args)
+  Description:
+    A basic implementation of vsnprintf, this function formats a string according to the specified format and stores it in buffer. It supports %d for integers and %s for strings, along with width specifiers.
+  Parameters:
+  
+    buffer (char*): The buffer to store the formatted string.
+    size (size_t): The size of the buffer.
+    format (const char*): The format string.
+    args (va_list): A va_list containing the arguments to format.
+    Returns:
+  
+  The number of characters written to buffer (excluding the null-terminator).
+
+int flopsnprintf(char *buffer, size_t size, const char *format, ...)
+  Description:
+    A wrapper around flopvsnprintf, this function formats a string using a variable list of arguments and stores the result in buffer.
+  Parameters:
+    buffer (char*): The buffer to store the formatted string.
+    size (size_t): The size of the buffer.
+    format (const char*): The format string.
+    ... (varargs): The arguments to format.
+  Returns:
+    The number of characters written to buffer (excluding the null-terminator).
+  
+Global Variables
+  static char *flopstrtok_next = NULL
+    Description:
+      This variable stores the state for the flopstrtok function, tracking the position of the next token in the string. It is used to ensure the function can continue tokenizing across multiple calls.
+
+Notes
+- The random number generator in floprand uses a fixed seed and is not cryptographically secure.
+- flopitoa pads integers with zeroes as specified by the width parameter.
+- The flopvsnprintf function supports basic formatting for integers and strings. For more complex formatting (e.g., floats), the implementation will be secured at a date TBA.
+
