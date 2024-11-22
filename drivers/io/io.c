@@ -45,3 +45,85 @@ void outw(uint16_t port, uint16_t data) {
     __asm__ volatile ("outw %0, %1" : : "a"(data), "Nd"(port));
     unlock_io();  // Unlock I/O operations
 }
+
+// Read a long word (4 bytes) from the specified port with locking
+uint32_t inl(uint16_t port) {
+    lock_io();  // Lock I/O operations
+    uint32_t data;
+    __asm__ volatile ("inl %1, %0" : "=a"(data) : "Nd"(port));
+    unlock_io();  // Unlock I/O operations
+    return data;
+}
+
+// Write a long word (4 bytes) to the specified port with locking
+void outl(uint16_t port, uint32_t data) {
+    lock_io();  // Lock I/O operations
+    __asm__ volatile ("outl %0, %1" : : "a"(data), "Nd"(port));
+    unlock_io();  // Unlock I/O operations
+}
+
+// Read a string of bytes from the specified port with locking
+void insb(uint16_t port, uint8_t *buffer, uint32_t count) {
+    lock_io();  // Lock I/O operations
+    __asm__ volatile (
+        "rep insb"
+        : "+D"(buffer), "+c"(count)
+        : "d"(port)
+        : "memory");
+    unlock_io();  // Unlock I/O operations
+}
+
+// Write a string of bytes to the specified port with locking
+void outsb(uint16_t port, const uint8_t *buffer, uint32_t count) {
+    lock_io();  // Lock I/O operations
+    __asm__ volatile (
+        "rep outsb"
+        : "+S"(buffer), "+c"(count)
+        : "d"(port)
+        : "memory");
+    unlock_io();  // Unlock I/O operations
+}
+
+// Read a string of words (2 bytes each) from the specified port with locking
+void insw(uint16_t port, uint16_t *buffer, uint32_t count) {
+    lock_io();  // Lock I/O operations
+    __asm__ volatile (
+        "rep insw"
+        : "+D"(buffer), "+c"(count)
+        : "d"(port)
+        : "memory");
+    unlock_io();  // Unlock I/O operations
+}
+
+// Write a string of words (2 bytes each) to the specified port with locking
+void outsw(uint16_t port, const uint16_t *buffer, uint32_t count) {
+    lock_io();  // Lock I/O operations
+    __asm__ volatile (
+        "rep outsw"
+        : "+S"(buffer), "+c"(count)
+        : "d"(port)
+        : "memory");
+    unlock_io();  // Unlock I/O operations
+}
+
+// Read a string of long words (4 bytes each) from the specified port with locking
+void insl(uint16_t port, uint32_t *buffer, uint32_t count) {
+    lock_io();  // Lock I/O operations
+    __asm__ volatile (
+        "rep insl"
+        : "+D"(buffer), "+c"(count)
+        : "d"(port)
+        : "memory");
+    unlock_io();  // Unlock I/O operations
+}
+
+// Write a string of long words (4 bytes each) to the specified port with locking
+void outsl(uint16_t port, const uint32_t *buffer, uint32_t count) {
+    lock_io();  // Lock I/O operations
+    __asm__ volatile (
+        "rep outsl"
+        : "+S"(buffer), "+c"(count)
+        : "d"(port)
+        : "memory");
+    unlock_io();  // Unlock I/O operations
+}
