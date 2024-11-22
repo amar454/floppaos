@@ -1,3 +1,14 @@
+/*
+Copyright 2024 Amar Djulovic <aaamargml@gmail.com>
+---------------------------------------------------------------
+io.c 
+
+I/O functions for FloppaOS, using inline assembly.
+
+Includes locking and unlocking feature for safe multithreading.
+---------------------------------------------------------------
+*/
+
 #include <stdint.h>
 #include <stdbool.h>
 
