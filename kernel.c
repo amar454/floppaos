@@ -40,7 +40,7 @@ kernel.c:
 #include "fshell/fshell.h"
 #include "drivers/keyboard/keyboard.h"
 #include "task/task_handler.h"
-#include "drivers/vga/vgacolors.h"
+#include "drivers/vga/vgahandler.h"
 void clear_screen(void) {
     int index = 0;
     while (index < 80 * 25 * 2) {

@@ -3,7 +3,7 @@
 #include "../fs/flopfs/flopfs.h"
 #include "../fs/tmpflopfs/tmpflopfs.h"
 #include "../lib/str.h"
-#include "../drivers/vga/vgacolors.h"
+#include "../drivers/vga/vgahandler.h"
 #include "command.h"  // Include the shared command header
 #include <stddef.h>
 #include <stdint.h>

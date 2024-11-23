@@ -15,7 +15,7 @@ CFLAGS = -m32 -ffreestanding -fno-stack-protector
 LD_FLAGS = -m elf_i386 -T linker.ld
 
 # Object files
-OBJ_FILES = boot.o kernel.o apps/echo.o fshell/fshell.o fs/flopfs/flopfs.o fs/tmpflopfs/tmpflopfs.o lib/str.o drivers/vga/vgacolors.o drivers/keyboard/keyboard.o drivers/time/floptime.o fs/tmpflopfs/fileutils.o mem/memutils.o drivers/io/io.o task/task_handler.o
+OBJ_FILES = boot.o kernel.o apps/echo.o fshell/fshell.o fs/flopfs/flopfs.o fs/tmpflopfs/tmpflopfs.o lib/str.o drivers/vga/vgahandler.o drivers/keyboard/keyboard.o drivers/time/floptime.o fs/tmpflopfs/fileutils.o mem/memutils.o drivers/io/io.o task/task_handler.o lib/flopmath.o
 
 .PHONY: all
 all: bootloader kernel linker iso
@@ -24,8 +24,8 @@ all: bootloader kernel linker iso
 bootloader: boot.asm
 	nasm -f elf32 boot.asm -o boot.o
 
-kernel: kernel.c apps/echo.c fshell/fshell.c fs/flopfs/flopfs.c fs/tmpflopfs/tmpflopfs.c lib/str.c drivers/vga/vgacolors.c drivers/keyboard/keyboard.c drivers/time/floptime.c fs/tmpflopfs/fileutils.c mem/memutils.c drivers/io/io.c task/task_handler.c
-	gcc $(CFLAGS) -c kernel.c apps/echo.c fshell/fshell.c fs/flopfs/flopfs.c fs/tmpflopfs/tmpflopfs.c lib/str.c drivers/vga/vgacolors.c drivers/keyboard/keyboard.c drivers/time/floptime.c fs/tmpflopfs/fileutils.c mem/memutils.c drivers/io/io.c task/task_handler.c
+kernel: kernel.c apps/echo.c fshell/fshell.c fs/flopfs/flopfs.c fs/tmpflopfs/tmpflopfs.c lib/str.c drivers/vga/vgahandler.c drivers/keyboard/keyboard.c drivers/time/floptime.c fs/tmpflopfs/fileutils.c mem/memutils.c drivers/io/io.c task/task_handler.c lib/flopmath.c
+	gcc $(CFLAGS) -c kernel.c apps/echo.c fshell/fshell.c fs/flopfs/flopfs.c fs/tmpflopfs/tmpflopfs.c lib/str.c drivers/vga/vgahandler.c drivers/keyboard/keyboard.c drivers/time/floptime.c fs/tmpflopfs/fileutils.c mem/memutils.c drivers/io/io.c task/task_handler.c lib/flopmath.c
 
 linker: linker.ld $(OBJ_FILES)
 	ld $(LD_FLAGS) -o $(BIN) $(OBJ_FILES)

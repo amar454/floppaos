@@ -1,9 +1,8 @@
 #include "echo.h"
-#include "../drivers/vga/vgacolors.h"
+#include "../drivers/vga/vgahandler.h"
 #include <stdint.h>
 
-#define VGA_WIDTH 80
-#define VGA_HEIGHT 25
+
 #define VGA_ADDRESS 0xB8000
 
 // Function to set a character in the terminal at the current vga_index

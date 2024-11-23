@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "../apps/echo.h"
-#include "../drivers/vga/vgacolors.h"
+#include "../drivers/vga/vgahandler.h"
 #define SIMULATED_DISK_SIZE 1024 * 1024 // Size of the simulated memory pool
 
 static uint8_t simulated_memory[SIMULATED_DISK_SIZE]; // Simulated memory pool

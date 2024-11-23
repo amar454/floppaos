@@ -3,7 +3,7 @@
 #include "../../lib/str.h"
 #include <stddef.h>
 #include "../../apps/echo.h"
-#include "../vga/vgacolors.h"
+#include "../vga/vgahandler.h"
 // Helper to read a byte from a CMOS register
 static unsigned char read_cmos(unsigned char reg) {
     unsigned char val;

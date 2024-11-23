@@ -1,7 +1,7 @@
 #include "tmpflopfs.h"
 #include "../../apps/echo.h"
 #include "../../lib/str.h"
-#include "../../drivers/vga/vgacolors.h"
+#include "../../drivers/vga/vgahandler.h"
 #include "../../drivers/time/floptime.h"
 #include "fileutils.h" // Ensure this header has the definition for TmpFileDescriptor
 #include <stdint.h>

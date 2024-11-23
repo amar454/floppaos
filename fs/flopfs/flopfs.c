@@ -2,7 +2,7 @@
 #include "../../apps/echo.h"
 #include "../../mem/memutils.h"
 #include "../../lib/str.h"
-#include "../../drivers/vga/vgacolors.h"
+#include "../../drivers/vga/vgahandler.h"
 #include "../../drivers/time/floptime.h"
  // Ensure this header has the definition for FileDescriptor
 #include <stdint.h>
