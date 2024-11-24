@@ -1,10 +1,18 @@
+/*
+ * keyboard.c
+ *
+ * Keyboard driver using inb to convert interrupts into text on the screen.
+ *
+ * Copyright Amar Djulovic 2024
+ */
+
 #include "keyboard.h"
 #include "../../apps/echo.h"
 #include "../../fshell/fshell.h"
 #include "../../fshell/command.h"  // Include the shared command header
-#include "../vga/vgacolors.h"
-#include <stdint.h>
+#include "../vga/vgahandler.h"
 #include "../io/io.h"
+#include <stdint.h>
 
 // Modifier key states
 static int shift_pressed = 0;
@@ -19,10 +27,10 @@ int command_ready = 0;  // Initialize the flag as 0 (no command is ready)
 char key_to_char(unsigned char key) {
     // Check for modifier keys
     switch (key) {
-        case 0x2A: case 0x36:  // Shift pressed
+        case 0x2A: case 0x36:  // Left or Right Shift pressed
             shift_pressed = 1;
             return 0;
-        case 0xAA: case 0xB6:  // Shift released
+        case 0xAA: case 0xB6:  // Left or Right Shift released
             shift_pressed = 0;
             return 0;
         case 0x1D:  // Ctrl pressed
@@ -39,11 +47,11 @@ char key_to_char(unsigned char key) {
             return 0;
     }
 
-    // Handle regular keys and combinations
-    if (key >= 0x02 && key <= 0x35) {
+    // Handle regular keys (press events only)
+    if (!(key & 0x80) && key >= 0x02 && key <= 0x39) {
         char c = 0;
         switch (key) {
-            // Number keys and symbols
+            // Numbers and symbols
             case 0x02: c = shift_pressed ? '!' : '1'; break;
             case 0x03: c = shift_pressed ? '@' : '2'; break;
             case 0x04: c = shift_pressed ? '#' : '3'; break;
@@ -54,10 +62,8 @@ char key_to_char(unsigned char key) {
             case 0x09: c = shift_pressed ? '*' : '8'; break;
             case 0x0A: c = shift_pressed ? '(' : '9'; break;
             case 0x0B: c = shift_pressed ? ')' : '0'; break;
-            case 0x0C: c = shift_pressed ? '_' : '-'; break;
-            case 0x0D: c = shift_pressed ? '+' : '='; break;
 
-            // Alphabet keys (uppercase with Shift)
+            // Alphabets
             case 0x10: c = shift_pressed ? 'Q' : 'q'; break;
             case 0x11: c = shift_pressed ? 'W' : 'w'; break;
             case 0x12: c = shift_pressed ? 'E' : 'e'; break;
@@ -85,39 +91,59 @@ char key_to_char(unsigned char key) {
             case 0x31: c = shift_pressed ? 'N' : 'n'; break;
             case 0x32: c = shift_pressed ? 'M' : 'm'; break;
 
-            // Space and symbols
-            case 0x27: c = shift_pressed ? ':' : ';'; break;
-            case 0x28: c = shift_pressed ? '"' : '\''; break;
-            case 0x29: c = shift_pressed ? '~' : '`'; break;
-            case 0x2B: c = shift_pressed ? '|' : '\\'; break;
-            case 0x33: c = shift_pressed ? '<' : ','; break;
-            case 0x34: c = shift_pressed ? '>' : '.'; break;
-            case 0x35: c = shift_pressed ? '?' : '/'; break;
+            // Symbols and space
             case 0x39: c = ' '; break;  // Space key
-
-            // Backspace and Enter
-            case 0x0E: c = '\b'; break;
-            case 0x1C: c = '\n'; break;
+            case 0x0E: c = '\b'; break; // Backspace
+            case 0x1C: c = '\n'; break; // Enter
         }
 
-        // Handle Ctrl, Alt, and combinations
-        if (ctrl_pressed || alt_pressed) {
-            // Here you can define specific shortcuts (e.g., Ctrl+C)
-            // For now, return the base character with Ctrl/Alt metadata
-            if (ctrl_pressed && alt_pressed && shift_pressed) {
-                echo("[Ctrl+Alt+Shift]", WHITE);
-            } else if (ctrl_pressed && alt_pressed) {
-                echo("[Ctrl+Alt]", WHITE);
-            } else if (ctrl_pressed) {
-                echo("[Ctrl]", WHITE);
-            } else if (alt_pressed) {
-                echo("[Alt]", WHITE);
-            }
-            return c;
-        }
-
-        return c;  // Return the character if no modifier combinations are used
+        return c;
     }
 
     return 0;  // Unsupported or non-printable key
+}
+
+
+
+// Updated function to check for a scancode without blocking
+unsigned char try_read_key(void) {
+    if (inb(0x64) & 0x1) {  // Check if the keyboard buffer is not empty
+        return inb(0x60);   // Read the scancode (handles both press and release)
+    }
+    return 0;  // Return 0 if no scancode is available
+}
+
+// Non-blocking function to get a character
+char try_get_char(void) {
+    unsigned char scancode = try_read_key();
+    if (scancode != 0) {
+        return key_to_char(scancode);
+    }
+    return 0;  // Return 0 if no character is available
+}
+
+// Updated keyboard_task
+void keyboard_task(void *arg) {
+    static int pos = 0;  // Persistent position in the command buffer
+
+    // Check for a keypress without blocking
+    char c = try_get_char();
+    if (c == 0) {
+        return;  // No keypress, yield back to the scheduler
+    }
+
+    if (c == '\b' && pos > 0) {  // Handle backspace
+        pos--;
+        vga_index--;               // Move cursor back
+        put_char(' ', BLACK);      // Clear character on screen
+        vga_index--; 
+    } else if (c == '\n') {  // Handle Enter key
+        command[pos] = '\0';  // Null-terminate the command
+        echo("\n", WHITE);
+        command_ready = 1;    // Signal that the command is ready
+        pos = 0;              // Reset the buffer position for the next command
+    } else if (c >= 32 && c <= 126 && pos < MAX_COMMAND_LENGTH - 1) {  // Handle printable characters
+        command[pos++] = c;
+        put_char(c, WHITE);   // Echo the character
+    }
 }

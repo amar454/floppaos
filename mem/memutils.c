@@ -3,73 +3,180 @@
 #include <stddef.h>
 #include "../apps/echo.h"
 #include "../drivers/vga/vgahandler.h"
+
 #define SIMULATED_DISK_SIZE 1024 * 1024 // Size of the simulated memory pool
+#define ALIGNMENT 4 // 4-byte alignment for memory blocks
+#define HEADER_SIZE sizeof(FlopMemBlockHeader)
 
-static uint8_t simulated_memory[SIMULATED_DISK_SIZE]; // Simulated memory pool
-static uint32_t next_free_offset = 0; // Next free position in the simulated memory
+// Simulated memory pool
+static uint8_t simulated_memory[SIMULATED_DISK_SIZE];
 
-// Custom flop equivalent for malloc
+// Free list structure
+typedef struct FlopMemBlockHeader {
+    size_t size;                        // Size of the block (excluding header)
+    struct FlopMemBlockHeader *next;    // Pointer to the next free block
+} FlopMemBlockHeader;
+
+// Head of the free list
+static FlopMemBlockHeader *free_list = NULL;
+
+// Align size to the nearest multiple of ALIGNMENT
+static inline size_t align_size(size_t size) {
+    return (size + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
+}
+
+// Initialize the memory allocator
+void init_memory() {
+    free_list = (FlopMemBlockHeader *)simulated_memory;
+    free_list->size = SIMULATED_DISK_SIZE - HEADER_SIZE;
+    free_list->next = NULL;
+}
+
+// Custom malloc implementation
 void *flop_malloc(size_t size) {
-    if (next_free_offset + size > SIMULATED_DISK_SIZE) {
-        return NULL; // Not enough memory
+    size = align_size(size); // Align size
+    FlopMemBlockHeader *prev = NULL;
+    FlopMemBlockHeader *current = free_list;
+
+    while (current) {
+        if (current->size >= size) {
+            if (current->size >= size + HEADER_SIZE + ALIGNMENT) {
+                // Split the block
+                FlopMemBlockHeader *new_block = (FlopMemBlockHeader *)((uint8_t *)current + HEADER_SIZE + size);
+                new_block->size = current->size - size - HEADER_SIZE;
+                new_block->next = current->next;
+
+                current->size = size;
+                current->next = NULL;
+
+                if (prev) {
+                    prev->next = new_block;
+                } else {
+                    free_list = new_block;
+                }
+            } else {
+                // Use the entire block
+                if (prev) {
+                    prev->next = current->next;
+                } else {
+                    free_list = current->next;
+                }
+            }
+            return (void *)((uint8_t *)current + HEADER_SIZE);
+        }
+        prev = current;
+        current = current->next;
     }
-    void *ptr = &simulated_memory[next_free_offset];
-    next_free_offset += size; // Move the free offset forward
-    return ptr;
+
+    echo("flop_malloc: Out of memory!\n", RED); // Error message only
+    return NULL;
 }
 
-// Custom flop equivalent for free
+// Custom free implementation
 void flop_free(void *ptr) {
-    // TBA
+    if (!ptr) {
+        echo("flop_free: NULL pointer!\n", RED); // Error message only
+        return;
+    }
+
+    FlopMemBlockHeader *block = (FlopMemBlockHeader *)((uint8_t *)ptr - HEADER_SIZE);
+    FlopMemBlockHeader *current = free_list;
+
+    // Insert the block into the free list
+    if (!free_list || block < free_list) {
+        block->next = free_list;
+        free_list = block;
+    } else {
+        while (current->next && current->next < block) {
+            current = current->next;
+        }
+        block->next = current->next;
+        current->next = block;
+    }
+
+    // Merge with next block if adjacent
+    if (block->next && (uint8_t *)block + HEADER_SIZE + block->size == (uint8_t *)block->next) {
+        block->size += HEADER_SIZE + block->next->size;
+        block->next = block->next->next;
+    }
+
+    // Merge with previous block if adjacent
+    if (current && (uint8_t *)current + HEADER_SIZE + current->size == (uint8_t *)block) {
+        current->size += HEADER_SIZE + block->size;
+        current->next = block->next;
+    }
 }
+
+// Custom memset implementation
 void *flop_memset(void *dest, int value, size_t size) {
-    uint8_t val = (uint8_t)value;  // Value to set in memory
-
+    uint8_t val = (uint8_t)value;
     asm volatile (
-        "cld\n\t"          // Clear direction flag (forward direction)
-        "rep stosb"        // Repeat storing AL into memory
-        : "+D" (dest), "+c" (size) // Outputs: Update EDI (dest) and ECX (size)
-        : "a" (val)         // Inputs: AL (value to set)
-        : "memory"          // Clobber: Memory is modified
+        "cld\n\t"
+        "rep stosb"
+        : "+D" (dest), "+c" (size)
+        : "a" (val)
+        : "memory"
     );
-
     return dest;
 }
+
+// Custom memcmp implementation
 int flop_memcmp(const void *ptr1, const void *ptr2, size_t num) {
     if (!ptr1 || !ptr2) {
-        echo("flop_memcmp: NULL pointer detected!\n", RED);
-        return -1;  // Convention: return -1 to indicate error
+        echo("flop_memcmp: NULL pointer detected!\n", RED); // Error message only
+        return -1;
     }
 
-    const uint8_t *p1 = (const uint8_t*)ptr1;
-    const uint8_t *p2 = (const uint8_t*)ptr2;
+    const uint8_t *p1 = (const uint8_t *)ptr1;
+    const uint8_t *p2 = (const uint8_t *)ptr2;
 
     for (size_t i = 0; i < num; i++) {
         if (p1[i] != p2[i]) {
-            return (p1[i] - p2[i]);  // Return the difference of the first non-matching byte
+            return (p1[i] - p2[i]);
         }
     }
-    return 0;  // Memory regions are equal
+    return 0;
 }
+
+// Custom memcpy implementation
 void *flop_memcpy(void *dest, const void *src, size_t n) {
     if (!dest || !src) {
-        echo("flop_memcpy: NULL pointer detected!\n", RED);
-        return NULL;  // Return NULL to indicate an error
+        echo("flop_memcpy: NULL pointer detected!\n", RED); // Error message only
+        return NULL;
     }
 
-    unsigned char *d = dest;
-    const unsigned char *s = src;
+    asm volatile (
+        "cld\n\t"
+        "rep movsb"
+        : "+D" (dest), "+S" (src), "+c" (n)
+        :
+        : "memory"
+    );
+    return dest;
+}
 
-    // Check for overlap (undefined behavior)
-    if ((d > s && d < s + n) || (s > d && s < d + n)) {
-        echo("flop_memcpy: Overlapping regions detected! Use memmove instead.\n", YELLOW);
-        return NULL;  // Indicate an error
+// Custom memmove implementation
+void *flop_memmove(void *dest, const void *src, size_t n) {
+    if (!dest || !src) {
+        echo("flop_memmove: NULL pointer detected!\n", RED); // Error message only
+        return NULL;
     }
 
-    while (n--) {
-        *d++ = *s++;
+    if (dest < src) {
+        return flop_memcpy(dest, src, n);
+    } else {
+        uint8_t *d = (uint8_t *)dest + n - 1;
+        const uint8_t *s = (const uint8_t *)src + n - 1;
+
+        asm volatile (
+            "std\n\t"
+            "rep movsb"
+            : "+D" (d), "+S" (s), "+c" (n)
+            :
+            : "memory"
+        );
+        asm volatile ("cld" ::: "cc");
     }
 
     return dest;
 }
-

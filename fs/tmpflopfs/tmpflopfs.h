@@ -32,5 +32,5 @@ void create_tmp_file(struct TmpFileSystem *tmp_fs, const char *filename);
 void write_tmp_file(struct TmpFileSystem *tmp_fs, const char *filename, const char *data, uint32_t size);
 void remove_tmp_file(struct TmpFileSystem *tmp_fs, const char *filename);
 void list_tmp_files(struct TmpFileSystem *tmp_fs, int colored);
-
+void read_tmp_file(struct TmpFileSystem *tmp_fs, const char *tmp_filename);
 #endif // FILESYSTEM_H

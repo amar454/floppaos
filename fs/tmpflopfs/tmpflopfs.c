@@ -7,8 +7,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "fileutils.h"
-#define TMP_DISK_SIZE (1024 * 1024)  // 1 MB simulated disk size
-#define TMP_DISK_FILENAME "virtual_disk.bin"
+#include "../../mem/memutils.h"
+#define TMP_DISK_SIZE (10 * 1024 * 1024)  // 10 MB simulated disk size
+#define TMP_DISK_FILENAME "tmpflopfs.bin"
 void tmpflopfs_strcopy(char *dest, const char *src) {
     while ((*dest++ = *src++));
 }
@@ -124,4 +125,41 @@ void list_tmp_files(struct TmpFileSystem *tmp_fs, int colored) {
         //echo(time_buffer, WHITE);
         echo("\n", WHITE);
     }
+}
+void read_tmp_file(struct TmpFileSystem *tmp_fs, const char *tmp_filename) {
+    for (int i = 0; i < tmp_fs->tmp_file_count; i++) {
+        struct TmpFile *tmp_file = &tmp_fs->tmp_files[i];
+        if (flopstrcmp(tmp_file->name, tmp_filename) == 0) {
+            // Open the virtual disk
+            TmpFileDescriptor *disk = flop_open(TMP_DISK_FILENAME, FILE_MODE_READ);
+            if (disk == NULL) {
+                echo("Failed to open virtual disk for reading!\n", RED);
+                return;
+            }
+
+            // Allocate a buffer to read the file data
+            char *buffer = (char *)flop_malloc(tmp_file->size + 1);  // +1 for null terminator
+            if (buffer == NULL) {
+                echo("Failed to allocate memory for file reading!\n", RED);
+                flop_close(disk);
+                return;
+            }
+
+            // Read the file data from the disk
+            flop_seek(disk, tmp_file->data_offset);
+            size_t bytes_read = flop_read(disk, buffer, tmp_file->size);
+            buffer[bytes_read] = '\0';  // Null-terminate the buffer
+            flop_close(disk);
+
+            // Print the file contents
+            echo("File Contents:\n", CYAN);
+            echo(buffer, WHITE);
+            echo("\n", WHITE);
+
+            // Free the allocated buffer
+            flop_free(buffer);
+            return;
+        }
+    }
+    echo("File not found!\n", RED);
 }

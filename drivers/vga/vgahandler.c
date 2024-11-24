@@ -5,11 +5,40 @@ static uint8_t *graphics_buffer = (uint8_t *)VGA_GRAPHICS_ADDRESS;
 // VGA text buffer
 unsigned short *terminal_buffer = (unsigned short *)VGA_ADDRESS;
 unsigned int vga_index = 0;
+
+// Initialize VGA graphics mode and text mode
+void vga_initialize() {
+    // You can put specific initialization code here if needed, like setting modes.
+    vga_switch_to_graphics_mode();
+}
+
 // Clear the VGA screen with a specific color
 void vga_clear_screen(uint8_t color) {
     for (int i = 0; i < 320 * 200; i++) {
         graphics_buffer[i] = color;
     }
+}
+
+// Switch to VGA graphics mode (Mode 0x13)
+void vga_switch_to_graphics_mode() {
+    asm volatile (
+        "movb $0x13, %%al\n\t"  // Set video mode to 0x13 (320x200, 256 colors)
+        "int $0x10"             // BIOS video interrupt
+        :
+        :
+        : "eax"
+    );
+}
+
+// Switch to text mode (Mode 0x03)
+void vga_switch_to_text_mode() {
+    asm volatile (
+        "movb $0x03, %%al\n\t"  // Set video mode to 0x03 (80x25, 16 colors)
+        "int $0x10"             // BIOS video interrupt
+        :
+        :
+        : "eax"
+    );
 }
 
 // Draw a pixel at (x, y) with a specified color
