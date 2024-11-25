@@ -6,18 +6,22 @@ Copyright Amar Djulovic 2024
 
 
 
-## Overview:
+## Feature Overview:
 * Simple and lightweight command line operating system
 * Custom command line scripting language (fshell)
-* Built in ASCII art... TBA
-* Limited command line 3D capability... TBA
-* User accounts... TBA
-* Ability to set and encrypt passwords... TBA
-* Automatic user folder encryption... TBA
+* Memory handler
+* VGA text mode and graphics (graphics in progress)
+* Task handler
 * Basic file system
-* Custom application API... TBA
-* Bible and Quran programs... TBA
-  
+
+## Goals
+* Run on low hardware requirements
+* Make completely from scratch
+* Uniqueness factor
+* Thorough documentation
+* Focus on security through cryptography
+* Low operating system size
+* Unique file system with permissions (not POSIX)
 
 ## Usage instructions:
 
