@@ -16,7 +16,7 @@ This is the VGA text and graphics handler for FloppaOS. Text output is completel
 
 Therefore, graphics are not yet accessable to the end user until it can be implemented safely, which is a top priority of development for me right now.
 
-Good luck reading half of this. 
+Good luck reading half of this. Most of the memory addresses I found on osdev, so look there for an explanation.
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 */
 
