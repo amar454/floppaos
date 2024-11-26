@@ -8,14 +8,13 @@ FloppaOS is free software: you can redistribute it and/or modify it under the te
 FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 keyboard.c 
 
 This is the keyboard driver for FloppaOS. It uses the io library to read and scan for keyboard interrupts, with tracking for shift to allow capital letters and additional symbols.
 
 It includes its own task to work with ../../task/task_handler to function as a system process. 
-
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 */
 
