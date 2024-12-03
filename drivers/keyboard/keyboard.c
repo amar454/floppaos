@@ -24,13 +24,14 @@ char command[MAX_COMMAND_LENGTH];
 int command_ready = 0;  // Initialize the flag as 0 (no command is ready)
 
 // Converts a scancode to an ASCII character or handles modifiers
+// Converts a scancode to an ASCII character or handles modifiers
 char key_to_char(unsigned char key) {
     // Check for modifier keys
     switch (key) {
-        case 0x2A: case 0x36:  // Left or Right Shift pressed
+        case 0x2A: case 0x36:  // Shift pressed
             shift_pressed = 1;
             return 0;
-        case 0xAA: case 0xB6:  // Left or Right Shift released
+        case 0xAA: case 0xB6:  // Shift released
             shift_pressed = 0;
             return 0;
         case 0x1D:  // Ctrl pressed
@@ -47,11 +48,11 @@ char key_to_char(unsigned char key) {
             return 0;
     }
 
-    // Handle regular keys (press events only)
-    if (!(key & 0x80) && key >= 0x02 && key <= 0x39) {
+    // Handle regular keys and combinations
+    if (key >= 0x02 && key <= 0x39) {
         char c = 0;
         switch (key) {
-            // Numbers and symbols
+            // Number keys and symbols
             case 0x02: c = shift_pressed ? '!' : '1'; break;
             case 0x03: c = shift_pressed ? '@' : '2'; break;
             case 0x04: c = shift_pressed ? '#' : '3'; break;
@@ -63,7 +64,7 @@ char key_to_char(unsigned char key) {
             case 0x0A: c = shift_pressed ? '(' : '9'; break;
             case 0x0B: c = shift_pressed ? ')' : '0'; break;
 
-            // Alphabets
+            // Alphabet keys
             case 0x10: c = shift_pressed ? 'Q' : 'q'; break;
             case 0x11: c = shift_pressed ? 'W' : 'w'; break;
             case 0x12: c = shift_pressed ? 'E' : 'e'; break;
@@ -107,10 +108,10 @@ char key_to_char(unsigned char key) {
 
 // Updated function to check for a scancode without blocking
 unsigned char try_read_key(void) {
-    if (inb(0x64) & 0x1) {  // Check if the keyboard buffer is not empty
-        return inb(0x60);   // Read the scancode (handles both press and release)
+    if (inb(0x64) & 0x1) {
+        return inb(0x60);  
     }
-    return 0;  // Return 0 if no scancode is available
+    return 0;
 }
 
 // Non-blocking function to get a character
@@ -122,28 +123,24 @@ char try_get_char(void) {
     return 0;  // Return 0 if no character is available
 }
 
-// Updated keyboard_task
 void keyboard_task(void *arg) {
-    static int pos = 0;  // Persistent position in the command buffer
-
-    // Check for a keypress without blocking
+    static int pos = 0; 
     char c = try_get_char();
     if (c == 0) {
-        return;  // No keypress, yield back to the scheduler
+        return;  // No keypress, yield to scheduler
     }
-
-    if (c == '\b' && pos > 0) {  // Handle backspace
+    if (c == '\b' && pos > 0) {               // backspace
         pos--;
-        vga_index--;               // Move cursor back
-        put_char(' ', BLACK);      // Clear character on screen
+        vga_index--;                          // Move cursor back
+        put_char(' ', BLACK);        // Clear character
         vga_index--; 
-    } else if (c == '\n') {  // Handle Enter key
-        command[pos] = '\0';  // Null-terminate the command
+    } else if (c == '\n') {                   // Enter key
+        command[pos] = '\0';                  // Null-terminate command
         echo("\n", WHITE);
-        command_ready = 1;    // Signal that the command is ready
-        pos = 0;              // Reset the buffer position for the next command
-    } else if (c >= 32 && c <= 126 && pos < MAX_COMMAND_LENGTH - 1) {  // Handle printable characters
+        command_ready = 1;    // Signal that command is ready to be parsed (hook for fshell in ../../fshell/command.h)
+        pos = 0;              // Reset buffer position
+    } else if (c >= 32 && c <= 126 && pos < MAX_COMMAND_LENGTH - 1) { 
         command[pos++] = c;
-        put_char(c, WHITE);   // Echo the character
+        put_char(c, WHITE);
     }
 }

@@ -10,35 +10,7 @@ void flopstrcopy(char *dst, const char *src, size_t len) {
     }
     dst[i] = '\0';  // Null-terminate the destination string
 }
-int flopatoi(const char *str) {
-    if (str == NULL) {
-        return 0; // Handle null pointer
-    }
 
-    int result = 0;
-    int sign = 1;
-
-    // Skip leading whitespace
-    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r' || *str == '\v' || *str == '\f') {
-        str++;
-    }
-
-    // Check for a sign
-    if (*str == '-') {
-        sign = -1;
-        str++;
-    } else if (*str == '+') {
-        str++;
-    }
-
-    // Convert characters to integers
-    while (*str >= '0' && *str <= '9') {
-        result = result * 10 + (*str - '0');
-        str++;
-    }
-
-    return result * sign;
-}
 // Returns the length of the string
 size_t flopstrlen(const char *str) {
     const char *s = str;
@@ -142,6 +114,36 @@ static int flopintlen(int value) {
         length++;
     }
     return length;
+}
+// Convert a string to an integer
+int flopatoi(const char *str) {
+    if (str == NULL) {
+        return 0; // Handle null pointer
+    }
+
+    int result = 0;
+    int sign = 1;
+
+    // Skip leading whitespace
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r' || *str == '\v' || *str == '\f') {
+        str++;
+    }
+
+    // Check for a sign
+    if (*str == '-') {
+        sign = -1;
+        str++;
+    } else if (*str == '+') {
+        str++;
+    }
+
+    // Convert characters to integers
+    while (*str >= '0' && *str <= '9') {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    return result * sign;
 }
 
 // Integer to string with zero padding

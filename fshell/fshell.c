@@ -4,13 +4,13 @@
 #include "../fs/tmpflopfs/tmpflopfs.h"
 #include "../lib/str.h"
 #include "../drivers/vga/vgahandler.h"
+#include "../drivers/time/floptime.h"
+#include "../mem/memutils.h"
 #include "command.h"  // Include the shared command header
 #include <stddef.h>
 #include <stdint.h>
 #define MAX_COMMAND_LENGTH 128 // Define max command length
 #define MAX_ARGUMENTS 10       // Define max number of arguments
-// Global variables
-
 
 // Function to parse the command using flopstrtok
 int parse_command(char *command, char *arguments[], int max_arguments) {
@@ -29,6 +29,11 @@ void fshell_task(void *arg) {
     int colored = 0;
     char *arguments[MAX_ARGUMENTS];
     char buffer[SECTOR_SIZE];  // Buffer to hold file data for reading
+    char time_buffer[32];      // Buffer to store the formatted time string
+    struct Time current_time;  // Struct to hold the current time
+
+    // Zero-initialize structs to avoid undefined behavior
+    flop_memset(&current_time, 0, sizeof(current_time));
 
     // Check the type of the argument
     struct FileSystem *fs = NULL;
@@ -52,6 +57,7 @@ void fshell_task(void *arg) {
 
     // Initialize only once
     if (!initialized) {
+        
         echo("fshell ->  ", WHITE);  // Initial prompt
         initialized = 1;  // Mark as initialized
         return;  // Yield back to scheduler
@@ -66,7 +72,8 @@ void fshell_task(void *arg) {
     int arg_count = parse_command(command, arguments, MAX_ARGUMENTS);
 
     if (arg_count == 0) {
-        echo("fshell ->  ", WHITE);  // Display prompt again
+        
+        echo("fshell ->  ", WHITE);
         return;  // Yield to scheduler
     }
 
@@ -107,11 +114,19 @@ void fshell_task(void *arg) {
         } else if (tmp_fs) {
             remove_tmp_file(tmp_fs, arguments[1]);
         }
+    } else if (flopstrcmp(arguments[0], "sleep") == 0 && arg_count > 1) {
+        // Convert the argument to an integer
+        int sleep_duration = flopatoi(arguments[1]);
+        if (sleep_duration > 0) {
+            sleep_seconds(sleep_duration);
+        } else {
+            echo("Invalid duration. Usage: sleep <seconds>\n", RED);
+        }
     } else if (flopstrcmp(arguments[0], "read") == 0 && arg_count > 1) {
         if (fs) {
             read_file(fs, arguments[1], buffer, sizeof(buffer));
         } else if (tmp_fs) {
-            //read_tmp_file(tmp_fs, arguments[1], buffer, sizeof(buffer));
+            read_tmp_file(tmp_fs, arguments[1]);
         }
     } else if (flopstrcmp(arguments[0], "help") == 0) {
         echo("Commands:\n", WHITE);
@@ -121,7 +136,9 @@ void fshell_task(void *arg) {
         echo(" - write <filename> <data>  Write data to file\n", WHITE);
         echo(" - remove <filename>     Remove file\n", WHITE);
         echo(" - read <filename>       Read and print file contents\n", WHITE);
+        echo(" - sleep <seconds>       Pause execution for specified time\n", WHITE);
         echo(" - help                  Display this help message\n", WHITE);
+        echo(" - exit                  Exit the shell\n", WHITE);
     } else if (flopstrcmp(arguments[0], "exit") == 0) {
         echo("Exiting shell...\n", YELLOW);
         initialized = 0;  // Allow reinitialization on re-entry
@@ -129,8 +146,7 @@ void fshell_task(void *arg) {
     } else {
         echo("Unknown command. Type 'help' for assistance.\n", RED);
     }
-
-    // Display prompt again after processing
+    
     echo("fshell ->  ", WHITE);
     return;  // Yield to scheduler
 }

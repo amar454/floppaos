@@ -2,9 +2,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-static Task task_queue[MAX_TASKS];
-static int task_count = 0;
-static int current_task = 0;
+// Global variables
+Task task_queue[MAX_TASKS];
+int task_count = 0;  // Now globally accessible
+int current_task = 0;
 
 // Adds a task to the task queue with priority
 void add_task(task_fn task, void *arg, uint8_t priority) {
@@ -17,11 +18,12 @@ void add_task(task_fn task, void *arg, uint8_t priority) {
     }
 }
 
+
 // Round-robin scheduler with priority handling and basic time-slicing
 void scheduler() {
     if (task_count == 0) return;
 
-    int ticks_per_task = 5; // Example time slice in ticks
+    int ticks_per_task = 3; 
 
     while (1) {
         Task *current = &task_queue[current_task];
@@ -67,4 +69,5 @@ void task_sleep(int task_index, uint32_t ticks) {
 void initialize_task_system() {
     task_count = 0;
     current_task = 0;
+    
 }

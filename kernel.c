@@ -1,26 +1,14 @@
 /* 
 
-MIT License
+Copyright 2024 Amar Djulovic <aaamargml@gmail.com>
 
-Copyright (c) 2024 Amar Djulovic 
+This file is part of FloppaOS.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
 
 ------------------------------------------------------------------------------
 
@@ -31,7 +19,6 @@ kernel.c:
     This is the prerelease alpha-v0.0.2 code, still in development
 
  ------------------------------------------------------------------------------
-
 */
 
 #include "kernel.h"
@@ -42,6 +29,9 @@ kernel.c:
 #include "task/task_handler.h"
 #include "drivers/vga/vgahandler.h"
 #include "mem/memutils.h"
+#include "multiboot/multiboot.h"
+
+
 void clear_screen(void) {
     int index = 0;
     while (index < 80 * 25 * 2) {
@@ -57,6 +47,10 @@ int main() {
 
     echo("Welcome to floppaOS!\n", YELLOW);
     echo("Type 'help' for available commands.\n\n", WHITE);
+    
+    //extern multiboot_info_t *multiboot_info;
+    //print_multiboot_info(multiboot_info);
+
 
     // Initialize memory allocator
     echo("Initializing memory allocator... ", WHITE);
@@ -79,6 +73,7 @@ int main() {
     add_task(fshell_task, &tmp_fs, 1);  
     echo("Success! \n\n", GREEN);
 
+    
     echo("Adding task keyboard... ", WHITE);
     add_task(keyboard_task, NULL, 0); 
     echo("Success! \n\n", GREEN);

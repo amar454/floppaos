@@ -5,7 +5,7 @@
 #define PI 3.14159265358979323846
 
 // Define NAN using a specific bit pattern (IEEE 754 standard for NaN)
-#define NAN 1.0/1.0
+#define NAN (*(volatile double*)(&((unsigned long long)0x7ff8000000000000)))
 
 // Declaration for the mathematical functions
 

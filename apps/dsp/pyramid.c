@@ -1,4 +1,4 @@
-#include "../../drivers/vga/vgahandler.h"
+/*#include "../../drivers/vga/vgahandler.h"
 #include "../../lib/flopmath.h"
 
 #define PI 3.14159265
@@ -70,3 +70,4 @@ void draw_pyramid(float angle) {
     vga_draw_line(projected[3].x, projected[3].y, projected[4].x, projected[4].y, WHITE);
     vga_draw_line(projected[4].x, projected[4].y, projected[1].x, projected[1].y, WHITE);
 }
+*/

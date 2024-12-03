@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include "../../apps/echo.h"
 #include "../vga/vgahandler.h"
+#include "../../task/task_handler.h"
 // Helper to read a byte from a CMOS register
 static unsigned char read_cmos(unsigned char reg) {
     unsigned char val;
@@ -33,28 +34,69 @@ static int bcd_to_binary(int val) {
 // Get current time from CMOS
 void time_get_current(struct Time *time) {
     if (time != NULL) {
-        // Wait until an update cycle is not in progress
         while (read_cmos(0x0A) & 0x80);
-
-        // Retrieve each time component
         time->second = bcd_to_binary(read_cmos(0x00));
         time->minute = bcd_to_binary(read_cmos(0x02));
         time->hour = bcd_to_binary(read_cmos(0x04));
         time->day = bcd_to_binary(read_cmos(0x07));
         time->month = bcd_to_binary(read_cmos(0x08));
-        time->year = bcd_to_binary(read_cmos(0x09)) + 2000;  // Adjust for century if necessary
+        time->year = bcd_to_binary(read_cmos(0x09)) + 2000;  
     }
 }
 
+// Format time into string
 void time_to_string(struct Time *time, char *buffer, size_t size) {
     if (time) {
-        // Format the time as "DD-MM-YYYY HH:MM:SS"
         flopsnprintf(buffer, size, "%02d-%02d-%04d %02d:%02d:%02d",
-             time->day, time->month, time->year, time->hour, time->minute, time->second);
-
+                     time->day, time->month, time->year,
+                     time->hour, time->minute, time->second);
     } else {
         flopsnprintf(buffer, size, "Invalid time");
-        echo(buffer, RED);
-        echo("\n", RED);
+    }
+}
+// Standalone timer function
+void run_timer_for_seconds(int duration, void (*callback)(void)) {
+    struct Time start_time, current_time;
+    int elapsed_seconds = 0;
+
+    // Get the start time
+    time_get_current(&start_time);
+
+    while (elapsed_seconds < duration) {
+        // Get the current time
+        time_get_current(&current_time);
+
+        // Calculate elapsed time in seconds
+        elapsed_seconds = current_time.second - start_time.second;
+        if (elapsed_seconds < 0) {
+            // Handle wrapping of seconds (e.g., 58 to 2 seconds)
+            elapsed_seconds += 60;
+        }
+
+        // Call the provided callback function
+        if (callback) {
+            callback();
+        }
+    }
+}
+
+// Sleep function
+void sleep_seconds(int seconds) {
+    struct Time start_time, current_time;
+    int elapsed_seconds = 0;
+
+    // Get the start time
+    time_get_current(&start_time);
+
+    while (elapsed_seconds < seconds) {
+        // Get the current time
+        time_get_current(&current_time);
+
+        // Calculate elapsed time
+        elapsed_seconds = current_time.second - start_time.second;
+        if (elapsed_seconds < 0) {
+            // Handle wrap-around (e.g., 58 to 2 seconds)
+            elapsed_seconds += 60;
+        }
     }
 }

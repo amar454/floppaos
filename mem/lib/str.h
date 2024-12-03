@@ -6,6 +6,7 @@
 // Function declarations
 void flopstrcopy(char *dst, const char *src, size_t len);
 size_t flopstrlen(const char *str);
+int flopatoi(const char *str);
 int flopstrcmp(const char *s1, const char *s2);
 int flopstrncmp(const char *s1, const char *s2, size_t n);
 unsigned int floprand(void);
@@ -15,5 +16,4 @@ char *flopstrtok(char *str, const char *delim); // Declaration for flopstrtok
 char *flopstrchr(const char *str, int c);
 int flopvsnprintf(char *buf, size_t size, const char *format, va_list args);
 int flopsnprintf(char *buf, size_t size, const char *format, ...);
-int flopatoi(const char *str) ;
 #endif // STR_H
