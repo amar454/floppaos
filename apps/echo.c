@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
-#include "../lib/str.h"
 #define VGA_ADDRESS 0xB8000
 // Function to retrieve all characters in the terminal buffer
 void get_terminal_content(char *buffer, size_t buffer_size) {
