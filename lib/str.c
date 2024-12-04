@@ -1,5 +1,4 @@
 /*
-
 str.c - string functions for floppaOS
 
 Copyright 2024 Amar Djulovic <aaamargml@gmail.com>
@@ -258,32 +257,99 @@ int flopitoa(int value, char *buffer, int width) {
     return len;
 }
 
+// Function to handle integer-to-string conversion for base 16 (hex)
+int flopitoa_hex(unsigned int value, char *buffer, int width, int is_upper) {
+    const char *hex_digits = is_upper ? "0123456789ABCDEF" : "0123456789abcdef";
+    char temp[9]; // Maximum size for an unsigned 32-bit hex value
+    int len = 0;
+
+    if (value == 0) {
+        buffer[len++] = '0';
+    }
+
+    int i = 0;
+    while (value) {
+        temp[i++] = hex_digits[value % 16];
+        value /= 16;
+    }
+
+    while (i < width) {
+        temp[i++] = '0';
+    }
+
+    while (i > 0) {
+        buffer[len++] = temp[--i];
+    }
+
+    buffer[len] = '\0';
+    return len;
+}
+
+// Implementation of vsnprintf for handling formatted output
 int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
     size_t pos = 0;
     for (const char *ptr = format; *ptr && pos < size - 1; ptr++) {
         if (*ptr == '%' && *(ptr + 1)) {
-            ptr++;
+            ptr++; // Skip the '%' character
             int width = 0;
 
+            // Process width specifier (e.g., %5d)
             while (*ptr >= '0' && *ptr <= '9') {
                 width = width * 10 + (*ptr - '0');
                 ptr++;
             }
 
-            if (*ptr == 'd') {
-                int num = va_arg(args, int);
-                pos += flopitoa(num, buffer + pos, width);
-            } else if (*ptr == 's') {
-                char *str = va_arg(args, char*);
-                while (*str && pos < size - 1) {
-                    buffer[pos++] = *str++;
+            switch (*ptr) {
+                case 'd': {
+                    // Handle integer format
+                    int num = va_arg(args, int);
+                    pos += flopitoa(num, buffer + pos, width);
+                    break;
+                }
+                case 'x': {
+                    // Handle hexadecimal format
+                    unsigned int num = va_arg(args, unsigned int);
+                    pos += flopitoa_hex(num, buffer + pos, width, 0); // Lowercase hex
+                    break;
+                }
+                case 'X': {
+                    // Handle uppercase hexadecimal format
+                    unsigned int num = va_arg(args, unsigned int);
+                    pos += flopitoa_hex(num, buffer + pos, width, 1); // Uppercase hex
+                    break;
+                }
+                case 's': {
+                    // Handle string format
+                    char *str = va_arg(args, char*);
+                    while (*str && pos < size - 1) {
+                        buffer[pos++] = *str++;
+                    }
+                    break;
+                }
+                case 'c': {
+                    // Handle character format
+                    char ch = (char)va_arg(args, int);
+                    buffer[pos++] = ch;
+                    break;
+                }
+                case '%': {
+                    // Handle literal '%' character
+                    buffer[pos++] = '%';
+                    break;
+                }
+                default: {
+                    // Handle unrecognized format specifier
+                    buffer[pos++] = '%';
+                    buffer[pos++] = *ptr;
+                    break;
                 }
             }
         } else {
+            // Handle normal characters
             buffer[pos++] = *ptr;
         }
     }
-    buffer[pos] = '\0';
+    buffer[pos] = '\0'; // Null-terminate the string
     return pos;
 }
 
@@ -294,4 +360,3 @@ int flopsnprintf(char *buffer, size_t size, const char *format, ...) {
     va_end(args);
     return result;
 }
-
