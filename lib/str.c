@@ -1,4 +1,7 @@
 /*
+
+str.c - string functions for floppaOS
+
 Copyright 2024 Amar Djulovic <aaamargml@gmail.com>
 
 This file is part of FloppaOS.
