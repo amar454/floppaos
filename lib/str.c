@@ -15,7 +15,9 @@ You should have received a copy of the GNU General Public License along with Flo
 
 #include "str.h"
 #include <stdarg.h>
+
 static char *flopstrtok_next = NULL;
+
 // Copies src string to dest
 void flopstrcopy(char *dst, const char *src, size_t len) {
     size_t i = 0;
@@ -25,6 +27,7 @@ void flopstrcopy(char *dst, const char *src, size_t len) {
     }
     dst[i] = '\0';  // Null-terminate the destination string
 }
+
 int flopatoi(const char *str) {
     if (str == NULL) {
         return 0; // Handle null pointer
@@ -54,6 +57,7 @@ int flopatoi(const char *str) {
 
     return result * sign;
 }
+
 // Returns the length of the string
 size_t flopstrlen(const char *str) {
     const char *s = str;
@@ -83,8 +87,81 @@ int flopstrncmp(const char *s1, const char *s2, size_t n) {
     return *(unsigned char *)s1 - *(unsigned char *)s2;
 }
 
+// Reverse a string in place
+void flopstrrev(char *str) {
+    size_t len = flopstrlen(str);
+    size_t i = 0;
+    while (i < len / 2) {
+        char temp = str[i];
+        str[i] = str[len - 1 - i];
+        str[len - 1 - i] = temp;
+        i++;
+    }
+}
+
+// Copies up to n characters from src to dst
+void flopstrncpy(char *dst, const char *src, size_t n) {
+    size_t i = 0;
+    while (i < n && src[i] != '\0') {
+        dst[i] = src[i];
+        i++;
+    }
+    while (i < n) {
+        dst[i] = '\0';
+        i++;
+    }
+}
+
+// Concatenates two strings
+void flopstrcat(char *dst, const char *src) {
+    while (*dst) {
+        dst++;
+    }
+    while (*src) {
+        *dst = *src;
+        dst++;
+        src++;
+    }
+    *dst = '\0'; // Null-terminate the resulting string
+}
+
+// Finds the first occurrence of a substring in a string
+char *flopstrstr(const char *haystack, const char *needle) {
+    if (*needle == '\0') {
+        return (char *)haystack; // Empty string is always found
+    }
+
+    for (const char *h = haystack; *h != '\0'; h++) {
+        const char *h_tmp = h;
+        const char *n_tmp = needle;
+
+        while (*h_tmp && *n_tmp && *h_tmp == *n_tmp) {
+            h_tmp++;
+            n_tmp++;
+        }
+
+        if (*n_tmp == '\0') {
+            return (char *)h; // Match found
+        }
+    }
+
+    return NULL; // No match found
+}
+
+// Finds the last occurrence of a character in a string
+char *flopstrrchr(const char *str, int c) {
+    char *result = NULL;
+    while (*str) {
+        if (*str == (char)c) {
+            result = (char *)str; // Update result to last occurrence
+        }
+        str++;
+    }
+    return result; // Return the last occurrence, or NULL if not found
+}
+
 // Random number generation functions
-static unsigned int flop_rand_seed = 1; // Seed for the random number generator
+static unsigned int flop_rand_seed = 1;
 
 unsigned int floprand(void) {
     flop_rand_seed = flop_rand_seed * 1103515245 + 12345;
@@ -97,10 +174,8 @@ void flopsrand(unsigned int seed) {
 
 // Simple time function
 unsigned int floptime(void) {
-    // Return a pseudo time value 
-    // You can modify this to return the time since system start or a fixed epoch if needed.
     static unsigned int seconds_since_start = 0;
-    seconds_since_start++; // Increment every time floptime() is called
+    seconds_since_start++;
     return seconds_since_start;
 }
 
@@ -110,48 +185,43 @@ char *flopstrtok(char *str, const char *delim) {
     }
 
     if (flopstrtok_next == NULL) {
-        return NULL; // end of tokens 
+        return NULL;
     }
 
-    // skip leading delims
     while (*flopstrtok_next && flopstrchr(delim, *flopstrtok_next)) {
         flopstrtok_next++;
     }
 
     if (*flopstrtok_next == '\0') {
-        flopstrtok_next = NULL; // end of tokens
+        flopstrtok_next = NULL;
         return NULL;
     }
 
-    // find end of token
     char *token_start = flopstrtok_next;
     while (*flopstrtok_next && !flopstrchr(delim, *flopstrtok_next)) {
         flopstrtok_next++;
     }
 
-    // null-terminate token
     if (*flopstrtok_next) {
         *flopstrtok_next++ = '\0';
     }
 
-    return token_start; // return token
+    return token_start;
 }
 
-// Function to find the first occurrence of a character in a string
 char *flopstrchr(const char *str, int c) {
     while (*str) {
         if (*str == (char)c) {
-            return (char *)str; // Return pointer to the first occurrence
+            return (char *)str;
         }
         str++;
     }
-    return NULL; // Return NULL if the character is not found
+    return NULL;
 }
 
-// Helper function to get the length of an integer in a specific base (decimal here).
 static int flopintlen(int value) {
     int length = 0;
-    if (value <= 0) length++; // Space for negative sign or '0'
+    if (value <= 0) length++;
     while (value != 0) {
         value /= 10;
         length++;
@@ -159,7 +229,6 @@ static int flopintlen(int value) {
     return length;
 }
 
-// Integer to string with zero padding
 int flopitoa(int value, char *buffer, int width) {
     char temp[12];
     int len = 0;
@@ -168,7 +237,7 @@ int flopitoa(int value, char *buffer, int width) {
     if (is_negative) {
         value = -value;
         buffer[len++] = '-';
-        width--;  // Adjust for negative sign
+        width--;
     }
 
     int i = 0;
@@ -189,7 +258,6 @@ int flopitoa(int value, char *buffer, int width) {
     return len;
 }
 
-// Basic vsnprintf for kernel environment with formatting support
 int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
     size_t pos = 0;
     for (const char *ptr = format; *ptr && pos < size - 1; ptr++) {
@@ -202,10 +270,10 @@ int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
                 ptr++;
             }
 
-            if (*ptr == 'd') { // Integer format
+            if (*ptr == 'd') {
                 int num = va_arg(args, int);
                 pos += flopitoa(num, buffer + pos, width);
-            } else if (*ptr == 's') { // String format
+            } else if (*ptr == 's') {
                 char *str = va_arg(args, char*);
                 while (*str && pos < size - 1) {
                     buffer[pos++] = *str++;
@@ -219,7 +287,6 @@ int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
     return pos;
 }
 
-// snprintf using our custom vsnprintf
 int flopsnprintf(char *buffer, size_t size, const char *format, ...) {
     va_list args;
     va_start(args, format);
@@ -227,3 +294,4 @@ int flopsnprintf(char *buffer, size_t size, const char *format, ...) {
     va_end(args);
     return result;
 }
+
