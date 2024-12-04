@@ -32,7 +32,11 @@ framebuffer_t fb;
 // VGA text buffer
 unsigned short *terminal_buffer = (unsigned short *)VGA_ADDRESS;
 unsigned int vga_index = 0;
-
+// Structure to store terminal state for restoring
+static unsigned short *terminal_buffer_saved = NULL;
+static uint32_t terminal_color_saved = 0;
+static uint16_t terminal_x_saved = 0;
+static uint16_t terminal_y_saved = 0;
 
 void framebuffer_initialize_wrapper(multiboot_info_t *mbi) {
     framebuffer_initialize(mbi, &fb);
@@ -127,5 +131,90 @@ void vga_set_cursor_position(uint16_t x, uint16_t y) {
             : "r"((uint8_t)(position & 0xFF)), "r"((uint8_t)((position >> 8) & 0xFF))
             : "eax", "dx"
         );
+    }
+}
+
+void vga_save_terminal_state() {
+    // Save current terminal state
+    terminal_buffer_saved = terminal_buffer;
+    terminal_color_saved = *(uint32_t *)((unsigned char *)terminal_buffer + 1);  // Assuming color is the second byte in each cell
+    terminal_x_saved = vga_index % VGA_WIDTH;
+    terminal_y_saved = vga_index / VGA_WIDTH;
+}
+
+void vga_restore_terminal_state() {
+    // Restore terminal buffer to saved state
+    if (terminal_buffer_saved != NULL) {
+        terminal_buffer = terminal_buffer_saved;
+        vga_set_cursor_position(terminal_x_saved, terminal_y_saved); // Restore cursor position
+    }
+}
+
+// Text-mode function to draw a horizontal line
+void textmode_draw_hline(int x, int y, int length, uint32_t color) {
+    for (int i = 0; i < length; i++) {
+        vga_place_char(x + i, y, '-', color); // Place '-' character for horizontal line
+    }
+}
+
+// Text-mode function to draw a vertical line
+void textmode_draw_vline(int x, int y, int length, uint32_t color) {
+    for (int i = 0; i < length; i++) {
+        vga_place_char(x, y + i, '|', color); // Place '|' character for vertical line
+    }
+}
+
+// Text-mode function to draw a rectangle with top-left corner at (x, y), given width and height
+void textmode_draw_rectangle(int x, int y, int width, int height, uint32_t color) {
+    // Draw the top and bottom lines
+    textmode_draw_hline(x, y, width, color); // Top line
+    textmode_draw_hline(x, y + height - 1, width, color); // Bottom line
+
+    // Draw the left and right vertical lines
+    textmode_draw_vline(x, y, height, color); // Left line
+    textmode_draw_vline(x + width - 1, y, height, color); // Right line
+
+    // Fill the inside of the rectangle with spaces (if desired)
+    for (int i = 1; i < height - 1; i++) {
+        for (int j = 1; j < width - 1; j++) {
+            vga_place_char(x + j, y + i, ' ', color); // Fill inside with ' ' (space)
+        }
+    }
+}
+
+// Text-mode function to draw a filled rectangle (border + filled interior)
+void textmode_draw_filled_rectangle(int x, int y, int width, int height, uint32_t border_color, uint32_t fill_color) {
+    // Draw the top and bottom border
+    textmode_draw_hline(x, y, width, border_color); // Top line
+    textmode_draw_hline(x, y + height - 1, width, border_color); // Bottom line
+
+    // Draw the left and right vertical borders
+    textmode_draw_vline(x, y, height, border_color); // Left line
+    textmode_draw_vline(x + width - 1, y, height, border_color); // Right line
+
+    // Fill the interior with fill_color
+    for (int i = 1; i < height - 1; i++) {
+        for (int j = 1; j < width - 1; j++) {
+            vga_place_char(x + j, y + i, ' ', fill_color); // Interior filled with spaces (or use any char)
+        }
+    }
+}
+
+// Text-mode function to draw a diagonal line (from (x0, y0) to (x1, y1))
+void textmode_draw_diagonal_line(int x0, int y0, int x1, int y1, uint32_t color) {
+    int dx = x1 - x0;
+    int dy = y1 - y0;
+    int steps = (dx > dy) ? dx : dy;  // The number of steps for drawing the line
+
+    float x_increment = (float)dx / (float)steps;
+    float y_increment = (float)dy / (float)steps;
+
+    float x = x0;
+    float y = y0;
+
+    for (int i = 0; i <= steps; i++) {
+        vga_place_char((int)x, (int)y, '/', color);  // '/' for diagonal line
+        x += x_increment;
+        y += y_increment;
     }
 }
