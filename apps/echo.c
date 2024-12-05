@@ -58,18 +58,29 @@ void echo(const char *str, unsigned char color) {
     }
 }
 
-void echo_f(const char *format, unsigned char color, ...) {
+void echo_bold(const char *str, unsigned char color) {
+    // Apply bold effect by setting the intensity bit (4th bit)
+    color = color | 0x08;
+
+    // Output the string character by character
+    while (*str) {
+        put_char(*str++, color);
+    }
+}
+
+// Variadic formatted output function
+void echo_f(const char *format, int color, ...) {
     va_list args;
     va_start(args, color);
 
-    char buffer[128];  // Temporary buffer for formatted output
+    char buffer[128]; // Temporary output buffer
     int buffer_index = 0;
 
     for (const char *ptr = format; *ptr != '\0'; ++ptr) {
         if (*ptr == '%' && *(ptr + 1) != '\0') {
             ++ptr;
             switch (*ptr) {
-                case 'd': {  // Integer
+                case 'd': {  // Signed integer
                     int num = va_arg(args, int);
                     if (num < 0) {
                         buffer[buffer_index++] = '-';
@@ -81,8 +92,8 @@ void echo_f(const char *format, unsigned char color, ...) {
                         num_buffer[num_len++] = '0' + (num % 10);
                         num /= 10;
                     } while (num > 0);
-                    for (int i = num_len - 1; i >= 0; --i) {
-                        buffer[buffer_index++] = num_buffer[i];
+                    while (num_len > 0) {
+                        buffer[buffer_index++] = num_buffer[--num_len];
                     }
                     break;
                 }
@@ -94,8 +105,8 @@ void echo_f(const char *format, unsigned char color, ...) {
                         num_buffer[num_len++] = '0' + (num % 10);
                         num /= 10;
                     } while (num > 0);
-                    for (int i = num_len - 1; i >= 0; --i) {
-                        buffer[buffer_index++] = num_buffer[i];
+                    while (num_len > 0) {
+                        buffer[buffer_index++] = num_buffer[--num_len];
                     }
                     break;
                 }
@@ -108,8 +119,8 @@ void echo_f(const char *format, unsigned char color, ...) {
                         num_buffer[num_len++] = hex_chars[num % 16];
                         num /= 16;
                     } while (num > 0);
-                    for (int i = num_len - 1; i >= 0; --i) {
-                        buffer[buffer_index++] = num_buffer[i];
+                    while (num_len > 0) {
+                        buffer[buffer_index++] = num_buffer[--num_len];
                     }
                     break;
                 }
@@ -120,35 +131,51 @@ void echo_f(const char *format, unsigned char color, ...) {
                     }
                     break;
                 }
+                case 'p': {  // Pointer
+                    uintptr_t addr = (uintptr_t)va_arg(args, void *);
+                    char hex_chars[] = "0123456789ABCDEF";
+
+                    buffer[buffer_index++] = '0';
+                    buffer[buffer_index++] = 'x';
+
+                    char num_buffer[16];
+                    int num_len = 0;
+                    do {
+                        num_buffer[num_len++] = hex_chars[addr % 16];
+                        addr /= 16;
+                    } while (addr > 0);
+                    while (num_len > 0) {
+                        buffer[buffer_index++] = num_buffer[--num_len];
+                    }
+                    break;
+                }
                 case '%': {  // Literal '%'
                     buffer[buffer_index++] = '%';
                     break;
                 }
                 default: {
-                    // Unknown specifier; ignore or handle as needed
-                    break;
+                    break; // Ignore unknown specifiers
                 }
             }
         } else {
             buffer[buffer_index++] = *ptr;
         }
 
-        // If the buffer is full, flush it
         if (buffer_index >= sizeof(buffer) - 1) {
             buffer[buffer_index] = '\0';
-            echo(buffer, color);
+            echo(buffer, (unsigned char)color);
             buffer_index = 0;
         }
     }
 
-    // Flush remaining buffer
     if (buffer_index > 0) {
         buffer[buffer_index] = '\0';
-        echo(buffer, color);
+        echo(buffer, (unsigned char)color);
     }
 
     va_end(args);
 }
+
 
 void retrieve_terminal_buffer(char *buffer, uint8_t *colors) {
     const unsigned short *terminal_buffer = (unsigned short *)VGA_ADDRESS;

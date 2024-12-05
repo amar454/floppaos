@@ -23,7 +23,7 @@ void add_task(task_fn task, void *arg, uint8_t priority) {
 void scheduler() {
     if (task_count == 0) return;
 
-    int ticks_per_task = 3; 
+    int ticks_per_task = 5; 
 
     while (1) {
         Task *current = &task_queue[current_task];

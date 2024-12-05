@@ -1,15 +1,3 @@
-/*
-Copyright 2024 Amar Djulovic <aaamargml@gmail.com>
-
-This file is part of FloppaOS.
-
-FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-
-FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
-*/
-
 #include "fshell.h"
 #include "../apps/echo.h"
 #include "../fs/flopfs/flopfs.h"
@@ -21,43 +9,87 @@ You should have received a copy of the GNU General Public License along with Flo
 #include "command.h"  // Include the shared command header
 #include <stddef.h>
 #include <stdint.h>
-#define MAX_COMMAND_LENGTH 128 // Define max command length
-#define MAX_ARGUMENTS 10       // Define max number of arguments
 
-// Function to parse the command using flopstrtok
+#define MAX_COMMAND_LENGTH 128 // Maximum command length
+#define MAX_ARGUMENTS 10       // Maximum number of arguments
+
+// Helper function to display the prompt
+static void display_prompt() {
+    echo("fshell ->  ", WHITE);
+}
+
+// Helper function to parse the command
 int parse_command(char *command, char *arguments[], int max_arguments) {
     int arg_count = 0;
     char *token = flopstrtok(command, " \n"); // Split by spaces and newlines
-    int colored = 0;  // Default to no color for listing files
+
     while (token != NULL && arg_count < max_arguments) {
         arguments[arg_count++] = token;
-        token = flopstrtok(NULL, " \n"); // Continue splitting
+        token = flopstrtok(NULL, " \n");
     }
     return arg_count;
 }
 
-void fshell_task(void *arg) {
-    static int initialized = 0;  // Track whether fshell_task is initialized
+// Helper function to handle 'list' command
+void handle_list_command(struct FileSystem *fs, struct TmpFileSystem *tmp_fs, char *arguments[], int arg_count) {
     int colored = 0;
+
+    // Check for '--colored' option
+    for (int i = 1; i < arg_count; i++) {
+        if (flopstrcmp(arguments[i], "--colored") == 0) {
+            colored = 1;
+        }
+    }
+
+    if (fs) {
+        list_files(fs, colored);
+    } else if (tmp_fs) {
+        list_tmp_files(tmp_fs, colored);
+    }
+}
+
+// Helper function to handle 'license' command
+void handle_license_command(int arg_count, char *arguments[]) {
+    if (arg_count == 1) {
+        // Display full license text
+        echo("THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY\n", WHITE);
+        echo("APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT\n", WHITE);
+        echo("HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM \"AS IS\" WITHOUT WARRANTY\n", WHITE);
+        echo("OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,\n", WHITE);
+        echo("THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR\n", WHITE);
+        echo("PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM\n", WHITE);
+        echo("IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF\n", WHITE);
+        echo("ALL NECESSARY SERVICING, REPAIR OR CORRECTION.\n", WHITE);
+    } else if (arg_count == 2) {
+        char *keyword = arguments[1];
+        if (flopstrcmp(keyword, "warranty") == 0) {
+            echo("THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY\n", WHITE);
+        } else if (flopstrcmp(keyword, "purpose") == 0) {
+            echo("THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR\n", WHITE);
+        } else {
+            echo("Keyword not found in the license text. Try 'warranty' or 'purpose'.\n", RED);
+        }
+    } else {
+        echo("Usage: license [optional_keyword]\n", YELLOW);
+    }
+}
+
+// Main fshell task
+
+void fshell_task(void *arg) {
+    static int initialized = 0; // Track initialization
     char *arguments[MAX_ARGUMENTS];
-    char buffer[SECTOR_SIZE];  // Buffer to hold file data for reading
-    char time_buffer[32];      // Buffer to store the formatted time string
-    struct Time current_time;  // Struct to hold the current time
-
-    // Zero-initialize structs to avoid undefined behavior
-    flop_memset(&current_time, 0, sizeof(current_time));
-
-    // Check the type of the argument
+    char buffer[SECTOR_SIZE]; // Buffer for file reading
     struct FileSystem *fs = NULL;
     struct TmpFileSystem *tmp_fs = NULL;
 
+    // Ensure valid filesystem argument
     if (arg == NULL) {
         echo("Error: No file system provided to fshell.\n", RED);
         return;
     }
 
-    uint8_t type_id = *((uint8_t *)arg);  // First byte is type_id in both structs
-
+    uint8_t type_id = *((uint8_t *)arg); // Determine filesystem type
     if (type_id == FILESYSTEM_TYPE_ID) {
         fs = (struct FileSystem *)arg;
     } else if (type_id == TMP_FILESYSTEM_TYPE_ID) {
@@ -67,98 +99,114 @@ void fshell_task(void *arg) {
         return;
     }
 
-    // Initialize only once
+    // Initialize fshell
     if (!initialized) {
-        
-        echo("fshell ->  ", WHITE);  // Initial prompt
-        initialized = 1;  // Mark as initialized
-        return;  // Yield back to scheduler
+        display_prompt();
+        initialized = 1;
+        return;
     }
 
     if (!command_ready) {
-        return;  // If no command is ready, yield to scheduler
+        return; // Yield if no command is ready
     }
 
-    // Process the command
-    command_ready = 0;  // Clear the command-ready flag
+    // Parse and process the command
+    command_ready = 0; // Reset the command-ready flag
     int arg_count = parse_command(command, arguments, MAX_ARGUMENTS);
 
     if (arg_count == 0) {
-        
-        echo("fshell ->  ", WHITE);
-        return;  // Yield to scheduler
+        display_prompt();
+        return;
     }
 
-    // Command processing logic
-    if (flopstrcmp(arguments[0], "list") == 0) {
-        // Check if '--colored' option is present
-        for (int i = 1; i < arg_count; i++) {
-            if (flopstrcmp(arguments[i], "--colored") == 0) {
-                colored = 1;  // Enable color if --colored is present
+    // Command dispatch using switch-case
+    char *cmd = arguments[0]; // First argument is the command
+    switch (flopstrcmp(cmd, "list") == 0 ? 1 :
+            flopstrcmp(cmd, "license") == 0 ? 2 :
+            flopstrcmp(cmd, "create") == 0 ? 3 :
+            flopstrcmp(cmd, "mkdir") == 0 ? 4 :
+            flopstrcmp(cmd, "write") == 0 ? 5 :
+            flopstrcmp(cmd, "remove") == 0 ? 6 :
+            flopstrcmp(cmd, "read") == 0 ? 7 :
+            flopstrcmp(cmd, "help") == 0 ? 8 :
+            flopstrcmp(cmd, "exit") == 0 ? 9 : 0) {
+
+        case 1: // "list"
+            handle_list_command(fs, tmp_fs, arguments, arg_count);
+            break;
+
+        case 2: // "license"
+            handle_license_command(arg_count, arguments);
+            break;
+
+        case 3: // "create"
+            if (arg_count > 1) {
+                if (fs) create_file(fs, arguments[1]);
+                else if (tmp_fs) create_tmp_file(tmp_fs, arguments[1]);
+            } else {
+                echo("Usage: create <filename>\n", YELLOW);
             }
-        }
-        if (fs) {
-            list_files(fs, colored);
-        } else if (tmp_fs) {
-            list_tmp_files(tmp_fs, colored);
-        }
-    } else if (flopstrcmp(arguments[0], "create") == 0 && arg_count > 1) {
-        if (fs) {
-            create_file(fs, arguments[1]);
-        } else if (tmp_fs) {
-            create_tmp_file(tmp_fs, arguments[1]);
-        }
-    } else if (flopstrcmp(arguments[0], "mkdir") == 0 && arg_count > 1) {
-        if (fs) {
-            create_directory(fs, arguments[1]);
-        } else if (tmp_fs) {
-            create_tmp_directory(tmp_fs, arguments[1]);
-        }
-    } else if (flopstrcmp(arguments[0], "write") == 0 && arg_count > 2) {
-        if (fs) {
-            write_file(fs, arguments[1], arguments[2], flopstrlen(arguments[2]));
-        } else if (tmp_fs) {
-            write_tmp_file(tmp_fs, arguments[1], arguments[2], flopstrlen(arguments[2]));
-        }
-    } else if (flopstrcmp(arguments[0], "remove") == 0 && arg_count > 1) {
-        if (fs) {
-            remove_file(fs, arguments[1]);
-        } else if (tmp_fs) {
-            remove_tmp_file(tmp_fs, arguments[1]);
-        }
-    } else if (flopstrcmp(arguments[0], "sleep") == 0 && arg_count > 1) {
-        // Convert the argument to an integer
-        int sleep_duration = flopatoi(arguments[1]);
-        if (sleep_duration > 0) {
-            sleep_seconds(sleep_duration);
-        } else {
-            echo("Invalid duration. Usage: sleep <seconds>\n", RED);
-        }
-    } else if (flopstrcmp(arguments[0], "read") == 0 && arg_count > 1) {
-        if (fs) {
-            read_file(fs, arguments[1], buffer, sizeof(buffer));
-        } else if (tmp_fs) {
-            read_tmp_file(tmp_fs, arguments[1]);
-        }
-    } else if (flopstrcmp(arguments[0], "help") == 0) {
-        echo("Commands:\n", WHITE);
-        echo(" - list [--colored]      List files (with optional color)\n", WHITE);
-        echo(" - create <filename>     Create file\n", WHITE);
-        echo(" - mkdir <dirname>       Create directory\n", WHITE);
-        echo(" - write <filename> <data>  Write data to file\n", WHITE);
-        echo(" - remove <filename>     Remove file\n", WHITE);
-        echo(" - read <filename>       Read and print file contents\n", WHITE);
-        echo(" - sleep <seconds>       Pause execution for specified time\n", WHITE);
-        echo(" - help                  Display this help message\n", WHITE);
-        echo(" - exit                  Exit the shell\n", WHITE);
-    } else if (flopstrcmp(arguments[0], "exit") == 0) {
-        echo("Exiting shell...\n", YELLOW);
-        initialized = 0;  // Allow reinitialization on re-entry
-        return;
-    } else {
-        echo("Unknown command. Type 'help' for assistance.\n", RED);
+            break;
+
+        case 4: // "mkdir"
+            if (arg_count > 1) {
+                if (fs) create_directory(fs, arguments[1]);
+                else if (tmp_fs) create_tmp_directory(tmp_fs, arguments[1]);
+            } else {
+                echo("Usage: mkdir <dirname>\n", YELLOW);
+            }
+            break;
+
+        case 5: // "write"
+            if (arg_count > 2) {
+                if (fs) write_file(fs, arguments[1], arguments[2], flopstrlen(arguments[2]));
+                else if (tmp_fs) write_tmp_file(tmp_fs, arguments[1], arguments[2], flopstrlen(arguments[2]));
+            } else {
+                echo("Usage: write <filename> <data>\n", YELLOW);
+            }
+            break;
+
+        case 6: // "remove"
+            if (arg_count > 1) {
+                if (fs) remove_file(fs, arguments[1]);
+                else if (tmp_fs) remove_tmp_file(tmp_fs, arguments[1]);
+            } else {
+                echo("Usage: remove <filename>\n", YELLOW);
+            }
+            break;
+
+        case 7: // "read"
+            if (arg_count > 1) {
+                if (fs) read_file(fs, arguments[1], buffer, sizeof(buffer));
+                else if (tmp_fs) read_tmp_file(tmp_fs, arguments[1]);
+            } else {
+                echo("Usage: read <filename>\n", YELLOW);
+            }
+            break;
+
+        case 8: // "help"
+            echo("Commands:\n", WHITE);
+            echo(" - list [--colored]      List files (with optional color)\n", WHITE);
+            echo(" - create <filename>     Create file\n", WHITE);
+            echo(" - mkdir <dirname>       Create directory\n", WHITE);
+            echo(" - write <filename> <data>  Write data to file\n", WHITE);
+            echo(" - remove <filename>     Remove file\n", WHITE);
+            echo(" - read <filename>       Read and print file contents\n", WHITE);
+            echo(" - sleep <seconds>       Pause execution for specified time\n", WHITE);
+            echo(" - license [keyword]     Display license or search by keyword\n", WHITE);
+            echo(" - help                  Display this help message\n", WHITE);
+            echo(" - exit                  Exit the shell\n", WHITE);
+            break;
+
+        case 9: // "exit"
+            echo("Exiting shell...\n", YELLOW);
+            initialized = 0; // Reset initialization
+            break;
+
+        default: // Unknown command
+            echo("Unknown command. Type 'help' for assistance.\n", RED);
+            break;
     }
-    
-    echo("fshell ->  ", WHITE);
-    return;  // Yield to scheduler
+
+    display_prompt(); // Show prompt for next input
 }

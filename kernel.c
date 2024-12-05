@@ -45,13 +45,16 @@ void clear_screen(void) {
 int main() {
     clear_screen();
 
-    echo("Welcome to floppaOS!\n", YELLOW);
+    echo("floppaOS  Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
+    echo("This program is licensed under the GNU General Public License 3.0\nType license --help for more information\n\n", CYAN);
+    echo("***************************\n",WHITE);
+    echo("*                         *\n",WHITE);
+    echo("*  Welcome to floppaOS!   *\n", WHITE);
+    echo("*                         *\n",WHITE);
+    echo("***************************\n\n",WHITE);
     echo("Type 'help' for available commands.\n\n", WHITE);
     
-    //extern multiboot_info_t *multiboot_info;
-    //print_multiboot_info(multiboot_info);
-
-
+    
     // Initialize memory allocator
     echo("Initializing memory allocator... ", WHITE);
     init_memory();
