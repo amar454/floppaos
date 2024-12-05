@@ -203,3 +203,49 @@ double min(double a, double b) {
 double max(double a, double b) {
     return (a > b) ? a : b;
 }
+
+// Absolute value function (for integer types)
+int abs_int(int x) {
+    return x < 0 ? -x : x;
+}
+
+// Logarithm base 2 (log2)
+double log2(double x) {
+    return ln(x) / ln(2.0);
+}
+
+// Cube root function (cbrt)
+double cbrt(double x) {
+    if (x < 0) return -pow(-x, 1.0/3.0);
+    return pow(x, 1.0/3.0);
+}
+
+// Greatest common divisor (gcd) of two integers
+int gcd(int a, int b) {
+    while (b != 0) {
+        int temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+// Least common multiple (lcm) of two integers
+int lcm(int a, int b) {
+    return (a * b) / gcd(a, b);
+}
+
+// Hyperbolic secant (sech)
+double sech(double x) {
+    return 1.0 / cosh(x);
+}
+
+// Hyperbolic cosecant (csch)
+double csch(double x) {
+    return 1.0 / sinh(x);
+}
+
+// Hyperbolic cotangent (coth)
+double coth(double x) {
+    return cosh(x) / sinh(x);
+}
