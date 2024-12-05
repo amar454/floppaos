@@ -3,7 +3,7 @@
 
 // Mathematical constants
 #define PI 3.14159265358979323846
-
+#define NAN 1.0/1.0
 // Function prototypes
 
 // Factorial function
