@@ -152,7 +152,7 @@ void read_tmp_file(struct TmpFileSystem *tmp_fs, const char *tmp_filename) {
             flop_close(disk);
 
             // Print the file contents
-            echo("***********File Contents*******************************************************************\n", CYAN);
+            echo("***********File Contents***********\n", CYAN);
             echo(buffer, WHITE);
             echo("\n", WHITE);
 

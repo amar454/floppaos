@@ -14,6 +14,8 @@ typedef struct {
     void *arg;
     uint8_t priority;
     uint32_t sleep_ticks;  // Ticks until the task runs again
+    
+    
 } Task;
 
 // Function declarations

@@ -14,6 +14,7 @@ You should have received a copy of the GNU General Public License along with Flo
 
 #include "str.h"
 #include <stdarg.h>
+#include <stdint.h>
 
 static char *flopstrtok_next = NULL;
 
@@ -300,45 +301,49 @@ int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
             }
 
             switch (*ptr) {
-                case 'd': {
-                    // Handle integer format
+                case 'd': {  // Handle signed integer format
                     int num = va_arg(args, int);
                     pos += flopitoa(num, buffer + pos, width);
                     break;
                 }
-                case 'x': {
-                    // Handle hexadecimal format
+                case 'u': {  // Handle unsigned integer format
                     unsigned int num = va_arg(args, unsigned int);
-                    pos += flopitoa_hex(num, buffer + pos, width, 0); // Lowercase hex
+                    pos += flopitoa(num, buffer + pos, width);  // Use itoa for unsigned as well
                     break;
                 }
-                case 'X': {
-                    // Handle uppercase hexadecimal format
+                case 'x': {  // Handle hexadecimal format (lowercase)
                     unsigned int num = va_arg(args, unsigned int);
-                    pos += flopitoa_hex(num, buffer + pos, width, 1); // Uppercase hex
+                    pos += flopitoa_hex(num, buffer + pos, width, 0);  // Lowercase hex
                     break;
                 }
-                case 's': {
-                    // Handle string format
+                case 'X': {  // Handle uppercase hexadecimal format
+                    unsigned int num = va_arg(args, unsigned int);
+                    pos += flopitoa_hex(num, buffer + pos, width, 1);  // Uppercase hex
+                    break;
+                }
+                case 's': {  // Handle string format
                     char *str = va_arg(args, char*);
                     while (*str && pos < size - 1) {
                         buffer[pos++] = *str++;
                     }
                     break;
                 }
-                case 'c': {
-                    // Handle character format
-                    char ch = (char)va_arg(args, int);
+                case 'c': {  // Handle character format (as unsigned char)
+                    unsigned char ch = (unsigned char)va_arg(args, int);  // Treat as unsigned char
                     buffer[pos++] = ch;
                     break;
                 }
-                case '%': {
-                    // Handle literal '%' character
+                case 'p': {  // Handle pointer format
+                    uintptr_t ptr_value = (uintptr_t)va_arg(args, void*);
+                    // Print pointer as hex
+                    pos += flopitoa_hex(ptr_value, buffer + pos, width, 0);  // Lowercase hex for pointer
+                    break;
+                }
+                case '%': {  // Handle literal '%' character
                     buffer[pos++] = '%';
                     break;
                 }
-                default: {
-                    // Handle unrecognized format specifier
+                default: {  // Handle unrecognized format specifier
                     buffer[pos++] = '%';
                     buffer[pos++] = *ptr;
                     break;
@@ -352,7 +357,6 @@ int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
     buffer[pos] = '\0'; // Null-terminate the string
     return pos;
 }
-
 int flopsnprintf(char *buffer, size_t size, const char *format, ...) {
     va_list args;
     va_start(args, format);

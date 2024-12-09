@@ -36,7 +36,6 @@ char command[MAX_COMMAND_LENGTH];
 int command_ready = 0;  // Initialize the flag as 0 (no command is ready)
 
 // Converts a scancode to an ASCII character or handles modifiers
-// Converts a scancode to an ASCII character or handles modifiers
 char key_to_char(unsigned char key) {
     // Check for modifier keys
     switch (key) {

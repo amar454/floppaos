@@ -5,6 +5,7 @@
 #include "../../apps/echo.h"
 #include "../vga/vgahandler.h"
 #include "../../task/task_handler.h"
+#include "../../fshell/command.h"
 // Helper to read a byte from a CMOS register
 static unsigned char read_cmos(unsigned char reg) {
     unsigned char val;
@@ -99,4 +100,13 @@ void sleep_seconds(int seconds) {
             elapsed_seconds += 60;
         }
     }
+}
+
+void time_task(void *arg) {
+    struct Time *time = (struct Time *)arg; // Cast arg to Time struct pointer
+    time_get_current(time);
+    // Format the time string and store it in the global current_time_string
+    flopsnprintf(current_time_string, sizeof(current_time_string), "%02d-%02d-%04d %02d:%02d:%02d",
+                 time->day, time->month, time->year,
+                 time->hour, time->minute, time->second);
 }

@@ -6,4 +6,5 @@
 extern int command_ready;
 extern char command[MAX_COMMAND_LENGTH];
 
+extern char current_time_string[32];
 #endif // COMMAND_H

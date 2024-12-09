@@ -23,14 +23,17 @@ kernel.c:
 
 #include "kernel.h"
 #include "apps/echo.h"
+#include "drivers/time/floptime.h"
 #include "fs/tmpflopfs/tmpflopfs.h"
+#include "fshell/command.h"
 #include "fshell/fshell.h"
 #include "drivers/keyboard/keyboard.h"
+#include "mem/lib/str.h"
 #include "task/task_handler.h"
 #include "drivers/vga/vgahandler.h"
 #include "mem/memutils.h"
 #include "multiboot/multiboot.h"
-
+int time_ready = 1; 
 
 void clear_screen(void) {
     int index = 0;
@@ -41,16 +44,42 @@ void clear_screen(void) {
 }
 
 
+int main(int argc, char **argv) {
+    echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
+    // Assuming argv[1] points to the Multiboot info structure
 
-int main() {
-    clear_screen();
+    multiboot_info_t *mbi = (multiboot_info_t *)argv[1];
+    echo("Checking for multiboot pointer multiboot_info_t...\n", WHITE);
+    // Check for valid Multiboot info structure
+    if (mbi && (mbi->flags & MULTIBOOT_INFO_MEMORY)) {
+        echo("MULTIBOOT_INFO_MEMORY available.\n\n", GREEN);
 
+        echo_f("MULTIBOOT_INFO_MEMORY address: %p\n", WHITE, mbi);
+
+        // Check if memory information is available
+        if (mbi->flags & MULTIBOOT_INFO_MEMORY) {
+            echo("Memory info is available!\n", GREEN);
+            echo_f("Lower Memory: %u KB\n", WHITE, mbi->mem_lower);
+            echo_f("Upper Memory: %u KB\n", WHITE, mbi->mem_upper);
+        } else {
+            echo("Memory info is not available!\n", RED);
+
+        }
+
+        // Now print out the actual Multiboot info
+        print_multiboot_info(mbi);
+
+    } else {
+        echo("No valid Multiboot information provided.\n", RED);
+
+    }
+    
     echo("floppaOS  Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
+
+
     echo("This program is licensed under the GNU General Public License 3.0\nType license --help for more information\n\n", CYAN);
     echo("***************************\n",WHITE);
-    echo("*                         *\n",WHITE);
     echo("*  Welcome to floppaOS!   *\n", WHITE);
-    echo("*                         *\n",WHITE);
     echo("***************************\n\n",WHITE);
     echo("Type 'help' for available commands.\n\n", WHITE);
     
@@ -70,20 +99,23 @@ int main() {
     echo("Initializing task_handler... ", WHITE);
     initialize_task_system();
     echo("Success! \n\n", GREEN);
+
+    echo("Adding fshell_task... ", WHITE);
+    struct Time system_time; 
+    add_task(time_task, &system_time, 2);
+    echo("Success! \n\n", GREEN);
     
     // Add fshell and keyboard as tasks
-    echo("Adding task fshell... ", WHITE);
+    echo("Adding fshell_task... ", WHITE);
     add_task(fshell_task, &tmp_fs, 1);  
     echo("Success! \n\n", GREEN);
 
     
-    echo("Adding task keyboard... ", WHITE);
+    echo("Adding keyboard_task ... ", WHITE);
     add_task(keyboard_task, NULL, 0); 
     echo("Success! \n\n", GREEN);
 
-    // Start the scheduler loop
     while (1) {
         scheduler();  // Execute the next task in the task queue
     }
 }
-

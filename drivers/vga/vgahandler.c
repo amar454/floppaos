@@ -21,8 +21,8 @@ Good luck reading half of this. Most of the memory addresses I found on osdev, s
 */
 
 #include "vgahandler.h"
-#include "../../lib/flopmath.h"
 #include "../../drivers/time/floptime.h"
+#include "../../lib/flopmath.h"
 #include "framebuffer.h" 
 // VGA constants for text mode (in real mode for the time being)
 #define VGA_WIDTH 80
@@ -37,6 +37,17 @@ static unsigned short *terminal_buffer_saved = NULL;
 static uint32_t terminal_color_saved = 0;
 static uint16_t terminal_x_saved = 0;
 static uint16_t terminal_y_saved = 0;
+
+void vga_clear_terminal() {
+    // Clear the entire terminal buffer
+    for (unsigned int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+        terminal_buffer[i] = (0x07 << 8) | ' '; // Default color (light gray on black) and space character
+    }
+
+    // Reset the VGA index and cursor position
+    vga_index = 0;
+    vga_set_cursor_position(0, 0);
+}
 
 void framebuffer_initialize_wrapper(multiboot_info_t *mbi) {
     framebuffer_initialize(mbi, &fb);
@@ -218,3 +229,56 @@ void textmode_draw_diagonal_line(int x0, int y0, int x1, int y1, uint32_t color)
         y += y_increment;
     }
 }
+
+// Cube vertices (3D space)
+float cube_vertices[8][3] = {
+    {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
+    {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}
+};
+
+// Cube edges
+int cube_edges[12][2] = {
+    {0, 1}, {1, 2}, {2, 3}, {3, 0},
+    {4, 5}, {5, 6}, {6, 7}, {7, 4},
+    {0, 4}, {1, 5}, {2, 6}, {3, 7}
+};
+
+// Projection function
+void project(float vertex[3], int *x, int *y, float angle) {
+    float sin_angle = sin(angle);
+    float cos_angle = cos(angle);
+
+    // Rotate around the Y-axis
+    float x_rot = vertex[0] * cos_angle - vertex[2] * sin_angle;
+    float z_rot = vertex[0] * sin_angle + vertex[2] * cos_angle;
+
+    // Perspective projection
+    float distance = 3.0; // Distance of the viewer from the screen
+    float perspective = 1 / (distance - z_rot);
+
+    *x = (int)(VGA_WIDTH / 2 + x_rot * perspective * 10);
+    *y = (int)(VGA_HEIGHT / 2 - vertex[1] * perspective * 10);
+}
+
+// Draw spinning cube
+void draw_spinning_cube() {
+    float angle = 0.0;
+
+    while (1) {
+        vga_clear_terminal(); // Clear screen
+
+        // Project and draw edges
+        for (int i = 0; i < 12; i++) {
+            int start[2], end[2];
+
+            project(cube_vertices[cube_edges[i][0]], &start[0], &start[1], angle);
+            project(cube_vertices[cube_edges[i][1]], &end[0], &end[1], angle);
+
+            textmode_draw_diagonal_line(start[0], start[1], end[0], end[1], 0x07);
+        }
+
+        angle += 0.05; // Increment angle for rotation
+
+    }
+}
+

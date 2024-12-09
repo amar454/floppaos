@@ -1,5 +1,6 @@
 #include "echo.h"
 #include "../drivers/vga/vgahandler.h"
+#include "../lib/str.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdarg.h>
@@ -70,110 +71,17 @@ void echo_bold(const char *str, unsigned char color) {
 
 // Variadic formatted output function
 void echo_f(const char *format, int color, ...) {
+    char buffer[256];  // Fixed buffer size
     va_list args;
     va_start(args, color);
 
-    char buffer[128]; // Temporary output buffer
-    int buffer_index = 0;
-
-    for (const char *ptr = format; *ptr != '\0'; ++ptr) {
-        if (*ptr == '%' && *(ptr + 1) != '\0') {
-            ++ptr;
-            switch (*ptr) {
-                case 'd': {  // Signed integer
-                    int num = va_arg(args, int);
-                    if (num < 0) {
-                        buffer[buffer_index++] = '-';
-                        num = -num;
-                    }
-                    char num_buffer[16];
-                    int num_len = 0;
-                    do {
-                        num_buffer[num_len++] = '0' + (num % 10);
-                        num /= 10;
-                    } while (num > 0);
-                    while (num_len > 0) {
-                        buffer[buffer_index++] = num_buffer[--num_len];
-                    }
-                    break;
-                }
-                case 'u': {  // Unsigned integer
-                    unsigned int num = va_arg(args, unsigned int);
-                    char num_buffer[16];
-                    int num_len = 0;
-                    do {
-                        num_buffer[num_len++] = '0' + (num % 10);
-                        num /= 10;
-                    } while (num > 0);
-                    while (num_len > 0) {
-                        buffer[buffer_index++] = num_buffer[--num_len];
-                    }
-                    break;
-                }
-                case 'x': {  // Hexadecimal
-                    unsigned int num = va_arg(args, unsigned int);
-                    char hex_chars[] = "0123456789ABCDEF";
-                    char num_buffer[16];
-                    int num_len = 0;
-                    do {
-                        num_buffer[num_len++] = hex_chars[num % 16];
-                        num /= 16;
-                    } while (num > 0);
-                    while (num_len > 0) {
-                        buffer[buffer_index++] = num_buffer[--num_len];
-                    }
-                    break;
-                }
-                case 's': {  // String
-                    const char *str = va_arg(args, const char *);
-                    while (*str) {
-                        buffer[buffer_index++] = *str++;
-                    }
-                    break;
-                }
-                case 'p': {  // Pointer
-                    uintptr_t addr = (uintptr_t)va_arg(args, void *);
-                    char hex_chars[] = "0123456789ABCDEF";
-
-                    buffer[buffer_index++] = '0';
-                    buffer[buffer_index++] = 'x';
-
-                    char num_buffer[16];
-                    int num_len = 0;
-                    do {
-                        num_buffer[num_len++] = hex_chars[addr % 16];
-                        addr /= 16;
-                    } while (addr > 0);
-                    while (num_len > 0) {
-                        buffer[buffer_index++] = num_buffer[--num_len];
-                    }
-                    break;
-                }
-                case '%': {  // Literal '%'
-                    buffer[buffer_index++] = '%';
-                    break;
-                }
-                default: {
-                    break; // Ignore unknown specifiers
-                }
-            }
-        } else {
-            buffer[buffer_index++] = *ptr;
-        }
-
-        if (buffer_index >= sizeof(buffer) - 1) {
-            buffer[buffer_index] = '\0';
-            echo(buffer, (unsigned char)color);
-            buffer_index = 0;
-        }
-    }
-
-    if (buffer_index > 0) {
-        buffer[buffer_index] = '\0';
-        echo(buffer, (unsigned char)color);
-    }
+    // Use flopsnprintf to format the string
+    flopsnprintf(buffer, sizeof(buffer), format, args);
 
     va_end(args);
+
+    // Output the formatted string using the echo function
+    echo(buffer, color);
 }
 
 

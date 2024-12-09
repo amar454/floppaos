@@ -3,12 +3,12 @@ ENTRY(start)
 
 SECTIONS
 {
-    . = 1M;
+    . = 1M;                      /* Load kernel at 1MB */
     .text BLOCK(4K) : ALIGN(4K)
     {
-        *(.multiboot)
-        *(.text)
+        *(.multiboot)            /* Multiboot header */
+        *(.text)                 /* Kernel code */
     }
-    .data : { *(.data) }
-    .bss  : { *(.bss) }
+    .data : { *(.data) }         /* Kernel data */
+    .bss  : { *(.bss) }          /* Kernel BSS */
 }

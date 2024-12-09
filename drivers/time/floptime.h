@@ -15,5 +15,5 @@ struct Time {
 void time_get_current(struct Time *time);
 void time_to_string(struct Time *time, char *buffer, size_t size);
 void sleep_seconds(int seconds);
-void time_print_task(void *arg);
+void time_task(void *arg);
 #endif // FLOPTIME_H
