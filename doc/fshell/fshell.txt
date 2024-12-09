@@ -1,0 +1,143 @@
+fshell.h Documentation
+--------------------------------------------------------------------------------
+
+Overview:
+--------------------------------------------------------------------------------
+The fshell.h file is part of a simple shell implementation for FloppaOS. It manages basic file system operations, including listing, creating, writing, reading, removing, and managing directories. The file interacts with the file system and temporary file system APIs, managing commands through a simple parser.
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+Global Variables:
+--------------------------------------------------------------------------------
+char current_time_string[32] = ""
+    Description:
+        Holds the current time as a string to be displayed at the top-right corner of the screen.
+
+#define MAX_COMMAND_LENGTH 128
+    Description:
+        Defines the maximum allowed length for commands entered into the shell.
+
+#define MAX_ARGUMENTS 10
+    Description:
+        Defines the maximum number of arguments that can be passed to a command.
+
+--------------------------------------------------------------------------------
+Functions:
+--------------------------------------------------------------------------------
+
+void display_time_top_right()
+    Description:
+        Displays the current time in a bordered box at the top-right corner of the screen.
+    Parameters:
+        None
+    Returns:
+        None
+
+static void display_prompt()
+    Description:
+        Displays the shell prompt, including the current time at the top-right and the prompt text "fshell -> ".
+    Parameters:
+        None
+    Returns:
+        None
+
+int parse_command(char *command, char *arguments[], int max_arguments)
+    Description:
+        Parses the input command into individual arguments. It tokenizes the command string and splits it into arguments based on spaces and newlines.
+    Parameters:
+        command (char*): The command string entered by the user.
+        arguments (char*[]): The array that will store the parsed arguments.
+        max_arguments (int): The maximum number of arguments to parse.
+    Returns:
+        The number of arguments parsed.
+
+void handle_list_command(struct FileSystem *fs, struct TmpFileSystem *tmp_fs, char *arguments[], int arg_count)
+    Description:
+        Handles the "list" command, displaying a list of files. It checks if the `--colored` argument is present to enable colored output.
+    Parameters:
+        fs (struct FileSystem*): The file system to list files from.
+        tmp_fs (struct TmpFileSystem*): The temporary file system to list files from.
+        arguments (char*[]): The command arguments.
+        arg_count (int): The number of arguments passed.
+    Returns:
+        None
+
+void handle_license_command(int arg_count, char *arguments[])
+    Description:
+        Handles the "license" command. Displays the full license or specific sections like "warranty" or "purpose".
+    Parameters:
+        arg_count (int): The number of arguments passed.
+        arguments (char*[]): The command arguments.
+    Returns:
+        None
+
+void fshell_task(void *arg)
+    Description:
+        Main function for handling the shell task. It handles command parsing, command execution, and updates the shell prompt.
+    Parameters:
+        arg (void*): The file system or temporary file system passed to the function.
+    Returns:
+        None
+
+--------------------------------------------------------------------------------
+Commands Supported:
+--------------------------------------------------------------------------------
+The following commands are supported in fshell:
+
+1. "list [--colored]"
+    Description: Lists files in the current file system. If `--colored` is passed, the output will be colored.
+    Usage: list [--colored]
+
+2. "license [keyword]"
+    Description: Displays the license text. You can optionally specify a keyword (e.g., "warranty", "purpose") to show a specific part.
+    Usage: license [optional_keyword]
+
+3. "create <filename>"
+    Description: Creates a file with the specified filename.
+    Usage: create <filename>
+
+4. "mkdir <dirname>"
+    Description: Creates a directory with the specified directory name.
+    Usage: mkdir <dirname>
+
+5. "write <filename> <data>"
+    Description: Writes data to the specified file.
+    Usage: write <filename> <data>
+
+6. "remove <filename>"
+    Description: Removes the specified file.
+    Usage: remove <filename>
+
+7. "read <filename>"
+    Description: Reads and prints the contents of the specified file.
+    Usage: read <filename>
+
+8. "help"
+    Description: Displays a help message listing all commands and their usage.
+    Usage: help
+
+9. "exit"
+    Description: Exits the shell and resets initialization.
+    Usage: exit
+
+10. "sleep <seconds>"
+    Description: Pauses execution for the specified number of seconds.
+    Usage: sleep <seconds>
+
+--------------------------------------------------------------------------------
+Implementation Details:
+--------------------------------------------------------------------------------
+
+The shell uses a simple string comparison (`flopstrcmp`) to identify which command was entered. Based on the command, it dispatches to the appropriate function to handle the task. Each function performs a specific operation, such as creating files, listing files, writing to files, etc.
+
+- The `display_time_top_right` function draws a time display box at the top-right corner of the screen.
+- The `parse_command` function handles the conversion of a command string into individual arguments that can be processed.
+- The `fshell_task` function is the main task that controls the flow of the shell. It processes input, executes commands, and displays the prompt after each action.
+
+Notes:
+--------------------------------------------------------------------------------
+- Commands are executed based on string matching with `flopstrcmp`.
+- The shell supports basic file system operations like file creation, reading, writing, and removal.
+- For each command, there is a corresponding function that handles the operation based on the file system type (`FileSystem` or `TmpFileSystem`).
+- The shell can output colored results depending on the command (e.g., the `list` command can output with color).
+--------------------------------------------------------------------------------
