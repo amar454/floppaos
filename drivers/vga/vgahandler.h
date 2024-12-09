@@ -9,6 +9,8 @@
 // VGA Constants
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
+    // ASCII box-drawing characters
+
 // VGA Color Definitions
 #define BLACK        0
 #define BLUE         1

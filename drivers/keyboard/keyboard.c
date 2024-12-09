@@ -74,6 +74,8 @@ char key_to_char(unsigned char key) {
             case 0x09: c = shift_pressed ? '*' : '8'; break;
             case 0x0A: c = shift_pressed ? '(' : '9'; break;
             case 0x0B: c = shift_pressed ? ')' : '0'; break;
+            case 0x0C: c = shift_pressed ? '_' : '-'; break; // minus
+            case 0x0D: c = shift_pressed ? '+' : '='; break; // equals
 
             // Alphabet keys
             case 0x10: c = shift_pressed ? 'Q' : 'q'; break;
@@ -115,8 +117,6 @@ char key_to_char(unsigned char key) {
     return 0;  // Unsupported or non-printable key
 }
 
-
-
 // Updated function to check for a scancode without blocking
 unsigned char try_read_key(void) {
     if (inb(0x64) & 0x1) {
@@ -134,13 +134,16 @@ char try_get_char(void) {
     return 0;  // Return 0 if no character is available
 }
 
+// Keyboard task to handle keypresses and display them
 void keyboard_task(void *arg) {
     static int pos = 0; 
     char c = try_get_char();
+
     if (c == 0) {
         return;  // No keypress, yield to scheduler
     }
-    if (c == '\b' && pos > 0) {               // backspace
+
+    if (c == '\b' && pos > 0) {               // Backspace
         pos--;
         vga_index--;                          // Move cursor back
         put_char(' ', BLACK);        // Clear character

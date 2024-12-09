@@ -173,7 +173,8 @@ void fshell_task(void *arg) {
             flopstrcmp(cmd, "remove") == 0 ? 6 :
             flopstrcmp(cmd, "read") == 0 ? 7 :
             flopstrcmp(cmd, "help") == 0 ? 8 :
-            flopstrcmp(cmd, "exit") == 0 ? 9 : 0) {
+            flopstrcmp(cmd, "exit") == 0 ? 9 :
+            flopstrcmp(cmd, "sleep") == 0 ? 10 : 0) {
 
         case 1: // "list"
             handle_list_command(fs, tmp_fs, arguments, arg_count);
@@ -246,7 +247,14 @@ void fshell_task(void *arg) {
             echo("Exiting shell...\n", YELLOW);
             initialized = 0; // Reset initialization
             break;
-
+        case 10:
+            if (arg_count > 1) {
+                sleep_seconds(flopatoi(arguments[1]));
+                break;
+            } else {
+                echo("Usage: sleep <seconds> \n", YELLOW);
+            }
+            break;
         default: // Unknown command
             echo("Unknown command. Type 'help' for assistance.\n", RED);
             break;

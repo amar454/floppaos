@@ -5,7 +5,7 @@
 // Print the full multiboot information using echo_f
 void print_multiboot_info(const multiboot_info_t *mb_info) {
     // Memory Info
-    
+    sleep_seconds(1);
     if (mb_info->flags & MULTIBOOT_INFO_MEMORY) {
         echo("Memory Info:\n", WHITE);
         echo_f("  Lower Memory: %u KB\n", WHITE, mb_info->mem_lower);
@@ -24,7 +24,7 @@ void print_multiboot_info(const multiboot_info_t *mb_info) {
         // Cast cmdline address to const char *
         echo_f("  %s\n", WHITE, (const char *)(uintptr_t)mb_info->cmdline);
     }
-    
+    sleep_seconds(1);
     // Modules Info
     if (mb_info->flags & MULTIBOOT_INFO_MODS) {
         echo("Modules Info:\n", WHITE);
@@ -39,7 +39,7 @@ void print_multiboot_info(const multiboot_info_t *mb_info) {
         echo_f("  String Size: %u\n", WHITE, mb_info->aout_sym.strsize);
         echo_f("  Address: 0x%x\n", WHITE, mb_info->aout_sym.addr);
     }
-    
+    sleep_seconds(1);
     // ELF Section Info
     if (mb_info->flags & MULTIBOOT_INFO_ELF_SHDR) {
         echo("ELF Section Info:\n", WHITE);
@@ -59,7 +59,7 @@ void print_multiboot_info(const multiboot_info_t *mb_info) {
             mmap = (multiboot_memory_map_t *)((uintptr_t)mmap + mmap->size + sizeof(mmap->size));
         }
     }
-    
+    sleep_seconds(1);
     // Drive Info
     if (mb_info->flags & MULTIBOOT_INFO_DRIVE_INFO) {
         echo("Drive Info:\n", WHITE);
@@ -84,7 +84,7 @@ void print_multiboot_info(const multiboot_info_t *mb_info) {
         echo("APM Table Info:\n", WHITE);
         echo_f("  Address: 0x%x\n", WHITE, mb_info->apm_table);
     }
-    
+    sleep_seconds(1);
     // Framebuffer Info
     if (mb_info->flags & MULTIBOOT_INFO_FRAMEBUFFER) {
         echo("Framebuffer Info:\n", WHITE);

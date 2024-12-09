@@ -43,13 +43,13 @@ void clear_screen(void) {
     }
 }
 
-
 int main(int argc, char **argv) {
     echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
     // Assuming argv[1] points to the Multiboot info structure
 
     multiboot_info_t *mbi = (multiboot_info_t *)argv[1];
     echo("Checking for multiboot pointer multiboot_info_t...\n", WHITE);
+    sleep_seconds(1);
     // Check for valid Multiboot info structure
     if (mbi && (mbi->flags & MULTIBOOT_INFO_MEMORY)) {
         echo("MULTIBOOT_INFO_MEMORY available.\n\n", GREEN);
@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
             echo("Memory info is not available!\n", RED);
 
         }
-
+        sleep_seconds(1);
         // Now print out the actual Multiboot info
         print_multiboot_info(mbi);
 
@@ -73,27 +73,29 @@ int main(int argc, char **argv) {
         echo("No valid Multiboot information provided.\n", RED);
 
     }
-    
+
+
     echo("floppaOS  Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
+    sleep_seconds(1);
 
-
-    echo("This program is licensed under the GNU General Public License 3.0\nType license --help for more information\n\n", CYAN);
+    echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n\n", CYAN);
     echo("***************************\n",WHITE);
     echo("*  Welcome to floppaOS!   *\n", WHITE);
     echo("***************************\n\n",WHITE);
-    echo("Type 'help' for available commands.\n\n", WHITE);
-    
-    
+
+    sleep_seconds(1);
     // Initialize memory allocator
     echo("Initializing memory allocator... ", WHITE);
     init_memory();
     echo("Success! \n\n", GREEN);
+    sleep_seconds(1);
 
     // Display loading message for file system
     echo("Loading tmpflopfs File System... ", WHITE);
     struct TmpFileSystem tmp_fs;
     init_tmpflopfs(&tmp_fs);  // Load the filesystem
     echo("Success! \n\n", GREEN);
+    sleep_seconds(1);
 
     // Initialize task system
     echo("Initializing task_handler... ", WHITE);
@@ -104,18 +106,22 @@ int main(int argc, char **argv) {
     struct Time system_time; 
     add_task(time_task, &system_time, 2);
     echo("Success! \n\n", GREEN);
-    
+
     // Add fshell and keyboard as tasks
     echo("Adding fshell_task... ", WHITE);
     add_task(fshell_task, &tmp_fs, 1);  
     echo("Success! \n\n", GREEN);
 
     
-    echo("Adding keyboard_task ... ", WHITE);
+    echo("Adding keyboard_task... ", WHITE);
     add_task(keyboard_task, NULL, 0); 
     echo("Success! \n\n", GREEN);
+    sleep_seconds(1);
+    
+    echo("Type 'help' for available commands.\n\n", WHITE);
 
     while (1) {
         scheduler();  // Execute the next task in the task queue
     }
+    
 }

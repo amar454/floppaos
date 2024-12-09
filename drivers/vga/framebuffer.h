@@ -19,5 +19,6 @@ void framebuffer_clear_screen(framebuffer_t *fb, uint32_t color);
 void framebuffer_draw_pixel(framebuffer_t *fb, uint16_t x, uint16_t y, uint32_t color);
 void framebuffer_draw_line(framebuffer_t *fb, int x0, int y0, int x1, int y1, uint32_t color);
 void framebuffer_draw_rect(framebuffer_t *fb, int x, int y, int width, int height, uint32_t color);
-
+void framebuffer_draw_char(framebuffer_t *fb, uint16_t x, uint16_t y, char c, uint32_t color);
+void framebuffer_draw_text(framebuffer_t *fb, uint16_t x, uint16_t y, const char *text, uint32_t color) ;
 #endif // FRAMEBUFFER_H
