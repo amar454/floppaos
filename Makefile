@@ -1,14 +1,17 @@
+# Define commands
 CP := cp
 RM := rm -rf
 MKDIR := mkdir -pv
 FIND := find
 
+# Define output and paths
 BIN = kernel
 CFG = grub.cfg
 ISO_PATH := iso
 BOOT_PATH := $(ISO_PATH)/boot
 GRUB_PATH := $(BOOT_PATH)/grub
 
+# Compiler flags and linker settings
 CFLAGS = -m32 -ffreestanding -fno-stack-protector
 LD_FLAGS = -m elf_i386 -T linker.ld
 
@@ -33,13 +36,34 @@ OBJ_FILES = \
     drivers/vga/framebuffer.o \
     multiboot/multiboot.o
 
-.PHONY: all
-all: bootloader kernel linker iso
-	@echo Make has completed.
+# Dependency check
+CHECK_DEPENDENCIES = \
+    nasm gcc ld grub-mkrescue grub-file
 
+# Check dependencies
+.PHONY: check-dependencies
+check-dependencies:
+	@echo "Checking dependencies..."
+	@for dep in $(CHECK_DEPENDENCIES); do \
+	    if ! command -v $$dep &>/dev/null; then \
+	        echo "Error: $$dep is not installed."; \
+	        echo "Please install it using your package manager."; \
+		echo "Try 'make install_guide' for information for your system."; \
+	        exit 1; \
+	    fi; \
+	done
+	@echo "All dependencies are installed."
+
+# Main build target
+.PHONY: all
+all: check-dependencies bootloader kernel linker iso
+	@echo "Make has completed."
+
+# Bootloader compilation
 bootloader: boot.asm
 	nasm -f elf32 boot.asm -o boot.o
 
+# Kernel compilation
 kernel: \
     kernel.c \
     apps/echo.c \
@@ -77,9 +101,11 @@ kernel: \
         drivers/vga/framebuffer.c \
         multiboot/multiboot.c
 
+# Linker step
 linker: linker.ld $(OBJ_FILES)
 	ld $(LD_FLAGS) -o $(BIN) $(OBJ_FILES)
 
+# ISO creation
 iso: $(BIN)
 	$(MKDIR) $(GRUB_PATH)
 	$(CP) $(BIN) $(BOOT_PATH)
@@ -87,6 +113,7 @@ iso: $(BIN)
 	grub-file --is-x86-multiboot $(BOOT_PATH)/$(BIN)
 	grub-mkrescue -o floppaOS-alpha.iso $(ISO_PATH)
 
+# Clean build artifacts
 .PHONY: clean cleanobj
 clean:
 	$(RM) $(BIN) *.iso $(ISO_PATH)
@@ -94,3 +121,25 @@ clean:
 
 cleanobj:
 	$(FIND) . -name "*.o" -exec $(RM) {} \;
+
+# Installation guide
+.PHONY: install-guide
+install-guide:
+	@echo "----------------------------------------------------"
+	@echo "Installation Guide for Dependencies:"
+	@echo "----------------------------------------------------"
+	@echo "1. On Ubuntu/Debian-based systems:"
+	@echo "   sudo apt update"
+	@echo "   sudo apt install nasm gcc grub-pc-bin grub2-common"
+	@echo "   sudo apt install make xorriso"
+	@echo ""
+	@echo "2. On Fedora/RHEL/CentOS-based systems:"
+	@echo "   sudo dnf install nasm gcc grub2-tools"
+	@echo "   sudo dnf install make xorriso"
+	@echo ""
+	@echo "3. On Arch Linux-based systems:"
+	@echo "   sudo pacman -S nasm gcc grub dosfstools"
+	@echo "   sudo pacman -S make xorriso"
+	@echo ""
+	@echo "After installing the dependencies, run 'make' to build the project."
+	@echo "----------------------------------------------------"
