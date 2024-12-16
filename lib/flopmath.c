@@ -508,7 +508,3 @@ double smoothstep(double edge0, double edge1, double x) {
     return t * t * (3.0 - 2.0 * t);
 }
 
-// Random number generation (uniform)
-double rand_range(double min, double max) {
-    return min + (max - min) * ((double)rand() / (double)RAND_MAX);
-}
