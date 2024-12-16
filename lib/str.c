@@ -28,6 +28,18 @@ void flopstrcopy(char *dst, const char *src, size_t len) {
     dst[i] = '\0';  // Null-terminate the destination string
 }
 
+size_t flopstrlcpy(char *dst, const char *src, size_t size) {
+    size_t i = 0;
+    while (i < size - 1 && src[i] != '\0') {
+        dst[i] = src[i];
+        i++;
+    }
+    if (size > 0) {
+        dst[i] = '\0';
+    }
+    return flopstrlen(src);
+}
+
 int flopatoi(const char *str) {
     if (str == NULL) {
         return 0; // Handle null pointer
@@ -66,6 +78,15 @@ size_t flopstrlen(const char *str) {
     }
     return s - str;
 }
+
+size_t flopstrnlen(const char *str, size_t maxlen) {
+    const char *s = str;
+    while (*s && maxlen--) {
+        s++;
+    }
+    return s - str;
+}
+
 
 // Compares two strings
 int flopstrcmp(const char *s1, const char *s2) {
@@ -123,6 +144,111 @@ void flopstrcat(char *dst, const char *src) {
         src++;
     }
     *dst = '\0'; // Null-terminate the resulting string
+}
+
+size_t flopstrlcat(char *dst, const char *src, size_t size) {
+    size_t dst_len = flopstrlen(dst);
+    size_t i = 0;
+
+    if (dst_len < size - 1) {
+        while (i < size - dst_len - 1 && src[i] != '\0') {
+            dst[dst_len + i] = src[i];
+            i++;
+        }
+        dst[dst_len + i] = '\0';
+    }
+
+    return dst_len + flopstrlen(src);
+}
+
+char *flopstrtrim(char *str) {
+    // Trim leading whitespace
+    char *start = str;
+    while (*start == ' ' || *start == '\t' || *start == '\n') {
+        start++;
+    }
+
+    // Trim trailing whitespace
+    char *end = start + flopstrlen(start) - 1;
+    while (end > start && (*end == ' ' || *end == '\t' || *end == '\n')) {
+        end--;
+    }
+
+    // Null-terminate the trimmed string
+    *(end + 1) = '\0';
+    return start;
+}
+
+char *flopstrreplace(char *str, const char *old, const char *new_str) {
+    char *result = str;
+    size_t old_len = flopstrlen(old);
+    size_t new_len = flopstrlen(new_str);
+    char *temp = (char *)malloc(flopstrlen(str) + 1);
+    if (temp) {
+        size_t pos = 0;
+        while (*str) {
+            if (flopstrncmp(str, old, old_len) == 0) {
+                flopstrcopy(temp + pos, new_str, new_len);
+                pos += new_len;
+                str += old_len;
+            } else {
+                temp[pos++] = *str++;
+            }
+        }
+        temp[pos] = '\0';
+        flopstrcopy(result, temp, pos + 1);
+        free(temp);
+    }
+    return result;
+}
+
+char **flopstrsplit(const char *str, const char *delim) {
+    size_t token_count = 0;
+    const char *s = str;
+    while (*s) {
+        if (flopstrchr(delim, *s)) {
+            token_count++;
+        }
+        s++;
+    }
+
+    char **tokens = (char **)malloc((token_count + 2) * sizeof(char *));
+    if (tokens) {
+        size_t index = 0;
+        s = str;
+        while (*s) {
+            const char *start = s;
+            while (*s && !flopstrchr(delim, *s)) {
+                s++;
+            }
+            size_t len = s - start;
+            tokens[index] = (char *)malloc(len + 1);
+            flopstrcopy(tokens[index], start, len + 1);
+            index++;
+            if (*s) {
+                s++;
+            }
+        }
+        tokens[index] = NULL;
+    }
+
+    return tokens;
+}
+
+void flopstrreverse_words(char *str) {
+    flopstrrev(str);
+    char *word_start = str;
+    char *p = str;
+    while (*p) {
+        if (*p == ' ' || *(p + 1) == '\0') {
+            if (*p != '\0') {
+                *p = '\0';
+            }
+            flopstrrev(word_start);
+            word_start = p + 1;
+        }
+        p++;
+    }
 }
 
 // Finds the first occurrence of a substring in a string
@@ -208,6 +334,43 @@ char *flopstrtok(char *str, const char *delim) {
 
     return token_start;
 }
+
+char *flopstrtok_r(char *str, const char *delim, char **saveptr) {
+    if (str == NULL) {
+        str = *saveptr;
+    }
+
+    while (*str && flopstrchr(delim, *str)) {
+        str++;
+    }
+
+    if (*str == '\0') {
+        *saveptr = NULL;
+        return NULL;
+    }
+
+    char *token_start = str;
+    while (*str && !flopstrchr(delim, *str)) {
+        str++;
+    }
+
+    if (*str) {
+        *str++ = '\0';
+    }
+
+    *saveptr = str;
+    return token_start;
+}
+
+char *flopstrdup(const char *str) {
+    size_t len = flopstrlen(str) + 1;
+    char *dup = (char *)malloc(len);
+    if (dup) {
+        flopstrcopy(dup, str, len);
+    }
+    return dup;
+}
+
 
 char *flopstrchr(const char *str, int c) {
     while (*str) {
