@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with Flo
 #include "str.h"
 #include <stdarg.h>
 #include <stdint.h>
-
+#include "../mem/memutils.h"
 static char *flopstrtok_next = NULL;
 
 // Copies src string to dest
@@ -183,7 +183,7 @@ char *flopstrreplace(char *str, const char *old, const char *new_str) {
     char *result = str;
     size_t old_len = flopstrlen(old);
     size_t new_len = flopstrlen(new_str);
-    char *temp = (char *)malloc(flopstrlen(str) + 1);
+    char *temp = (char *)flop_malloc(flopstrlen(str) + 1);
     if (temp) {
         size_t pos = 0;
         while (*str) {
@@ -197,7 +197,7 @@ char *flopstrreplace(char *str, const char *old, const char *new_str) {
         }
         temp[pos] = '\0';
         flopstrcopy(result, temp, pos + 1);
-        free(temp);
+        flop_free(temp);
     }
     return result;
 }
@@ -212,7 +212,7 @@ char **flopstrsplit(const char *str, const char *delim) {
         s++;
     }
 
-    char **tokens = (char **)malloc((token_count + 2) * sizeof(char *));
+    char **tokens = (char **)flop_malloc((token_count + 2) * sizeof(char *));
     if (tokens) {
         size_t index = 0;
         s = str;
@@ -222,7 +222,7 @@ char **flopstrsplit(const char *str, const char *delim) {
                 s++;
             }
             size_t len = s - start;
-            tokens[index] = (char *)malloc(len + 1);
+            tokens[index] = (char *)flop_malloc(len + 1);
             flopstrcopy(tokens[index], start, len + 1);
             index++;
             if (*s) {
@@ -364,7 +364,7 @@ char *flopstrtok_r(char *str, const char *delim, char **saveptr) {
 
 char *flopstrdup(const char *str) {
     size_t len = flopstrlen(str) + 1;
-    char *dup = (char *)malloc(len);
+    char *dup = (char *)flop_malloc(len);
     if (dup) {
         flopstrcopy(dup, str, len);
     }
