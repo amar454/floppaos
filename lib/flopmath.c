@@ -414,6 +414,7 @@ Matrix4x4 matrix_multiply(Matrix4x4 a, Matrix4x4 b) {
     return result;
 }
 
+
 // Matrix translation
 Matrix4x4 matrix_translation(double tx, double ty, double tz) {
     Matrix4x4 result = matrix_identity();
@@ -496,10 +497,6 @@ Matrix4x4 matrix_look_at(Vector3 eye, Vector3 target, Vector3 up) {
     return result;
 }
 
-// Linear interpolation (lerp)
-double lerp(double a, double b, double t) {
-    return a + (b - a) * t;
-}
 
 // Smoothstep (easing function)
 double smoothstep(double edge0, double edge1, double x) {
@@ -507,4 +504,131 @@ double smoothstep(double edge0, double edge1, double x) {
     t = (t < 0) ? 0 : (t > 1) ? 1 : t;
     return t * t * (3.0 - 2.0 * t);
 }
+
+// Quadratic equation solver: ax^2 + bx + c = 0
+int solve_quadratic(double a, double b, double c, double *root1, double *root2) {
+    if (a == 0) {
+        if (b == 0) return 0; // No solution
+        *root1 = -c / b;
+        return 1; // One solution
+    }
+    double discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) return 0; // No real roots
+    *root1 = (-b + sqrt(discriminant)) / (2 * a);
+    *root2 = (-b - sqrt(discriminant)) / (2 * a);
+    return (discriminant == 0) ? 1 : 2; // Return number of roots
+}
+
+// Linear interpolation for a vector (lerp)
+Vector3 vector_lerp(Vector3 a, Vector3 b, double t) {
+    return vector_add(vector_scalar_multiply(a, 1 - t), vector_scalar_multiply(b, t));
+}
+
+
+// Matrix determinant (2x2 matrix)
+double determinant_2x2(double a, double b, double c, double d) {
+    return a * d - b * c;
+}
+
+// Matrix determinant (3x3 matrix)
+double determinant_3x3(double m[3][3]) {
+    return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+           m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+           m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+}
+
+double compute_lighting(Vector3D normal, Vector3D light_dir) {
+    normal = vector_normalize(normal);
+    light_dir = vector_normalize(light_dir);
+    double intensity = vector_dot(normal, light_dir);
+    return fmax(0.0, intensity); // Clamp to [0, 1]
+}
+// Solve a linear system using Gauss-Jordan Elimination (NxN matrix)
+int solve_linear_system(double matrix[][N], double results[], int n) {
+    for (int i = 0; i < n; i++) {
+        // Make the diagonal element 1
+        double diag = matrix[i][i];
+        if (fabs(diag) < 1e-9) return 0; // Singular matrix
+        for (int j = 0; j <= n; j++) matrix[i][j] /= diag;
+
+        // Eliminate other rows
+        for (int k = 0; k < n; k++) {
+            if (k != i) {
+                double factor = matrix[k][i];
+                for (int j = 0; j <= n; j++) {
+                    matrix[k][j] -= factor * matrix[i][j];
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < n; i++) results[i] = matrix[i][n];
+    return 1; // Solution exists
+}
+
+// Polynomial evaluation using Horner's Method
+double evaluate_polynomial(double coefficients[], int degree, double x) {
+    double result = coefficients[0];
+    for (int i = 1; i <= degree; i++) {
+        result = result * x + coefficients[i];
+    }
+    return result;
+}
+
+// Numerical differentiation (central difference method)
+double numerical_differentiation(double (*f)(double), double x, double h) {
+    return (f(x + h) - f(x - h)) / (2 * h);
+}
+
+// Numerical integration (trapezoidal rule)
+double numerical_integration(double (*f)(double), double a, double b, int n) {
+    double h = (b - a) / n;
+    double sum = 0.5 * (f(a) + f(b));
+    for (int i = 1; i < n; i++) {
+        sum += f(a + i * h);
+    }
+    return sum * h;
+}
+
+// Definite integral of a polynomial
+double polynomial_integral(double coefficients[], int degree, double a, double b) {
+    double integral_coefficients[degree + 2];
+    for (int i = 0; i <= degree; i++) {
+        integral_coefficients[i] = coefficients[i] / (degree - i + 1);
+    }
+    integral_coefficients[degree + 1] = 0; // Constant of integration
+
+    // Evaluate the polynomial integral at b and a
+    double result_b = evaluate_polynomial(integral_coefficients, degree + 1, b);
+    double result_a = evaluate_polynomial(integral_coefficients, degree + 1, a);
+    return result_b - result_a;
+}
+
+// Symbolic derivative of a polynomial
+void polynomial_derivative(double coefficients[], int degree, double derivative_coefficients[]) {
+    for (int i = 0; i < degree; i++) {
+        derivative_coefficients[i] = coefficients[i] * (degree - i);
+    }
+}
+
+// Compute lighting using Lambertian reflection
+double compute_lighting(Vector3D normal, Vector3D light_dir) {
+    normal = vector_normalize(normal);
+    light_dir = vector_normalize(light_dir);
+    double intensity = vector_dot(normal, light_dir);
+    return max(0.0, intensity); // Clamp to [0, 1]
+}
+
+double nrt(double x, double n) {
+    if (n == 0) {
+        // If n is 0, the n-th root is undefined; handle as an error
+        return NAN; // Returns Not-a-Number
+    }
+    if (x < 0 && ((int)n) % 2 == 0) {
+        // Even roots of negative numbers are undefined in real numbers
+        return NAN;
+    }
+    return pow(x, 1.0 / n);
+}
+
 
