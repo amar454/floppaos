@@ -631,4 +631,353 @@ double nrt(double x, double n) {
     return pow(x, 1.0 / n);
 }
 
+// Linear interpolation (lerp)
+double lerp(double a, double b, double t) {
+    return a + (b - a) * t;
+}
 
+// Struct for a 3D point
+typedef struct {
+    double x, y, z;
+} Point3D;
+
+// Helper function to calculate the cross product of two vectors
+Point3D cross_product(Point3D u, Point3D v) {
+    Point3D result;
+    result.x = u.y * v.z - u.z * v.y;
+    result.y = u.z * v.x - u.x * v.z;
+    result.z = u.x * v.y - u.y * v.x;
+    return result;
+}
+
+// Helper function to calculate the dot product of two vectors
+double dot_product(Point3D u, Point3D v) {
+    return u.x * v.x + u.y * v.y + u.z * v.z;
+}
+
+// Function to compute the volume of a tetrahedron
+double tetrahedron_volume(Point3D A, Point3D B, Point3D C, Point3D D) {
+    Point3D AB = {B.x - A.x, B.y - A.y, B.z - A.z};
+    Point3D AC = {C.x - A.x, C.y - A.y, C.z - A.z};
+    Point3D AD = {D.x - A.x, D.y - A.y, D.z - A.z};
+
+    Point3D cross = cross_product(AC, AD);
+    double volume = fabs(dot_product(AB, cross)) / 6.0;
+    return volume;
+}
+
+// Function to compute the volume of a cube
+double cube_volume(double side_length) {
+    return side_length * side_length * side_length;
+}
+
+// Function to compute the surface area of a cube
+double cube_surface_area(double side_length) {
+    return 6 * side_length * side_length;
+}
+
+// Function to compute the volume of a sphere
+double sphere_volume(double radius) {
+    return (4.0 / 3.0) * PI * radius * radius * radius;
+}
+
+// Function to compute the surface area of a sphere
+double sphere_surface_area(double radius) {
+    return 4 * PI * radius * radius;
+}
+
+// Function to compute the volume of a cylinder
+double cylinder_volume(double radius, double height) {
+    return PI * radius * radius * height;
+}
+
+// Function to compute the surface area of a cylinder
+double cylinder_surface_area(double radius, double height) {
+    return 2 * PI * radius * (radius + height);
+}
+
+// Function to compute the volume of a cone
+double cone_volume(double radius, double height) {
+    return (1.0 / 3.0) * PI * radius * radius * height;
+}
+
+// Function to compute the surface area of a cone
+double cone_surface_area(double radius, double height) {
+    double slant_height = sqrt(radius * radius + height * height);
+    return PI * radius * (radius + slant_height);
+}
+
+// Function to compute the volume of a rectangular prism
+double rectangular_prism_volume(double length, double width, double height) {
+    return length * width * height;
+}
+
+// Function to compute the surface area of a rectangular prism
+double rectangular_prism_surface_area(double length, double width, double height) {
+    return 2 * (length * width + width * height + height * length);
+}
+
+// Function to compute the volume of a pyramid
+double pyramid_volume(double base_area, double height) {
+    return (1.0 / 3.0) * base_area * height;
+}
+
+// Function to compute the volume of a torus
+double torus_volume(double major_radius, double minor_radius) {
+    return 2 * PI * PI * major_radius * minor_radius * minor_radius;
+}
+
+// Function to compute the surface area of a torus
+double torus_surface_area(double major_radius, double minor_radius) {
+    return 4 * PI * PI * major_radius * minor_radius;
+}
+
+// Basic mathematical utilities
+double deg_to_rad(double degrees) {
+    return degrees * (PI / 180.0);
+}
+
+double rad_to_deg(double radians) {
+    return radians * (180.0 / PI);
+}
+
+// 2D transformations
+void translate_2d(double* x, double* y, double dx, double dy) {
+    *x += dx;
+    *y += dy;
+}
+
+void scale_2d(double* x, double* y, double sx, double sy) {
+    *x *= sx;
+    *y *= sy;
+}
+
+void rotate_2d(double* x, double* y, double angle) {
+    double radians = deg_to_rad(angle);
+    double cos_a = cos(radians);
+    double sin_a = sin(radians);
+    double new_x = *x * cos_a - *y * sin_a;
+    double new_y = *x * sin_a + *y * cos_a;
+    *x = new_x;
+    *y = new_y;
+}
+
+// 3D transformations
+void translate_3d(double* x, double* y, double* z, double dx, double dy, double dz) {
+    *x += dx;
+    *y += dy;
+    *z += dz;
+}
+
+void scale_3d(double* x, double* y, double* z, double sx, double sy, double sz) {
+    *x *= sx;
+    *y *= sy;
+    *z *= sz;
+}
+
+void rotate_3d_x(double* y, double* z, double angle) {
+    double radians = deg_to_rad(angle);
+    double cos_a = cos(radians);
+    double sin_a = sin(radians);
+    double new_y = *y * cos_a - *z * sin_a;
+    double new_z = *y * sin_a + *z * cos_a;
+    *y = new_y;
+    *z = new_z;
+}
+
+void rotate_3d_y(double* x, double* z, double angle) {
+    double radians = deg_to_rad(angle);
+    double cos_a = cos(radians);
+    double sin_a = sin(radians);
+    double new_x = *x * cos_a + *z * sin_a;
+    double new_z = -(*x) * sin_a + *z * cos_a;
+    *x = new_x;
+    *z = new_z;
+}
+
+void rotate_3d_z(double* x, double* y, double angle) {
+    double radians = deg_to_rad(angle);
+    double cos_a = cos(radians);
+    double sin_a = sin(radians);
+    double new_x = *x * cos_a - *y * sin_a;
+    double new_y = *x * sin_a + *y * cos_a;
+    *x = new_x;
+    *y = new_y;
+}
+
+// Distance calculations
+double distance_2d(double x1, double y1, double x2, double y2) {
+    return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
+}
+
+double distance_3d(double x1, double y1, double z1, double x2, double y2, double z2) {
+    return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) + pow(z2 - z1, 2));
+}
+
+// Graphing utilities
+double linear(double x, double m, double c) {
+    return m * x + c;
+}
+
+double quadratic(double x, double a, double b, double c) {
+    return a * x * x + b * x + c;
+}
+
+double sine_wave(double x, double amplitude, double frequency, double phase) {
+    return amplitude * sin(2 * PI * frequency * x + phase);
+}
+
+double cosine_wave(double x, double amplitude, double frequency, double phase) {
+    return amplitude * cos(2 * PI * frequency * x + phase);
+}
+
+double sphere(double x, double y, double radius) {
+    return sqrt(radius * radius - x * x - y * y);
+}
+
+double plane(double x, double y, double z0) {
+    return z0;
+}
+
+// Polar to Cartesian conversion
+void polar_to_cartesian_2d(double r, double theta, double* x, double* y) {
+    double radians = deg_to_rad(theta);
+    *x = r * cos(radians);
+    *y = r * sin(radians);
+}
+
+// Spherical to Cartesian conversion
+void spherical_to_cartesian(double r, double theta, double phi, double* x, double* y, double* z) {
+    double theta_rad = deg_to_rad(theta);
+    double phi_rad = deg_to_rad(phi);
+    *x = r * sin(phi_rad) * cos(theta_rad);
+    *y = r * sin(phi_rad) * sin(theta_rad);
+    *z = r * cos(phi_rad);
+}
+
+// Bezier curve calculation (2D)
+void bezier_curve_2d(double t, double x0, double y0, double x1, double y1, double x2, double y2, double* x, double* y) {
+    double u = 1 - t;
+    *x = u * u * x0 + 2 * u * t * x1 + t * t * x2;
+    *y = u * u * y0 + 2 * u * t * y1 + t * t * y2;
+}
+
+// Bezier curve calculation (3D)
+void bezier_curve_3d(double t, double x0, double y0, double z0, double x1, double y1, double z1, double x2, double y2, double z2, double* x, double* y, double* z) {
+    double u = 1 - t;
+    *x = u * u * x0 + 2 * u * t * x1 + t * t * x2;
+    *y = u * u * y0 + 2 * u * t * y1 + t * t * y2;
+    *z = u * u * z0 + 2 * u * t * z1 + t * t * z2;
+}
+
+
+// Convert degrees to radians
+double deg_to_rad(double degrees) {
+    return degrees * (PI / 180.0);
+}
+
+// 4D to 3D projection function (ignores the w component)
+void project_4d_to_3d(double x, double y, double z, double w, double* x_out, double* y_out, double* z_out) {
+    // Simple projection: Ignore the 'w' component and keep (x, y, z)
+    *x_out = x / (1 + w);  // Perspective divide for 'x'
+    *y_out = y / (1 + w);  // Perspective divide for 'y'
+    *z_out = z / (1 + w);  // Perspective divide for 'z'
+}
+
+// 4D translation (move a 4D point by a vector)
+void translate_4d(double* x, double* y, double* z, double* w, double dx, double dy, double dz, double dw) {
+    *x += dx;
+    *y += dy;
+    *z += dz;
+    *w += dw;
+}
+
+// 4D scaling function
+void scale_4d(double* x, double* y, double* z, double* w, double sx, double sy, double sz, double sw) {
+    *x *= sx;
+    *y *= sy;
+    *z *= sz;
+    *w *= sw;
+}
+
+// 4D rotation matrix around the X axis
+void rotate_4d_x(double* y, double* z, double* w, double angle) {
+    double radians = deg_to_rad(angle);
+    double cos_a = cos(radians);
+    double sin_a = sin(radians);
+    double new_y = *y * cos_a - *z * sin_a;
+    double new_z = *y * sin_a + *z * cos_a;
+    double new_w = *w * cos_a;  // Keep 'w' component unaffected in this rotation.
+    *y = new_y;
+    *z = new_z;
+    *w = new_w;
+}
+
+// 4D rotation matrix around the Y axis
+void rotate_4d_y(double* x, double* z, double* w, double angle) {
+    double radians = deg_to_rad(angle);
+    double cos_a = cos(radians);
+    double sin_a = sin(radians);
+    double new_x = *x * cos_a + *z * sin_a;
+    double new_z = -(*x) * sin_a + *z * cos_a;
+    double new_w = *w * cos_a;  // Keep 'w' component unaffected in this rotation.
+    *x = new_x;
+    *z = new_z;
+    *w = new_w;
+}
+
+// 4D rotation matrix around the Z axis
+void rotate_4d_z(double* x, double* y, double* w, double angle) {
+    double radians = deg_to_rad(angle);
+    double cos_a = cos(radians);
+    double sin_a = sin(radians);
+    double new_x = *x * cos_a - *y * sin_a;
+    double new_y = *x * sin_a + *y * cos_a;
+    double new_w = *w * cos_a;  // Keep 'w' component unaffected in this rotation.
+    *x = new_x;
+    *y = new_y;
+    *w = new_w;
+}
+
+// 4D rotation matrix around the W axis (a different dimension of rotation)
+void rotate_4d_w(double* x, double* y, double* z, double* w, double angle) {
+    double radians = deg_to_rad(angle);
+    double cos_a = cos(radians);
+    double sin_a = sin(radians);
+    double new_x = *x * cos_a - *y * sin_a;
+    double new_y = *x * sin_a + *y * cos_a;
+    double new_z = *z * cos_a - *w * sin_a;
+    double new_w = *z * sin_a + *w * cos_a;
+    *x = new_x;
+    *y = new_y;
+    *z = new_z;
+    *w = new_w;
+}
+
+// Function to calculate the distance between two 4D points
+double distance_4d(double x1, double y1, double z1, double w1, double x2, double y2, double z2, double w2) {
+    return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) + pow(z2 - z1, 2) + pow(w2 - w1, 2));
+}
+
+// 4D to 3D projection with a specific matrix (homogeneous coordinates)
+void project_4d_to_3d_matrix(double x, double y, double z, double w, double* x_out, double* y_out, double* z_out) {
+    // For a more complex projection (can be extended with perspective projection)
+    double factor = 1.0 / (1.0 + w);  // Simple perspective projection
+    *x_out = x * factor;
+    *y_out = y * factor;
+    *z_out = z * factor;
+}
+
+// Example function to project a 4D hypercube into 3D
+void project_hypercube_4d(double* vertices, int num_vertices, double* projected_vertices) {
+    for (int i = 0; i < num_vertices; i++) {
+        // Each vertex has 4 components (x, y, z, w), thus process them in a loop
+        double x = vertices[i * 4];
+        double y = vertices[i * 4 + 1];
+        double z = vertices[i * 4 + 2];
+        double w = vertices[i * 4 + 3];
+        
+        // Project the 4D point onto 3D space
+        project_4d_to_3d(x, y, z, w, &projected_vertices[i * 3], &projected_vertices[i * 3 + 1], &projected_vertices[i * 3 + 2]);
+    }
+}
