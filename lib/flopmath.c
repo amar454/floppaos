@@ -300,10 +300,6 @@ long long fib(int n) {
     return a;
 }
 
-// Returns the absolute value of an integer (already implemented but defined here for clarity)
-int abs_int(int x) {
-    return (x < 0) ? -x : x;
-}
 
 // Computes the mean of an array of numbers
 double mean(double arr[], int size) {
@@ -537,21 +533,41 @@ double determinant_3x3(double m[3][3]) {
            m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
 }
 
-double compute_lighting(Vector3D normal, Vector3D light_dir) {
+double compute_lighting(Vector3 normal, Vector3 light_dir) {
     normal = vector_normalize(normal);
     light_dir = vector_normalize(light_dir);
     double intensity = vector_dot(normal, light_dir);
-    return fmax(0.0, intensity); // Clamp to [0, 1]
+    return max(0.0, intensity); // Clamp to [0, 1]
 }
-// Solve a linear system using Gauss-Jordan Elimination (NxN matrix)
-int solve_linear_system(double matrix[][N], double results[], int n) {
+int solve_linear_system(int n, double matrix[][n + 1], double results[]) {
     for (int i = 0; i < n; i++) {
-        // Make the diagonal element 1
+        // Find the pivot row
+        int pivotRow = i;
+        for (int k = i + 1; k < n; k++) {
+            if (fabs(matrix[k][i]) > fabs(matrix[pivotRow][i])) {
+                pivotRow = k;
+            }
+        }
+
+        // Swap rows if needed
+        if (pivotRow != i) {
+            for (int j = 0; j <= n; j++) {
+                double temp = matrix[i][j];
+                matrix[i][j] = matrix[pivotRow][j];
+                matrix[pivotRow][j] = temp;
+            }
+        }
+
+        // Check for singularity
         double diag = matrix[i][i];
         if (fabs(diag) < 1e-9) return 0; // Singular matrix
-        for (int j = 0; j <= n; j++) matrix[i][j] /= diag;
 
-        // Eliminate other rows
+        // Normalize the pivot row
+        for (int j = 0; j <= n; j++) {
+            matrix[i][j] /= diag;
+        }
+
+        // Eliminate all other rows
         for (int k = 0; k < n; k++) {
             if (k != i) {
                 double factor = matrix[k][i];
@@ -562,7 +578,10 @@ int solve_linear_system(double matrix[][N], double results[], int n) {
         }
     }
 
-    for (int i = 0; i < n; i++) results[i] = matrix[i][n];
+    // Extract results
+    for (int i = 0; i < n; i++) {
+        results[i] = matrix[i][n];
+    }
     return 1; // Solution exists
 }
 
@@ -609,14 +628,6 @@ void polynomial_derivative(double coefficients[], int degree, double derivative_
     for (int i = 0; i < degree; i++) {
         derivative_coefficients[i] = coefficients[i] * (degree - i);
     }
-}
-
-// Compute lighting using Lambertian reflection
-double compute_lighting(Vector3D normal, Vector3D light_dir) {
-    normal = vector_normalize(normal);
-    light_dir = vector_normalize(light_dir);
-    double intensity = vector_dot(normal, light_dir);
-    return max(0.0, intensity); // Clamp to [0, 1]
 }
 
 double nrt(double x, double n) {
@@ -871,10 +882,6 @@ void bezier_curve_3d(double t, double x0, double y0, double z0, double x1, doubl
 }
 
 
-// Convert degrees to radians
-double deg_to_rad(double degrees) {
-    return degrees * (PI / 180.0);
-}
 
 // 4D to 3D projection function (ignores the w component)
 void project_4d_to_3d(double x, double y, double z, double w, double* x_out, double* y_out, double* z_out) {
