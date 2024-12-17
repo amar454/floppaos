@@ -520,6 +520,215 @@ int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
     buffer[pos] = '\0'; // Null-terminate the string
     return pos;
 }
+
+// Convert a string to lowercase
+void flopstrtolower(char *str) {
+    while (*str) {
+        if (*str >= 'A' && *str <= 'Z') {
+            *str = *str + ('a' - 'A');
+        }
+        str++;
+    }
+}
+
+// Convert a string to uppercase
+void flopstrtoupper(char *str) {
+    while (*str) {
+        if (*str >= 'a' && *str <= 'z') {
+            *str = *str - ('a' - 'A');
+        }
+        str++;
+    }
+}
+
+// Check if a string is a valid number
+int flopstrisnum(const char *str) {
+    if (*str == '-' || *str == '+') {
+        str++; // Skip sign
+    }
+
+    while (*str) {
+        if (*str < '0' || *str > '9') {
+            return 0; // Not a number
+        }
+        str++;
+    }
+    return 1; // It is a valid number
+}
+
+// Find the length of a word in a string (until a delimiter is encountered)
+size_t flopstrwordlen(const char *str, const char *delim) {
+    size_t len = 0;
+    while (*str && !flopstrchr(delim, *str)) {
+        str++;
+        len++;
+    }
+    return len;
+}
+
+// Find the first non-space character in a string
+char *flopstrlskip(char *str) {
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r') {
+        str++;
+    }
+    return str;
+}
+
+// Find the last non-space character in a string
+char *flopstrrskip(char *str) {
+    while (*str && (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')) {
+        str--;
+    }
+    return str;
+}
+
+// Safe string concatenation with specified length
+int flopstrncat_safe(char *dst, const char *src, size_t size) {
+    size_t dst_len = flopstrlen(dst);
+    size_t src_len = flopstrlen(src);
+
+    if (dst_len + src_len + 1 > size) {
+        return -1; // Not enough space
+    }
+
+    flopstrcat(dst, src);
+    return 0;
+}
+
+// String search (case-insensitive)
+char *flopstristr(const char *haystack, const char *needle) {
+    char *h = (char *)haystack;
+    char *n = (char *)needle;
+
+    while (*h) {
+        char *h_tmp = h;
+        char *n_tmp = n;
+
+        while (*h_tmp && *n_tmp && (floptolower(*h_tmp) == floptolower(*n_tmp))) {
+            h_tmp++;
+            n_tmp++;
+        }
+
+        if (*n_tmp == '\0') {
+            return h; // Match found
+        }
+        h++;
+    }
+
+    return NULL; // No match found
+}
+
+// Extract a substring from a string
+char *flopsubstr(const char *str, size_t start, size_t len) {
+    if (start >= flopstrlen(str)) {
+        return NULL; // Start is out of bounds
+    }
+
+    char *sub = (char *)flop_malloc(len + 1);
+    if (!sub) {
+        return NULL; // Memory allocation failed
+    }
+
+    size_t i = 0;
+    while (i < len && str[start + i] != '\0') {
+        sub[i] = str[start + i];
+        i++;
+    }
+    sub[i] = '\0';
+
+    return sub;
+}
+
+// Replace all occurrences of a character in a string
+void flopstrreplace_char(char *str, char old_char, char new_char) {
+    while (*str) {
+        if (*str == old_char) {
+            *str = new_char;
+        }
+        str++;
+    }
+}
+
+// Find the position of a character in a string (case-insensitive)
+int flopstrichr(const char *str, char c) {
+    c = floptolower(c);
+    int pos = 0;
+
+    while (*str) {
+        if (floptolower(*str) == c) {
+            return pos;
+        }
+        str++;
+        pos++;
+    }
+
+    return -1; // Character not found
+}
+
+// Convert a string to a double-precision floating point number
+double flopstrtod(const char *str) {
+    double result = 0.0;
+    double sign = 1.0;
+    double fraction = 1.0;
+
+    // Skip leading whitespace
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r') {
+        str++;
+    }
+
+    // Handle optional sign
+    if (*str == '-') {
+        sign = -1.0;
+        str++;
+    } else if (*str == '+') {
+        str++;
+    }
+
+    // Integer part
+    while (*str >= '0' && *str <= '9') {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    // Fractional part
+    if (*str == '.') {
+        str++;
+        while (*str >= '0' && *str <= '9') {
+            result += (*str - '0') * (fraction /= 10);
+            str++;
+        }
+    }
+
+    return result * sign;
+}
+
+// Return a string representing a binary number (e.g., "1101")
+char *flopitoa_bin(unsigned int value, char *buffer, int width) {
+    char temp[33]; // Maximum size for a 32-bit unsigned integer
+    int len = 0;
+
+    if (value == 0) {
+        buffer[len++] = '0';
+    }
+
+    int i = 0;
+    while (value) {
+        temp[i++] = (value % 2) + '0';
+        value /= 2;
+    }
+
+    while (i < width) {
+        temp[i++] = '0';
+    }
+
+    while (i > 0) {
+        buffer[len++] = temp[--i];
+    }
+
+    buffer[len] = '\0';
+    return buffer;
+}
+
 int flopsnprintf(char *buffer, size_t size, const char *format, ...) {
     va_list args;
     va_start(args, format);
