@@ -35,6 +35,7 @@ Thank you for checking out floppaOS, and reading my little note (if you did)
 * VGA text mode and graphics (graphics in progress)
 * Task handler
 * Basic file system
+* Command line scientific calculator (functions in progress, application wrapper not)
 
 ## Goals:
 - [x] Run on low hardware requirements
