@@ -1,4 +1,7 @@
 /*
+
+keyboard.c - keyboard driver for FloppaOS. It uses the io library to read and scan for keyboard interrupts, with tracking for shift to allow capital letters and additional symbols.
+
 Copyright 2024 Amar Djulovic <aaamargml@gmail.com>
 
 This file is part of FloppaOS.
@@ -9,13 +12,6 @@ FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARR
 
 You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-keyboard.c 
-
-This is the keyboard driver for FloppaOS. It uses the io library to read and scan for keyboard interrupts, with tracking for shift to allow capital letters and additional symbols.
-
-It includes its own task to work with ../../task/task_handler to function as a system process. 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 */
 
 #include "keyboard.h"
