@@ -114,6 +114,35 @@ char key_to_char(unsigned char key) {
         return c;
     }
 
+    // Handle special keys
+    switch (key) {
+        case 0x01: return "Esc";    // Escape key
+        case 0x3B: return "F1";     // F1 key
+        case 0x3C: return "F2";     // F2 key
+        case 0x3D: return "F3";     // F3 key
+        case 0x3E: return "F4";     // F4 key
+        case 0x3F: return "F5";     // F5 key
+        case 0x40: return "F6";     // F6 key
+        case 0x41: return "F7";     // F7 key
+        case 0x42: return "F8";     // F8 key
+        case 0x43: return "F9";     // F9 key
+        case 0x44: return "F10";    // F10 key
+        case 0x57: return "F11";    // F11 key
+        case 0x58: return "F12";    // F12 key
+        case 0x0F: return "Tab";    // Tab key
+        case 0x2B: return "Enter";  // Enter key (for keypad)
+        case 0x35: return "Insert"; // Insert key
+        case 0x49: return "Home";   // Home key
+        case 0x4B: return "PageUp"; // Page Up key
+        case 0x4D: return "Delete"; // Delete key
+        case 0x4F: return "End";    // End key
+        case 0x51: return "PageDown";// Page Down key
+        case 0x52: return "ArrowUp";// Up Arrow key
+        case 0x53: return "ArrowLeft";// Left Arrow key
+        case 0x54: return "ArrowRight";// Right Arrow key
+        case 0x55: return "ArrowDown";// Down Arrow key
+    }
+
     return 0;  // Unsupported or non-printable key
 }
 
