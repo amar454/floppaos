@@ -1,4 +1,4 @@
-# <img src="https://github.com/amar454/floppaos/blob/main/C999A980-DD33-41B2-8C9E-941D8E16A5A7.jpeg?raw=true" width="100">
+# <img src="https://github.com/amar454/floppaos/blob/main/floppaOS_logo.jpeg?raw=true" width="100">
 # floppaOS 
 
 ### Copyright Amar Djulovic 2024
