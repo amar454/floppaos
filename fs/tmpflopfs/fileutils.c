@@ -69,7 +69,6 @@ size_t flop_write(TmpFileDescriptor *tmp_file, const void *buffer, size_t size) 
     return bytes_to_write;
 }
 
-// New: Read data from the file
 size_t flop_read(TmpFileDescriptor *tmp_file, void *buffer, size_t size) {
     if (tmp_file->mode != FILE_MODE_READ) return 0;
 
