@@ -600,22 +600,33 @@ char *flopstristr(const char *haystack, const char *needle) {
     char *h = (char *)haystack;
     char *n = (char *)needle;
 
-    while (*h) {
-        char *h_tmp = h;
-        char *n_tmp = n;
+    // Convert both haystack and needle to lowercase to perform case-insensitive comparison
+    char *h_lower = flopstrdup(haystack);  // Create a lowercase copy of haystack
+    char *n_lower = flopstrdup(needle);    // Create a lowercase copy of needle
 
-        while (*h_tmp && *n_tmp && (floptolower(*h_tmp) == floptolower(*n_tmp))) {
-            h_tmp++;
-            n_tmp++;
-        }
+    if (h_lower && n_lower) {
+        flopstrtolower(h_lower);  // Convert haystack to lowercase
+        flopstrtolower(n_lower);  // Convert needle to lowercase
 
-        if (*n_tmp == '\0') {
-            return h; // Match found
+        while (*h_lower) {
+            char *h_tmp = h_lower;
+            char *n_tmp = n_lower;
+
+            while (*h_tmp && *n_tmp && (*h_tmp == *n_tmp)) {
+                h_tmp++;
+                n_tmp++;
+            }
+
+            if (*n_tmp == '\0') {
+                return h; // Match found
+            }
+            h_lower++;
         }
-        h++;
     }
 
-    return NULL; // No match found
+    flop_free(h_lower);  // Free the lowercase copies
+    flop_free(n_lower);
+    return NULL;  // No match found
 }
 
 // Extract a substring from a string
@@ -651,19 +662,35 @@ void flopstrreplace_char(char *str, char old_char, char new_char) {
 
 // Find the position of a character in a string (case-insensitive)
 int flopstrichr(const char *str, char c) {
-    c = floptolower(c);
+    // Convert character c to lowercase
+    char lower_c = c;
+    if (lower_c >= 'A' && lower_c <= 'Z') {
+        lower_c = lower_c + ('a' - 'A');
+    }
+
     int pos = 0;
 
-    while (*str) {
-        if (floptolower(*str) == c) {
-            return pos;
+    // Create a temporary copy of the string to avoid modifying the original
+    char *temp_str = flopstrdup(str);
+    if (temp_str) {
+        // Convert the copied string to lowercase
+        flopstrtolower(temp_str);
+
+        // Search for the lowercase character in the lowercase string
+        while (temp_str[pos] != '\0') {
+            if (temp_str[pos] == lower_c) {
+                flop_free(temp_str); // Clean up the temporary string
+                return pos;
+            }
+            pos++;
         }
-        str++;
-        pos++;
+
+        flop_free(temp_str); // Clean up the temporary string
     }
 
     return -1; // Character not found
 }
+
 
 // Convert a string to a double-precision floating point number
 double flopstrtod(const char *str) {
