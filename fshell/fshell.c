@@ -1,63 +1,20 @@
 #include "fshell.h"
 #include "../apps/echo.h"
+//#include "../apps/floptxt/floptxt.h"
 #include "../fs/flopfs/flopfs.h"
 #include "../fs/tmpflopfs/tmpflopfs.h"
 #include "../lib/str.h"
 #include "../drivers/vga/vgahandler.h"
+#include "../task/task_handler.h"
 #include "../drivers/time/floptime.h"
-#include "../mem/memutils.h"
 #include "command.h"  // Include the shared command header
 #include <stddef.h>
 #include <stdint.h>
 char current_time_string[32] = "";
 #define MAX_COMMAND_LENGTH 128 // Maximum command length
 #define MAX_ARGUMENTS 10       // Maximum number of arguments
-void display_time_top_right() {
-    uint16_t time_length = flopstrlen(current_time_string); // Length of the time string
-    uint16_t x_start = VGA_WIDTH - time_length - 4; // Adjust for box border width
-    uint16_t y_position = 0; // Top row (first line)
-    uint8_t border_color = LIGHT_BLUE; // Border color
-    uint8_t time_color = WHITE; // Time string color
-
-    // ASCII box-drawing characters
-    char top_left = '\xDA';  // ╔
-    char top_right = '\xBF'; // ╗
-    char bottom_left = '\xC0'; // ╚
-    char bottom_right = '\xD9'; // ╝
-    char horizontal = '\xC4'; // ═
-    char vertical = '\xB3'; // ║
-
-    // Clear the area where the box will be drawn
-    for (uint16_t y = 0; y < 3; y++) { // The box height is 3 rows
-        for (uint16_t x = x_start; x < VGA_WIDTH; x++) {
-            vga_place_char(x, y_position + y, ' ', border_color); // Clear with spaces
-        }
-    }
-
-    // Draw top border
-    vga_place_char(x_start, y_position, top_left, border_color); // Top-left corner
-    for (uint16_t i = 0; i < time_length + 2; i++) {
-        vga_place_char(x_start + 1 + i, y_position, horizontal, border_color);
-    }
-    vga_place_char(x_start + time_length + 3, y_position, top_right, border_color); // Top-right corner
-
-    // Draw middle row with the time string
-    vga_place_char(x_start, y_position + 1, vertical, border_color); // Left border
-    for (size_t i = 0; i < time_length; i++) {
-        vga_place_char(x_start + 2 + i, y_position + 1, current_time_string[i], time_color);
-    }
-    vga_place_char(x_start + time_length + 3, y_position + 1, vertical, border_color); // Right border
-
-    // Draw bottom border
-    vga_place_char(x_start, y_position + 2, bottom_left, border_color); // Bottom-left corner
-    for (uint16_t i = 0; i < time_length + 2; i++) {
-        vga_place_char(x_start + 1 + i, y_position + 2, horizontal, border_color);
-    }
-    vga_place_char(x_start + time_length + 3, y_position + 2, bottom_right, border_color); // Bottom-right corner
-}
 
 static void display_prompt() {
-    display_time_top_right(); // Display the bordered time at the top right
     echo("fshell ->  ", WHITE); // Display the shell prompt
 }
 
@@ -120,6 +77,7 @@ void handle_license_command(int arg_count, char *arguments[]) {
 
 // Main fshell task
 
+
 void fshell_task(void *arg) {
     static int initialized = 0; // Track initialization
     char *arguments[MAX_ARGUMENTS];
@@ -174,7 +132,8 @@ void fshell_task(void *arg) {
             flopstrcmp(cmd, "read") == 0 ? 7 :
             flopstrcmp(cmd, "help") == 0 ? 8 :
             flopstrcmp(cmd, "exit") == 0 ? 9 :
-            flopstrcmp(cmd, "sleep") == 0 ? 10 : 0) {
+            flopstrcmp(cmd, "sleep") == 0 ? 10 : 0) 
+            {
 
         case 1: // "list"
             handle_list_command(fs, tmp_fs, arguments, arg_count);
@@ -247,7 +206,7 @@ void fshell_task(void *arg) {
             echo("Exiting shell...\n", YELLOW);
             initialized = 0; // Reset initialization
             break;
-        case 10:
+        case 10: // "sleep"
             if (arg_count > 1) {
                 sleep_seconds(flopatoi(arguments[1]));
                 break;
@@ -255,6 +214,7 @@ void fshell_task(void *arg) {
                 echo("Usage: sleep <seconds> \n", YELLOW);
             }
             break;
+    break;
         default: // Unknown command
             echo("Unknown command. Type 'help' for assistance.\n", RED);
             break;

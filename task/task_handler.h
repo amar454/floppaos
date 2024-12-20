@@ -20,8 +20,9 @@ typedef struct {
 
 // Function declarations
 void add_task(task_fn task, void *arg, uint8_t priority); // Add a task to the task queue with its argument
-void remove_task(int index);
+void remove_task_n(int task_index);
 void scheduler();                       // Execute the current task and schedule the next one
 void initialize_task_system();          // Initialize task system (optional)
+void remove_current_task();
 void task_sleep(int task_index, uint32_t ticks);
 #endif // TASK_HANDLER_H

@@ -73,7 +73,7 @@ void draw_rectangle(int x, int y, int width, int height, uint32_t color) {
 }
 // Function to place a character at a specific (x, y) position in the terminal
 void vga_place_char(uint16_t x, uint16_t y, char c, uint8_t color) {
-    // Check for valid coordinates
+    // Check for valid coordinates within the inner area
     if (x < VGA_WIDTH && y < VGA_HEIGHT) {
         unsigned int index = y * VGA_WIDTH + x;  // Calculate index based on the position
 
@@ -126,7 +126,7 @@ void vga_set_cursor_position(uint16_t x, uint16_t y) {
 
         // Use inline assembly to update VGA cursor position
         asm volatile (
-            "mov $0x3D4, %%dx\n\t"          // VGA port for cursor index register
+            "mov $0x3D4, %%dx\n\t"         // VGA port for cursor index register
             "mov $0x0F, %%al\n\t"          // Select low cursor byte
             "out %%al, %%dx\n\t"           // Write to index register
             "inc %%dx\n\t"                 // Switch to data port
@@ -217,11 +217,11 @@ void textmode_draw_diagonal_line(int x0, int y0, int x1, int y1, uint32_t color)
     int dy = y1 - y0;
     int steps = (dx > dy) ? dx : dy;  // The number of steps for drawing the line
 
-    float x_increment = (float)dx / (float)steps;
-    float y_increment = (float)dy / (float)steps;
+    double x_increment = (double)dx / (double)steps;
+    double y_increment = (double)dy / (double)steps;
 
-    float x = x0;
-    float y = y0;
+    double x = x0;
+    double y = y0;
 
     for (int i = 0; i <= steps; i++) {
         vga_place_char((int)x, (int)y, '/', color);  // '/' for diagonal line
@@ -231,7 +231,7 @@ void textmode_draw_diagonal_line(int x0, int y0, int x1, int y1, uint32_t color)
 }
 
 // Cube vertices (3D space)
-float cube_vertices[8][3] = {
+double cube_vertices[8][3] = {
     {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
     {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}
 };
@@ -244,25 +244,25 @@ int cube_edges[12][2] = {
 };
 
 // Projection function
-void project(float vertex[3], int *x, int *y, float angle) {
-    float sin_angle = sin(angle);
-    float cos_angle = cos(angle);
+void project(double vertex[3], int *x, int *y, double angle) {
+    double sin_angle = sin(angle);
+    double cos_angle = cos(angle);
 
     // Rotate around the Y-axis
-    float x_rot = vertex[0] * cos_angle - vertex[2] * sin_angle;
-    float z_rot = vertex[0] * sin_angle + vertex[2] * cos_angle;
+    double x_rot = vertex[0] * cos_angle - vertex[2] * sin_angle;
+    double z_rot = vertex[0] * sin_angle + vertex[2] * cos_angle;
 
     // Perspective projection
-    float distance = 3.0; // Distance of the viewer from the screen
-    float perspective = 1 / (distance - z_rot);
+    double distance = 3.0; // Distance of the viewer from the screen
+    double perspective = 1 / (distance - z_rot);
 
-    *x = (int)(VGA_WIDTH / 2 + x_rot * perspective * 10);
-    *y = (int)(VGA_HEIGHT / 2 - vertex[1] * perspective * 10);
+    *x = (int)((double)VGA_WIDTH / 2 + x_rot * perspective * 10);
+    *y = (int)((double)VGA_HEIGHT / 2 - vertex[1] * perspective * 10);
 }
 
 // Draw spinning cube
 void draw_spinning_cube() {
-    float angle = 0.0;
+    double angle = 0.0;
 
     while (1) {
         vga_clear_terminal(); // Clear screen

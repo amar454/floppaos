@@ -7,6 +7,7 @@
 #define SIMULATED_DISK_SIZE 1024 * 1024 // Size of the simulated memory pool
 #define ALIGNMENT 4 // 4-byte alignment for memory blocks
 #define HEADER_SIZE sizeof(FlopMemBlockHeader)
+#define PAGE_SIZE 4096 // Size of a virtual memory page
 
 // Simulated memory pool
 static uint8_t simulated_memory[SIMULATED_DISK_SIZE];
@@ -16,6 +17,14 @@ typedef struct FlopMemBlockHeader {
     size_t size;                        // Size of the block (excluding header)
     struct FlopMemBlockHeader *next;    // Pointer to the next free block
 } FlopMemBlockHeader;
+
+// Virtual memory page structure
+typedef struct VirtualPage {
+    uint8_t *physical_address;          // Physical address the virtual page maps to
+    int is_allocated;                   // Allocation status
+} VirtualPage;
+
+static VirtualPage page_table[SIMULATED_DISK_SIZE / PAGE_SIZE];
 
 // Head of the free list
 static FlopMemBlockHeader *free_list = NULL;
@@ -30,6 +39,47 @@ void init_memory() {
     free_list = (FlopMemBlockHeader *)simulated_memory;
     free_list->size = SIMULATED_DISK_SIZE - HEADER_SIZE;
     free_list->next = NULL;
+
+    // Initialize the page table
+    for (size_t i = 0; i < SIMULATED_DISK_SIZE / PAGE_SIZE; i++) {
+        page_table[i].physical_address = NULL;
+        page_table[i].is_allocated = 0;
+    }
+}
+
+// Translate virtual address to physical address
+void *virtual_to_physical(void *virtual_address) {
+    uintptr_t addr = (uintptr_t)virtual_address;
+    size_t page_index = addr / PAGE_SIZE;
+    if (page_table[page_index].is_allocated) {
+        return page_table[page_index].physical_address + (addr % PAGE_SIZE);
+    }
+    return NULL;
+}
+
+// Allocate a virtual memory page
+void *allocate_page() {
+    for (size_t i = 0; i < SIMULATED_DISK_SIZE / PAGE_SIZE; i++) {
+        if (!page_table[i].is_allocated) {
+            page_table[i].is_allocated = 1;
+            page_table[i].physical_address = &simulated_memory[i * PAGE_SIZE];
+            return (void *)(i * PAGE_SIZE);
+        }
+    }
+    echo("allocate_page: Out of pages!\n", RED);
+    return NULL;
+}
+
+// Free a virtual memory page
+void free_page(void *virtual_address) {
+    uintptr_t addr = (uintptr_t)virtual_address;
+    size_t page_index = addr / PAGE_SIZE;
+    if (page_table[page_index].is_allocated) {
+        page_table[page_index].is_allocated = 0;
+        page_table[page_index].physical_address = NULL;
+    } else {
+        echo("free_page: Page not allocated!\n", RED);
+    }
 }
 
 // Custom malloc implementation
@@ -68,14 +118,14 @@ void *flop_malloc(size_t size) {
         current = current->next;
     }
 
-    echo("flop_malloc: Out of memory!\n", RED); // Error message only
+    echo("flop_malloc: Out of memory!\n", RED);
     return NULL;
 }
 
 // Custom free implementation
 void flop_free(void *ptr) {
     if (!ptr) {
-        echo("flop_free: NULL pointer!\n", RED); // Error message only
+        echo("flop_free: NULL pointer!\n", RED);
         return;
     }
 
@@ -123,7 +173,7 @@ void *flop_memset(void *dest, int value, size_t size) {
 // Custom memcmp implementation
 int flop_memcmp(const void *ptr1, const void *ptr2, size_t num) {
     if (!ptr1 || !ptr2) {
-        echo("flop_memcmp: NULL pointer detected!\n", RED); // Error message only
+        echo("flop_memcmp: NULL pointer detected!\n", RED);
         return -1;
     }
 
@@ -141,7 +191,7 @@ int flop_memcmp(const void *ptr1, const void *ptr2, size_t num) {
 // Custom memcpy implementation
 void *flop_memcpy(void *dest, const void *src, size_t n) {
     if (!dest || !src) {
-        echo("flop_memcpy: NULL pointer detected!\n", RED); // Error message only
+        echo("flop_memcpy: NULL pointer detected!\n", RED);
         return NULL;
     }
 
@@ -158,7 +208,7 @@ void *flop_memcpy(void *dest, const void *src, size_t n) {
 // Custom memmove implementation
 void *flop_memmove(void *dest, const void *src, size_t n) {
     if (!dest || !src) {
-        echo("flop_memmove: NULL pointer detected!\n", RED); // Error message only
+        echo("flop_memmove: NULL pointer detected!\n", RED);
         return NULL;
     }
 

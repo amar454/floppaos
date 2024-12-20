@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+
 // Global variables
 Task task_queue[MAX_TASKS];
 int task_count = 0;  // Now globally accessible
@@ -18,12 +19,54 @@ void add_task(task_fn task, void *arg, uint8_t priority) {
     }
 }
 
+// Removes the current task from the queue
+void remove_current_task() {
+    if (task_count == 0) return; // No tasks to remove
+
+    // Shift tasks down by one to fill the gap created by the removed task
+    for (int i = current_task; i < task_count - 1; i++) {
+        task_queue[i] = task_queue[i + 1];
+    }
+
+    // Decrease the task count and adjust the current task index if necessary
+    task_count--;
+
+    // If we removed the last task, wrap around to the first task
+    if (current_task >= task_count) {
+        current_task = 0;
+    }
+}
+
+// Removes a task by index
+void remove_task_n(int task_index) {
+    if (task_index < 0 || task_index >= task_count) return; // Invalid index
+
+    // Shift tasks down by one to fill the gap created by the removed task
+    for (int i = task_index; i < task_count - 1; i++) {
+        task_queue[i] = task_queue[i + 1];
+    }
+
+    // Decrease the task count
+    task_count--;
+
+    // If the task removed was after the current task, we don't change the current_task index
+    // If the task was the current task, we move to the next task
+    if (task_index == current_task) {
+        // If we removed the last task, wrap around to the first task
+        if (current_task >= task_count) {
+            current_task = 0;
+        }
+    } else if (task_index < current_task) {
+        // If the task removed is before the current task, adjust the current_task index
+        current_task--;
+    }
+}
 
 // Round-robin scheduler with priority handling and basic time-slicing
 void scheduler() {
     if (task_count == 0) return;
 
-    int ticks_per_task = 5; 
+    int ticks_per_task = 5;
 
     while (1) {
         Task *current = &task_queue[current_task];
@@ -55,9 +98,6 @@ void scheduler() {
     }
 }
 
-
-
-
 // Sets a task to sleep for a specified number of ticks
 void task_sleep(int task_index, uint32_t ticks) {
     if (task_index >= 0 && task_index < task_count) {
@@ -69,5 +109,4 @@ void task_sleep(int task_index, uint32_t ticks) {
 void initialize_task_system() {
     task_count = 0;
     current_task = 0;
-    
 }

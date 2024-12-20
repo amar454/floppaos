@@ -2,30 +2,37 @@
 #define INTERRUPTS_H
 
 #include <stdint.h>
-#include "../drivers/io/io.h"  // For inb and outb functions
 
-// Interrupt Gate Descriptor Structure
-struct interrupt_descriptor {
-    uint16_t offset_low;   // Lower 16 bits of the ISR address
-    uint16_t selector;     // Code segment selector
-    uint8_t zero;          // Reserved, should be 0
-    uint8_t type_attr;     // Type and attributes (e.g., present, privilege level)
-    uint16_t offset_high;  // Higher 16 bits of the ISR address
-};
+// Define the structure for the IDT entry
+typedef struct {
+    uint16_t base_low;       // Lower 16 bits of the address to jump to when this interrupt is called
+    uint16_t sel;            // Kernel segment selector
+    uint8_t always0;         // This must always be 0
+    uint8_t flags;           // Flags for the interrupt gate
+    uint16_t base_high;      // Upper 16 bits of the address to jump to
+} __attribute__((packed)) idt_entry_t;
 
-// Define the number of interrupt vectors
-#define NUM_INTERRUPTS 256
+// Define the structure for the IDT pointer (used for loading the IDT)
+typedef struct {
+    uint16_t limit;          // Size of the IDT (number of bytes minus 1)
+    uint32_t base;           // Base address of the IDT
+} __attribute__((packed)) idt_ptr_t;
 
-// Interrupt Descriptor Table (IDT)
-extern struct interrupt_descriptor idt[NUM_INTERRUPTS];
+// Define a structure for the interrupt frame (used in ISR handling)
+typedef struct {
+    uint32_t ds;             // Data segment
+    uint32_t edi, esi, ebx, edx, ecx, eax;  // Pushed registers
+    uint32_t int_no, err_code;  // Interrupt number and error code (if applicable)
+    uint32_t eip, cs, eflags, useresp, ss;  // Registers pushed by the interrupt
 
-// Function prototypes
-void init_idt(void);
-void set_idt_gate(int n, uint32_t handler);
-void idt_flush(uint32_t idt_ptr);
-void isr_handler(void);
+    // Optional segment registers for saving the context during interrupts
+    uint32_t es, fs, gs;    // Extra, FS, and GS segment registers (optional but common)
+} interrupt_frame_t;
 
-// Assembly functions
-void load_idt(void);
+void init_pic();
+void init_pit();
+void init_idt();
+void interrupt_init();
+void __attribute__((interrupt)) pit_isr(interrupt_frame_t *frame);
 
-#endif // INTERRUPTS_H
+#endif

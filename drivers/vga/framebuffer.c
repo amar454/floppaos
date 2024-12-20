@@ -4,6 +4,7 @@
 #include "../../lib/flopmath.h"
 
 
+
 // Initialize framebuffer using GRUB multiboot information
 void framebuffer_initialize(multiboot_info_t *mbi, framebuffer_t *fb) {
     // Check if the framebuffer information is available in the multiboot info
@@ -13,7 +14,7 @@ void framebuffer_initialize(multiboot_info_t *mbi, framebuffer_t *fb) {
     }
 
     // Framebuffer data is available, so we initialize the framebuffer structure
-    fb->framebuffer = (uint32_t *)mbi->framebuffer_addr;
+    fb->framebuffer = (uint32_t *)(uintptr_t)mbi->framebuffer_addr; // Cast the framebuffer address correctly
     fb->width = mbi->framebuffer_width;
     fb->height = mbi->framebuffer_height;
     fb->pitch = mbi->framebuffer_pitch;
@@ -22,9 +23,10 @@ void framebuffer_initialize(multiboot_info_t *mbi, framebuffer_t *fb) {
 
 // Clear the framebuffer with a specific color
 void framebuffer_clear_screen(framebuffer_t *fb, uint32_t color) {
+    // Check bounds for framebuffer width/height
     for (uint32_t y = 0; y < fb->height; y++) {
         for (uint32_t x = 0; x < fb->width; x++) {
-            fb->framebuffer[y * (fb->pitch / 4) + x] = color;
+            fb->framebuffer[y * (fb->pitch / 4) + x] = color; // Use pitch divided by 4 for 32bpp
         }
     }
 }
@@ -32,7 +34,7 @@ void framebuffer_clear_screen(framebuffer_t *fb, uint32_t color) {
 // Draw a pixel at (x, y) with a specific color
 void framebuffer_draw_pixel(framebuffer_t *fb, uint16_t x, uint16_t y, uint32_t color) {
     if (x < fb->width && y < fb->height) {
-        fb->framebuffer[y * (fb->pitch / 4) + x] = color;
+        fb->framebuffer[y * (fb->pitch / 4) + x] = color; // Use pitch divided by 4 for 32bpp
     }
 }
 
@@ -59,6 +61,7 @@ void framebuffer_draw_rect(framebuffer_t *fb, int x, int y, int width, int heigh
         }
     }
 }
+
 
 
 // Define an 8x8 bitmap font for ASCII printable characters (32 to 126)
@@ -255,23 +258,31 @@ const uint8_t FONT_8X8[95][8] = {
     {0x3C, 0x63, 0x60, 0x7E, 0x63, 0x63, 0x63, 0x00}
 };
 
-void framebuffer_draw_char(framebuffer_t *fb, uint16_t x, uint16_t y, char c, uint32_t color) {
-    if (c < 32 || c > 126) return;  // Only printable characters
-    const uint8_t *bitmap = FONT_8X8[c - 32];
+// Function to print a single character at (x, y) using the framebuffer
+void framebuffer_print_char(framebuffer_t *fb, uint16_t x, uint16_t y, char c, uint32_t color) {
+    if (c < 32 || c > 126) {
+        return; // Only handle printable ASCII characters
+    }
     
+    // Get the font bitmap for the character (subtract 32 to align with the FONT_8X8 array)
+    const uint8_t *font = FONT_8X8[c - 32];
+    
+    // Loop through each row of the 8x8 font and draw each pixel
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            if (bitmap[i] & (1 << (7 - j))) {
-                framebuffer_draw_pixel(fb, x + j, y + i, color);
+            // Check if the bit is set in the bitmap
+            if (font[i] & (1 << (7 - j))) {
+                framebuffer_draw_pixel(fb, x + j, y + i, color); // Draw pixel on framebuffer
             }
         }
     }
 }
 
-void framebuffer_draw_text(framebuffer_t *fb, uint16_t x, uint16_t y, const char *text, uint32_t color) {
-    while (*text) {
-        framebuffer_draw_char(fb, x, y, *text, color);
-        x += 8;  // Move to the next character position (8 pixels wide)
-        text++;
+// Function to print a string starting from (x, y)
+void framebuffer_print_string(framebuffer_t *fb, uint16_t x, uint16_t y, const char *str, uint32_t color) {
+    while (*str) {
+        framebuffer_print_char(fb, x, y, *str, color);
+        x += 8; // Move to the next character position
+        str++;
     }
 }

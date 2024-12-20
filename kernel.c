@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
             echo("Memory info is not available!\n", RED);
 
         }
-        sleep_seconds(1);
+
         // Now print out the actual Multiboot info
         print_multiboot_info(mbi);
 
@@ -75,13 +75,11 @@ int main(int argc, char **argv) {
     }
 
 
-    echo("floppaOS  Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
+    echo("\nfloppaOS - Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
+
     sleep_seconds(1);
 
     echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n\n", CYAN);
-    echo("***************************\n",WHITE);
-    echo("*  Welcome to floppaOS!   *\n", WHITE);
-    echo("***************************\n\n",WHITE);
 
     sleep_seconds(1);
     // Initialize memory allocator
@@ -91,7 +89,7 @@ int main(int argc, char **argv) {
     sleep_seconds(1);
 
     // Display loading message for file system
-    echo("Loading tmpflopfs File System... ", WHITE);
+    echo_f("Loading tmpflopfs File System... ", WHITE);
     struct TmpFileSystem tmp_fs;
     init_tmpflopfs(&tmp_fs);  // Load the filesystem
     echo("Success! \n\n", GREEN);
@@ -118,6 +116,22 @@ int main(int argc, char **argv) {
     echo("Success! \n\n", GREEN);
     sleep_seconds(1);
     
+    const char *ascii_art = 
+    "   ____ __                        ____   ____\n"
+    "  / __// /___   ___   ___  ___ _ / __ \\ / __/\n"
+    " / _/ / // _ \\ / _ \\ / _ \\/ _ `// /_/ /_\\ \\  \n"
+    "/_/  /_/ \\___// .__// .__/\\_,_/ \\____//___/ v0.0.2-alpha\n"
+    "             /_/   /_/                                          \n";
+
+
+    echo(ascii_art, YELLOW);
+
+    echo("\nfloppaOS - Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
+
+    sleep_seconds(1);
+
+    echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n\n", CYAN);
+
     echo("Type 'help' for available commands.\n\n", WHITE);
 
     while (1) {
