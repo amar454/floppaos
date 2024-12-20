@@ -1,56 +1,81 @@
-# FloppaOS
+<div style="text-align: center;"> <img src="https://github.com/amar454/floppaos/blob/main/floppaOS_logo.jpeg?raw=true" alt="floppaOS Logo" width="100"> </div>
 
-Copyright Amar Djulovic 2024
+# floppaOS 
 
-<img src="https://cdn.discordapp.com/attachments/1302771014618578998/1307518520388751471/IMG_9415.png?ex=673bea83&is=673a9903&hm=9f20bd690d2df8c9910a1dea5b30b58ad40188da08358674038355e2a87083bc&" width="100">
+```
+   ____ __                        ____   ____
+  / __// /___   ___   ___  ___ _ / __ \ / __/
+ / _/ / // _ \ / _ \ / _ \/ _ `// /_/ /_\ \  
+/_/  /_/ \___// .__// .__/\_,_/ \____//___/ v0.0.2-alpha
+             /_/   /_/                                          
+```
 
+### Copyright Amar Djulovic 2024
 
+**floppaOS** is a free and open-source 32-bit operating system made in C. Everything is coded by me from scratch, aside from the GNU GRUB bootloader.
+
+This project is intended to be the "magnum opus" of my programming portfolio. I am making it for both job opportunities and personal interest in low-level programming.
+
+Obviously, this will not be a production or professional operating system in its current state. I chose not to conform to UNIX standards, which are common in OS development, as I am focusing on creating something unique. In my view, GNU/Linux already exists and represents the peak of UNIX operating systems, so I don’t see the need to compete with that. Instead, I want to create something that stands apart from the typical UNIX-based systems.
+
+Operating system programming is a tough and time-consuming endeavor. As a result, updates and new versions will be inconsistent, especially while the operating system is still in its alpha stage.
+
+Help and contributions are highly appreciated! This is a time-consuming project, and I have my own career and life as well. Feel free to fork the project, submit pull requests, or contact me on my Discord at **@amarat**.
+
+Thank you for checking out **floppaOS**, and for reading my little note (if you did).
+
+---
+
+## Compiling Instructions:
+
+1. **Clone the Repository**  
+   To compile from source, clone the repository by running the following command in your terminal:  
+   ```bash
+   git clone https://github.com/amar454/floppaos.git
+   ```
+
+2. **Build the OS**  
+   Navigate to the repository directory and type:  
+   ```bash
+   make all
+   ```  
+   *This will generate the ISO image, which you can then attach to a virtual machine or write to a USB device.*
+
+3. **Clean Up**  
+   After building, you can optionally clean up the binaries by running:  
+   ```bash
+   make clean
+   ```  
+   
+4. **Clean Object Files**  
+   If you want to keep the ISO binary but remove C and assembly object files, run:  
+   ```bash
+   make cleanobj
+   ```  
+   *(This is the recommended action after compilation.)*
+
+---
 
 ## Feature Overview:
-* Simple and lightweight command line operating system
-* Custom command line scripting language (fshell)
-* Memory handler
-* VGA text mode and graphics (graphics in progress)
-* Task handler
-* Basic file system
 
-## Goals
-* Run on low hardware requirements
-* Make completely from scratch
-* Uniqueness factor
-* Thorough documentation
-* Focus on security through cryptography
-* Low operating system size
-* Unique file system with permissions (not POSIX)
+- Simple and lightweight command-line operating system
+- Custom command-line scripting language (fshell)
+- Memory handler
+- VGA text mode and graphics (graphics work in progress)
+- Task handler
+- Basic file system
+- Command-line scientific calculator (some functions in progress, wrapper not yet complete)
 
-## Usage instructions:
+---
 
-* fshell instructions below
+## Goals:
 
-## fshell instructions:
+- [x] **Run on low hardware requirements**
+- [x] **Completely built from scratch**
+- [ ] **Uniqueness factor**  
+- [ ] **Thorough documentation**
+- [ ] **Focus on security through cryptography**
+- [x] **Small OS size** (As of 12/13/2024, floppaOS is only **27.65MB**!)
+- [ ] **Unique file system with permissions** (Not POSIX)
 
-* **list**
-  * synopsis: `list [options(s)] [dir]`
-  * description - list files
-
-* **create**
-  * synopsis: `create [options(s)] [filename]`
-  * description - create a file
-
-* **mdkir**
-  * synopsis `mkdir [options(s)] [dirname]`
-  * description - create a directory
-
-* **write** 
-  * synopsis `write [file]`
-  * description - write to a file
-
-* **remove**
-  * synopsis: `create [options(s)] [file]`
-  * description - create a file
-
-* **help**
-  * synopsis: `help`
-  * description - show commands
-
-
+---

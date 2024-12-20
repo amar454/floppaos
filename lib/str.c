@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with Flo
 #include "str.h"
 #include <stdarg.h>
 #include <stdint.h>
-
+#include "../mem/memutils.h"
 static char *flopstrtok_next = NULL;
 
 // Copies src string to dest
@@ -26,6 +26,18 @@ void flopstrcopy(char *dst, const char *src, size_t len) {
         i++;
     }
     dst[i] = '\0';  // Null-terminate the destination string
+}
+
+size_t flopstrlcpy(char *dst, const char *src, size_t size) {
+    size_t i = 0;
+    while (i < size - 1 && src[i] != '\0') {
+        dst[i] = src[i];
+        i++;
+    }
+    if (size > 0) {
+        dst[i] = '\0';
+    }
+    return flopstrlen(src);
 }
 
 int flopatoi(const char *str) {
@@ -66,6 +78,15 @@ size_t flopstrlen(const char *str) {
     }
     return s - str;
 }
+
+size_t flopstrnlen(const char *str, size_t maxlen) {
+    const char *s = str;
+    while (*s && maxlen--) {
+        s++;
+    }
+    return s - str;
+}
+
 
 // Compares two strings
 int flopstrcmp(const char *s1, const char *s2) {
@@ -123,6 +144,111 @@ void flopstrcat(char *dst, const char *src) {
         src++;
     }
     *dst = '\0'; // Null-terminate the resulting string
+}
+
+size_t flopstrlcat(char *dst, const char *src, size_t size) {
+    size_t dst_len = flopstrlen(dst);
+    size_t i = 0;
+
+    if (dst_len < size - 1) {
+        while (i < size - dst_len - 1 && src[i] != '\0') {
+            dst[dst_len + i] = src[i];
+            i++;
+        }
+        dst[dst_len + i] = '\0';
+    }
+
+    return dst_len + flopstrlen(src);
+}
+
+char *flopstrtrim(char *str) {
+    // Trim leading whitespace
+    char *start = str;
+    while (*start == ' ' || *start == '\t' || *start == '\n') {
+        start++;
+    }
+
+    // Trim trailing whitespace
+    char *end = start + flopstrlen(start) - 1;
+    while (end > start && (*end == ' ' || *end == '\t' || *end == '\n')) {
+        end--;
+    }
+
+    // Null-terminate the trimmed string
+    *(end + 1) = '\0';
+    return start;
+}
+
+char *flopstrreplace(char *str, const char *old, const char *new_str) {
+    char *result = str;
+    size_t old_len = flopstrlen(old);
+    size_t new_len = flopstrlen(new_str);
+    char *temp = (char *)flop_malloc(flopstrlen(str) + 1);
+    if (temp) {
+        size_t pos = 0;
+        while (*str) {
+            if (flopstrncmp(str, old, old_len) == 0) {
+                flopstrcopy(temp + pos, new_str, new_len);
+                pos += new_len;
+                str += old_len;
+            } else {
+                temp[pos++] = *str++;
+            }
+        }
+        temp[pos] = '\0';
+        flopstrcopy(result, temp, pos + 1);
+        flop_free(temp);
+    }
+    return result;
+}
+
+char **flopstrsplit(const char *str, const char *delim) {
+    size_t token_count = 0;
+    const char *s = str;
+    while (*s) {
+        if (flopstrchr(delim, *s)) {
+            token_count++;
+        }
+        s++;
+    }
+
+    char **tokens = (char **)flop_malloc((token_count + 2) * sizeof(char *));
+    if (tokens) {
+        size_t index = 0;
+        s = str;
+        while (*s) {
+            const char *start = s;
+            while (*s && !flopstrchr(delim, *s)) {
+                s++;
+            }
+            size_t len = s - start;
+            tokens[index] = (char *)flop_malloc(len + 1);
+            flopstrcopy(tokens[index], start, len + 1);
+            index++;
+            if (*s) {
+                s++;
+            }
+        }
+        tokens[index] = NULL;
+    }
+
+    return tokens;
+}
+
+void flopstrreverse_words(char *str) {
+    flopstrrev(str);
+    char *word_start = str;
+    char *p = str;
+    while (*p) {
+        if (*p == ' ' || *(p + 1) == '\0') {
+            if (*p != '\0') {
+                *p = '\0';
+            }
+            flopstrrev(word_start);
+            word_start = p + 1;
+        }
+        p++;
+    }
 }
 
 // Finds the first occurrence of a substring in a string
@@ -208,6 +334,43 @@ char *flopstrtok(char *str, const char *delim) {
 
     return token_start;
 }
+
+char *flopstrtok_r(char *str, const char *delim, char **saveptr) {
+    if (str == NULL) {
+        str = *saveptr;
+    }
+
+    while (*str && flopstrchr(delim, *str)) {
+        str++;
+    }
+
+    if (*str == '\0') {
+        *saveptr = NULL;
+        return NULL;
+    }
+
+    char *token_start = str;
+    while (*str && !flopstrchr(delim, *str)) {
+        str++;
+    }
+
+    if (*str) {
+        *str++ = '\0';
+    }
+
+    *saveptr = str;
+    return token_start;
+}
+
+char *flopstrdup(const char *str) {
+    size_t len = flopstrlen(str) + 1;
+    char *dup = (char *)flop_malloc(len);
+    if (dup) {
+        flopstrcopy(dup, str, len);
+    }
+    return dup;
+}
+
 
 char *flopstrchr(const char *str, int c) {
     while (*str) {
@@ -357,6 +520,178 @@ int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
     buffer[pos] = '\0'; // Null-terminate the string
     return pos;
 }
+
+// Convert a string to lowercase
+void flopstrtolower(char *str) {
+    while (*str) {
+        if (*str >= 'A' && *str <= 'Z') {
+            *str = *str + ('a' - 'A');
+        }
+        str++;
+    }
+}
+
+// Convert a string to uppercase
+void flopstrtoupper(char *str) {
+    while (*str) {
+        if (*str >= 'a' && *str <= 'z') {
+            *str = *str - ('a' - 'A');
+        }
+        str++;
+    }
+}
+
+// Check if a string is a valid number
+int flopstrisnum(const char *str) {
+    if (*str == '-' || *str == '+') {
+        str++; // Skip sign
+    }
+
+    while (*str) {
+        if (*str < '0' || *str > '9') {
+            return 0; // Not a number
+        }
+        str++;
+    }
+    return 1; // It is a valid number
+}
+
+// Find the length of a word in a string (until a delimiter is encountered)
+size_t flopstrwordlen(const char *str, const char *delim) {
+    size_t len = 0;
+    while (*str && !flopstrchr(delim, *str)) {
+        str++;
+        len++;
+    }
+    return len;
+}
+
+// Find the first non-space character in a string
+char *flopstrlskip(char *str) {
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r') {
+        str++;
+    }
+    return str;
+}
+
+// Find the last non-space character in a string
+char *flopstrrskip(char *str) {
+    while (*str && (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r')) {
+        str--;
+    }
+    return str;
+}
+
+// Safe string concatenation with specified length
+int flopstrncat_safe(char *dst, const char *src, size_t size) {
+    size_t dst_len = flopstrlen(dst);
+    size_t src_len = flopstrlen(src);
+
+    if (dst_len + src_len + 1 > size) {
+        return -1; // Not enough space
+    }
+
+    flopstrcat(dst, src);
+    return 0;
+}
+
+
+// Extract a substring from a string
+char *flopsubstr(const char *str, size_t start, size_t len) {
+    if (start >= flopstrlen(str)) {
+        return NULL; // Start is out of bounds
+    }
+
+    char *sub = (char *)flop_malloc(len + 1);
+    if (!sub) {
+        return NULL; // Memory allocation failed
+    }
+
+    size_t i = 0;
+    while (i < len && str[start + i] != '\0') {
+        sub[i] = str[start + i];
+        i++;
+    }
+    sub[i] = '\0';
+
+    return sub;
+}
+
+// Replace all occurrences of a character in a string
+void flopstrreplace_char(char *str, char old_char, char new_char) {
+    while (*str) {
+        if (*str == old_char) {
+            *str = new_char;
+        }
+        str++;
+    }
+}
+
+
+// Convert a string to a double-precision floating point number
+double flopstrtod(const char *str) {
+    double result = 0.0;
+    double sign = 1.0;
+    double fraction = 1.0;
+
+    // Skip leading whitespace
+    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r') {
+        str++;
+    }
+
+    // Handle optional sign
+    if (*str == '-') {
+        sign = -1.0;
+        str++;
+    } else if (*str == '+') {
+        str++;
+    }
+
+    // Integer part
+    while (*str >= '0' && *str <= '9') {
+        result = result * 10 + (*str - '0');
+        str++;
+    }
+
+    // Fractional part
+    if (*str == '.') {
+        str++;
+        while (*str >= '0' && *str <= '9') {
+            result += (*str - '0') * (fraction /= 10);
+            str++;
+        }
+    }
+
+    return result * sign;
+}
+
+// Return a string representing a binary number (e.g., "1101")
+char *flopitoa_bin(unsigned int value, char *buffer, int width) {
+    char temp[33]; // Maximum size for a 32-bit unsigned integer
+    int len = 0;
+
+    if (value == 0) {
+        buffer[len++] = '0';
+    }
+
+    int i = 0;
+    while (value) {
+        temp[i++] = (value % 2) + '0';
+        value /= 2;
+    }
+
+    while (i < width) {
+        temp[i++] = '0';
+    }
+
+    while (i > 0) {
+        buffer[len++] = temp[--i];
+    }
+
+    buffer[len] = '\0';
+    return buffer;
+}
+
 int flopsnprintf(char *buffer, size_t size, const char *format, ...) {
     va_list args;
     va_start(args, format);

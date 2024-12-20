@@ -26,7 +26,7 @@
 
 // Converts a keyboard scan code to an ASCII character
 void keyboard_task(void *arg);
-char key_to_char(unsigned char key);
+const char *key_to_char(unsigned char key);
 
 // Reads a key scan code from the keyboard
 unsigned char try_read_key(void);
