@@ -603,14 +603,44 @@ double numerical_differentiation(double (*f)(double), double x, double h) {
     return (f(x + h) - f(x - h)) / (2 * h);
 }
 
-// Numerical integration (trapezoidal rule)
-double numerical_integration(double (*f)(double), double a, double b, int n) {
+// Trapezoidal rule
+double trapezoidal_integration(double (*f)(double), double a, double b, int n) {
     double h = (b - a) / n;
-    double sum = 0.5 * (f(a) + f(b));
+    double sum = (f(a) + f(b)) / 2.0;
+
     for (int i = 1; i < n; i++) {
-        sum += f(a + i * h);
+        double x = a + i * h;
+        sum += f(x);
     }
+
     return sum * h;
+}
+
+// Midpoint rule
+double midpoint_integration(double (*f)(double), double a, double b, int n) {
+    double h = (b - a) / n;
+    double sum = 0.0;
+
+    for (int i = 0; i < n; i++) {
+        double x = a + (i + 0.5) * h;
+        sum += f(x);
+    }
+
+    return sum * h;
+}
+
+// Simpson's rule
+double simpsons_integration(double (*f)(double), double a, double b, int n) {
+    if (n % 2 != 0) n++; // Ensure n is even for Simpson's rule
+    double h = (b - a) / n;
+    double sum = f(a) + f(b);
+
+    for (int i = 1; i < n; i++) {
+        double x = a + i * h;
+        sum += (i % 2 == 0 ? 2 : 4) * f(x);
+    }
+
+    return sum * h / 3.0;
 }
 
 // Definite integral of a polynomial
