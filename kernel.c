@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     initialize_task_system();
     echo("Success! \n\n", GREEN);
 
-    echo("Adding fshell_task... ", WHITE);
+    echo("Adding time_task... ", WHITE);
     struct Time system_time; 
     add_task(time_task, &system_time, 2);
     echo("Success! \n\n", GREEN);
