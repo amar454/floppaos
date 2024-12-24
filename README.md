@@ -1,15 +1,15 @@
 <div style="text-align: center;"> <img src="https://github.com/amar454/floppaos/blob/main/floppaOS_logo.jpeg?raw=true" alt="floppaOS Logo" width="100"> </div>
 
 # floppaOS 
+```
+  __ _                          ___  ____  
+ / _| | ___  _ __  _ __   __ _ / _ \/ ___| 
+| |_| |/ _ \| '_ \| '_ \ / _` | | | \___ \ 
+|  _| | (_) | |_) | |_) | (_| | |_| |___) |
+|_| |_|\___/| .__/| .__/ \__,_|\___/|____/ 
+            |_|   |_|                             
 
 ```
-   ____ __                        ____   ____
-  / __// /___   ___   ___  ___ _ / __ \ / __/
- / _/ / // _ \ / _ \ / _ \/ _ `// /_/ /_\ \  
-/_/  /_/ \___// .__// .__/\_,_/ \____//___/ v0.0.2-alpha
-             /_/   /_/                                          
-```
-
 ### Copyright Amar Djulovic 2024
 
 **floppaOS** is a free and open-source 32-bit operating system made in C. Everything is coded by me from scratch, aside from the GNU GRUB bootloader.
