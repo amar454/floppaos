@@ -24,6 +24,7 @@ def create_header_file(c_file, header_file):
     print(f"Header file '{header_file}' created successfully!")
 if __name__ == "__main__":
     c_file = "../" + input("Name of C file (from root directory)") 
-    create_header_file(c_file)
+    h_file = "../" + input ("Name of the header file (from root directory):")
+    create_header_file(c_file, header_file=h_file)
   
     

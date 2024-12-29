@@ -2,7 +2,7 @@
 #define INTERRUPTS_H
 
 #include <stdint.h>
-
+extern volatile int schedule_needed;
 // Define the structure for the IDT entry
 typedef struct {
     uint16_t base_low;       // Lower 16 bits of the address to jump to when this interrupt is called
@@ -32,7 +32,7 @@ typedef struct {
 void init_pic();
 void init_pit();
 void init_idt();
-void interrupt_init();
-void __attribute__((interrupt)) pit_isr(interrupt_frame_t *frame);
+void init_interrupts();
+void __attribute__((naked)) pit_isr();
 
 #endif

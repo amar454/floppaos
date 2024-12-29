@@ -35,7 +35,10 @@ OBJ_FILES = \
     apps/dsp/dsp.o \
     drivers/vga/framebuffer.o \
     multiboot/multiboot.o \
-    apps/floptxt/floptxt.o
+    apps/floptxt/floptxt.o \
+    drivers/acpi/acpi.o \
+    interrupts/interrupts.o
+
     
 
 # Dependency check
@@ -84,7 +87,9 @@ kernel: \
     apps/dsp/dsp.c \
     drivers/vga/framebuffer.c \
     multiboot/multiboot.c \
-    apps/floptxt/floptxt.c
+    apps/floptxt/floptxt.c \
+    drivers/acpi/acpi.c \
+    interrupts/interrupts.c
 	gcc $(CFLAGS) -c \
         kernel.c \
         apps/echo.c \
@@ -103,7 +108,9 @@ kernel: \
         apps/dsp/dsp.c \
         drivers/vga/framebuffer.c \
         multiboot/multiboot.c \
-        apps/floptxt/floptxt.c
+        apps/floptxt/floptxt.c \
+        drivers/acpi/acpi.c \
+        interrupts/interrupts.c
 # Linker step
 linker: linker.ld $(OBJ_FILES)
 	ld $(LD_FLAGS) -o $(BIN) $(OBJ_FILES)

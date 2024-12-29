@@ -65,3 +65,27 @@ void outw(uint16_t port, uint16_t data) {
     __asm__ volatile ("outw %0, %1" : : "a"(data), "Nd"(port));
     unlock_io();  // Unlock I/O operations
 }
+
+// Function to read a 32-bit value from the I/O port
+uint32_t inl(uint16_t port) {
+    lock_io();  // Lock I/O operations
+    uint32_t result;
+    __asm__ volatile (
+        "inl %[port], %[result]"  // Read a 32-bit value from the given port
+        : [result] "=a" (result)  // Output operand: result will hold the value in the EAX register
+        : [port] "d" (port)      // Input operand: port is passed in the EDX register
+    );
+    unlock_io();
+    return result;
+}
+
+// Function to write a 32-bit value to a specified I/O port
+void outl(uint16_t port, uint32_t value) {
+    lock_io();  // Lock I/O operations
+    __asm__ volatile (
+        "outl %0, %1"  // Write the value to the port
+        :
+        : "a" (value), "Nd" (port)  // 'a' operand: value goes into the EAX register, 'Nd' operand: port goes into the DX register
+    );
+    unlock_io();
+}

@@ -3,28 +3,14 @@
 #include <stddef.h>
 #include "../apps/echo.h"
 #include "../drivers/vga/vgahandler.h"
-
-#define SIMULATED_DISK_SIZE 1024 * 1024 // Size of the simulated memory pool
-#define ALIGNMENT 4 // 4-byte alignment for memory blocks
-#define HEADER_SIZE sizeof(FlopMemBlockHeader)
-#define PAGE_SIZE 4096 // Size of a virtual memory page
+#include "../lib/str.h"
 
 // Simulated memory pool
-static uint8_t simulated_memory[SIMULATED_DISK_SIZE];
+static uint8_t simulated_memory[MEMORY_SIZE];
 
-// Free list structure
-typedef struct FlopMemBlockHeader {
-    size_t size;                        // Size of the block (excluding header)
-    struct FlopMemBlockHeader *next;    // Pointer to the next free block
-} FlopMemBlockHeader;
 
-// Virtual memory page structure
-typedef struct VirtualPage {
-    uint8_t *physical_address;          // Physical address the virtual page maps to
-    int is_allocated;                   // Allocation status
-} VirtualPage;
 
-static VirtualPage page_table[SIMULATED_DISK_SIZE / PAGE_SIZE];
+static VirtualPage page_table[MEMORY_SIZE / PAGE_SIZE];
 
 // Head of the free list
 static FlopMemBlockHeader *free_list = NULL;
@@ -37,15 +23,16 @@ static inline size_t align_size(size_t size) {
 // Initialize the memory allocator
 void init_memory() {
     free_list = (FlopMemBlockHeader *)simulated_memory;
-    free_list->size = SIMULATED_DISK_SIZE - HEADER_SIZE;
+    free_list->size = MEMORY_SIZE - HEADER_SIZE;
     free_list->next = NULL;
 
     // Initialize the page table
-    for (size_t i = 0; i < SIMULATED_DISK_SIZE / PAGE_SIZE; i++) {
+    for (size_t i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
         page_table[i].physical_address = NULL;
-        page_table[i].is_allocated = 0;
+        page_table[i].is_allocated = 0;  // Initialize allocation status to 0
     }
 }
+
 
 // Translate virtual address to physical address
 void *virtual_to_physical(void *virtual_address) {
@@ -59,18 +46,21 @@ void *virtual_to_physical(void *virtual_address) {
 
 // Allocate a virtual memory page
 void *allocate_page() {
-    for (size_t i = 0; i < SIMULATED_DISK_SIZE / PAGE_SIZE; i++) {
+    size_t buffer_zone_pages = 1;  // Define the number of pages to reserve for buffer
+
+    // Start allocation from the second page onward (skip the first page)
+    for (size_t i = buffer_zone_pages; i < MEMORY_SIZE / PAGE_SIZE; i++) {
         if (!page_table[i].is_allocated) {
             page_table[i].is_allocated = 1;
             page_table[i].physical_address = &simulated_memory[i * PAGE_SIZE];
+            char buffer[60];
             return (void *)(i * PAGE_SIZE);
         }
     }
     echo("allocate_page: Out of pages!\n", RED);
     return NULL;
 }
-
-// Free a virtual memory page
+// Free a page of memory
 void free_page(void *virtual_address) {
     uintptr_t addr = (uintptr_t)virtual_address;
     size_t page_index = addr / PAGE_SIZE;

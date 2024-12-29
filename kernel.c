@@ -23,12 +23,16 @@ kernel.c:
 
 #include "kernel.h"
 #include "apps/echo.h"
+#include "drivers/acpi/acpi.h"
 #include "drivers/time/floptime.h"
 #include "fs/tmpflopfs/tmpflopfs.h"
 #include "fshell/command.h"
 #include "fshell/fshell.h"
 #include "drivers/keyboard/keyboard.h"
+#include "lib/str.h"
 #include "mem/lib/str.h"
+#include "mem/lib/flopmath.h"
+#include "interrupts/interrupts.h"
 #include "task/task_handler.h"
 #include "drivers/vga/vgahandler.h"
 #include "mem/memutils.h"
@@ -42,17 +46,26 @@ void clear_screen(void) {
         index += 2;
     }
 }
-
+void null_task(void *arg)  {
+    return;
+}
+    
 int main(int argc, char **argv) {
-    echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
-    // Assuming argv[1] points to the Multiboot info structure
+    //echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
+    //test_graphics_mode();
 
+    //while (1) {
+
+    //}
     multiboot_info_t *mbi = (multiboot_info_t *)argv[1];
     echo("Checking for multiboot pointer multiboot_info_t...\n", WHITE);
+
     sleep_seconds(1);
+
     // Check for valid Multiboot info structure
     if (mbi && (mbi->flags & MULTIBOOT_INFO_MEMORY)) {
         echo("MULTIBOOT_INFO_MEMORY available.\n\n", GREEN);
+
 
         echo_f("MULTIBOOT_INFO_MEMORY address: %p\n", WHITE, mbi);
 
@@ -77,58 +90,69 @@ int main(int argc, char **argv) {
 
     echo("\nfloppaOS - Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
 
-    sleep_seconds(1);
+
 
     echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n\n", CYAN);
+
+
+    //echo("Initializing ACPI... ", WHITE);
+    //acpi_initialize();
+
+
+
+    //init_interrupts();
+
 
     sleep_seconds(1);
     // Initialize memory allocator
     echo("Initializing memory allocator... ", WHITE);
     init_memory();
     echo("Success! \n\n", GREEN);
-    sleep_seconds(1);
+
 
     // Display loading message for file system
     echo_f("Loading tmpflopfs File System... ", WHITE);
     struct TmpFileSystem tmp_fs;
     init_tmpflopfs(&tmp_fs);  // Load the filesystem
     echo("Success! \n\n", GREEN);
-    sleep_seconds(1);
+
+
+
 
     // Initialize task system
     echo("Initializing task_handler... ", WHITE);
     initialize_task_system();
     echo("Success! \n\n", GREEN);
 
-    echo("Adding time_task... ", WHITE);
-    struct Time system_time; 
-    add_task(time_task, &system_time, 2);
-    echo("Success! \n\n", GREEN);
-
     // Add fshell and keyboard as tasks
     echo("Adding fshell_task... ", WHITE);
-    add_task(fshell_task, &tmp_fs, 1);  
+    add_task(fshell_task, &tmp_fs, 0, "fshell", "floppaos://fshell/fshell.c");  
     echo("Success! \n\n", GREEN);
+    // Add fshell and keyboard as tasks
 
     
     echo("Adding keyboard_task... ", WHITE);
-    add_task(keyboard_task, NULL, 0); 
+    add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c");
     echo("Success! \n\n", GREEN);
     sleep_seconds(1);
+
+    echo("Adding time_task... ", WHITE);
+    struct Time system_time; 
+    add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c");
+    echo("Success! \n\n", GREEN);
     
     const char *ascii_art = 
     "  __ _                          ___  ____   \n"
     " / _| | ___  _ __  _ __   __ _ / _ \\/ ___|  \n"
     "| |_| |/ _ \\| '_ \\| '_ \\ / _` | | | \\___ \\  \n"
     "|  _| | (_) | |_) | |_) | (_| | |_| |___) | \n"
-    "|_| |_|\\___/| .__/| .__/ \\__,_|\\___/|____/ v0.0.2-alpha \n"
+    "|_| |_|\\___/| .__/| .__/ \\__,_|\\___/|____/ v0.1.1-alpha \n"
     "            |_|   |_|                      \n";
 
     echo(ascii_art, YELLOW);
 
     echo("\nfloppaOS - Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
 
-    sleep_seconds(1);
 
     echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n\n", CYAN);
 

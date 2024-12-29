@@ -69,16 +69,23 @@ void echo_bold(const char *str, unsigned char color) {
     }
 }
 
-// Variadic formatted output function
 void echo_f(const char *format, int color, ...) {
     char buffer[256];  // Fixed buffer size
     va_list args;
+
     va_start(args, color);
 
     // Use flopsnprintf to format the string
-    flopsnprintf(buffer, sizeof(buffer), format, args);
+    int result = flopsnprintf(buffer, sizeof(buffer), format, args);
 
     va_end(args);
+
+    // Check the result from flopsnprintf
+    if (result < 0) {
+        buffer[0] = '\0';  // Ensure the buffer is empty on failure
+    } else if ((size_t)result >= sizeof(buffer)) {
+        buffer[sizeof(buffer) - 1] = '\0';  // Ensure null-termination on truncation
+    }
 
     // Output the formatted string using the echo function
     echo(buffer, color);

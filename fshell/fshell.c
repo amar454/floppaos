@@ -18,7 +18,9 @@ You should have received a copy of the GNU General Public License along with Flo
 #include "../fs/flopfs/flopfs.h"
 #include "../fs/tmpflopfs/tmpflopfs.h"
 #include "../lib/str.h"
+#include "../lib/flopmath.h"
 #include "../drivers/vga/vgahandler.h"
+#include "../drivers/acpi/acpi.h"
 #include "../task/task_handler.h"
 #include "../drivers/time/floptime.h"
 #include "command.h"  // Include the shared command header
@@ -89,7 +91,50 @@ void handle_license_command(int arg_count, char *arguments[]) {
     }
 }
 
-// Main fshell task
+// Helper function to handle 'flopmath' command
+void handle_flopmath_command(char *arguments[], int arg_count) {
+    if (arg_count < 2) {
+        echo("Usage: flopmath <function> [parameters...]\n", YELLOW);
+        return;
+    }
+
+    char *operation = arguments[1];
+    double result = 0.0;
+    
+    // Dispatch based on the operation
+    if (flopstrcmp(operation, "sin") == 0 && arg_count > 2) {
+        result = sin(flopatof(arguments[2]));
+    } else if (flopstrcmp(operation, "cos") == 0 && arg_count > 2) {
+        result = cos(flopatof(arguments[2]));
+    } else if (flopstrcmp(operation, "tan") == 0 && arg_count > 2) {
+        result = tan(flopatof(arguments[2]));
+    } else if (flopstrcmp(operation, "sqrt") == 0 && arg_count > 2) {
+        result = sqrt(flopatof(arguments[2]));
+    } else if (flopstrcmp(operation, "exp") == 0 && arg_count > 2) {
+        result = exp(flopatof(arguments[2]));
+    } else if (flopstrcmp(operation, "log") == 0 && arg_count > 2) {
+        result = ln(flopatof(arguments[2]));
+    } else if (flopstrcmp(operation, "pow") == 0 && arg_count > 3) {
+        result = pow(flopatof(arguments[2]), flopatof(arguments[3]));
+    } else if (flopstrcmp(operation, "deg_to_rad") == 0 && arg_count > 2) {
+        result = deg_to_rad(flopatof(arguments[2]));
+    } else if (flopstrcmp(operation, "rad_to_deg") == 0 && arg_count > 2) {
+        result = rad_to_deg(flopatof(arguments[2]));
+    } else if (flopstrcmp(operation, "abs") == 0 && arg_count > 2) {
+        result = fabs(flopatof(arguments[2]));
+    } else {
+        echo("Unknown or invalid 'flopmath' operation. Available operations:\n", RED);
+        echo("sin, cos, tan, sqrt, exp, log, pow, deg_to_rad, rad_to_deg, abs\n", WHITE);
+        return;
+    }
+
+    // Display the result
+    char result_buffer[64];
+    flopdtoa(result, result_buffer, sizeof(result_buffer));
+    echo("Result: ", GREEN);
+    echo(result_buffer, WHITE);
+    echo("\n", WHITE);
+}
 
 
 void fshell_task(void *arg) {
@@ -138,16 +183,19 @@ void fshell_task(void *arg) {
     // Command dispatch using switch-case
     char *cmd = arguments[0]; // First argument is the command
     switch (flopstrcmp(cmd, "list") == 0 ? 1 :
-            flopstrcmp(cmd, "license") == 0 ? 2 :
-            flopstrcmp(cmd, "create") == 0 ? 3 :
-            flopstrcmp(cmd, "mkdir") == 0 ? 4 :
-            flopstrcmp(cmd, "write") == 0 ? 5 :
-            flopstrcmp(cmd, "remove") == 0 ? 6 :
-            flopstrcmp(cmd, "read") == 0 ? 7 :
-            flopstrcmp(cmd, "help") == 0 ? 8 :
-            flopstrcmp(cmd, "exit") == 0 ? 9 :
-            flopstrcmp(cmd, "sleep") == 0 ? 10 : 0) 
-            {
+        flopstrcmp(cmd, "license") == 0 ? 2 :
+        flopstrcmp(cmd, "create") == 0 ? 3 :
+        flopstrcmp(cmd, "mkdir") == 0 ? 4 :
+        flopstrcmp(cmd, "write") == 0 ? 5 :
+        flopstrcmp(cmd, "remove") == 0 ? 6 :
+        flopstrcmp(cmd, "read") == 0 ? 7 :
+        flopstrcmp(cmd, "help") == 0 ? 8 :
+        flopstrcmp(cmd, "exit") == 0 ? 9 :
+        flopstrcmp(cmd, "sleep") == 0 ? 10 :
+        flopstrcmp(cmd, "tdsp") == 0 ? 11 :
+        flopstrcmp(cmd, "flopmath") == 0 ? 12 :
+        flopstrcmp(cmd, "shutdown") ==  0 ? 13 : 0)
+    {
 
         case 1: // "list"
             handle_list_command(fs, tmp_fs, arguments, arg_count);
@@ -204,16 +252,17 @@ void fshell_task(void *arg) {
 
         case 8: // "help"
             echo("Commands:\n", WHITE);
-            echo(" - list [--colored]      List files (with optional color)\n", WHITE);
-            echo(" - create <filename>     Create file\n", WHITE);
-            echo(" - mkdir <dirname>       Create directory\n", WHITE);
+            echo(" - list [--colored]         List files (with optional color)\n", WHITE);
+            echo(" - create <filename>        Create file\n", WHITE);
+            echo(" - mkdir <dirname>          Create directory\n", WHITE);
             echo(" - write <filename> <data>  Write data to file\n", WHITE);
-            echo(" - remove <filename>     Remove file\n", WHITE);
-            echo(" - read <filename>       Read and print file contents\n", WHITE);
-            echo(" - sleep <seconds>       Pause execution for specified time\n", WHITE);
-            echo(" - license [keyword]     Display license or search by keyword\n", WHITE);
-            echo(" - help                  Display this help message\n", WHITE);
-            echo(" - exit                  Exit the shell\n", WHITE);
+            echo(" - remove <filename>        Remove file\n", WHITE);
+            echo(" - read <filename>          Read and print file contents\n", WHITE);
+            echo(" - sleep <seconds>          Pause execution for specified time\n", WHITE);
+            echo(" - license [keyword]        Display license or search by keyword\n", WHITE);
+            //echo(" - flopmath                 Perform a mathematical operation\n", WHITE);  // New flopmath command
+            echo(" - help                     Display this help message\n", WHITE);
+            echo(" - exit                     Exit the shell\n", WHITE);
             break;
 
         case 9: // "exit"
@@ -227,6 +276,15 @@ void fshell_task(void *arg) {
             } else {
                 echo("Usage: sleep <seconds> \n", YELLOW);
             }
+            break;
+        case 11: // "tdsp"
+            print_tasks();
+            break;
+        case 12: // "flopmath"
+            //handle_flopmath_command(arguments, arg_count);
+            break;
+        case 13: // "shutdown"
+            acpi_shutdown();
             break;
     break;
         default: // Unknown command

@@ -14,6 +14,7 @@ You should have received a copy of the GNU General Public License along with Flo
 
 #include "str.h"
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include "../mem/memutils.h"
 static char *flopstrtok_next = NULL;
@@ -38,6 +39,59 @@ size_t flopstrlcpy(char *dst, const char *src, size_t size) {
         dst[i] = '\0';
     }
     return flopstrlen(src);
+}
+// Function to convert a double to a string (minimal approach)
+void flopdtoa(double value, char *buffer, int precision) {
+    // Handle negative values
+    if (value < 0) {
+        *buffer++ = '-';
+        value = -value;
+    }
+
+    // Integer part
+    uint32_t int_part = (uint32_t)value;
+    char *int_str = buffer;
+    char tmp[20]; // Temporary buffer for reversing the integer part
+    int i = 0;
+    do {
+        tmp[i++] = (int_part % 10) + '0';
+        int_part /= 10;
+    } while (int_part > 0);
+
+    // Reverse the integer part
+    while (i > 0) {
+        *buffer++ = tmp[--i];
+    }
+
+    // Fractional part
+    if (precision > 0) {
+        *buffer++ = '.'; // Decimal point
+        value -= (uint32_t)value; // Remove the integer part
+
+        while (precision--) {
+            value *= 10;
+            uint32_t frac_part = (uint32_t)value;
+
+            // Directly write the fraction part (based on the precision level)
+            switch (frac_part) {
+                case 0: *buffer++ = '0'; break;
+                case 1: *buffer++ = '1'; break;
+                case 2: *buffer++ = '2'; break;
+                case 3: *buffer++ = '3'; break;
+                case 4: *buffer++ = '4'; break;
+                case 5: *buffer++ = '5'; break;
+                case 6: *buffer++ = '6'; break;
+                case 7: *buffer++ = '7'; break;
+                case 8: *buffer++ = '8'; break;
+                case 9: *buffer++ = '9'; break;
+                default: *buffer++ = '0'; break;
+            }
+
+            value -= frac_part; // Remove the integer part of the fraction
+        }
+    }
+
+    *buffer = '\0'; // Null-terminate the string
 }
 
 int flopatoi(const char *str) {
@@ -393,14 +447,23 @@ static int flopintlen(int value) {
 }
 
 int flopitoa(int value, char *buffer, int width) {
-    char temp[12];
+    char temp[12];  // Enough for INT_MIN
     int len = 0;
     int is_negative = (value < 0);
 
+    // Handle INT_MIN
+    if (value == INT_MIN) {
+        const char *int_min_str = "-2147483648";
+        while (*int_min_str) {
+            buffer[len++] = *int_min_str++;
+        }
+        buffer[len] = '\0';
+        return len;
+    }
+
+    // Handle negative values
     if (is_negative) {
         value = -value;
-        buffer[len++] = '-';
-        width--;
     }
 
     int i = 0;
@@ -409,53 +472,80 @@ int flopitoa(int value, char *buffer, int width) {
         value /= 10;
     } while (value);
 
-    while (i < width) {
-        temp[i++] = '0';
+    // Apply padding: pad with zeros if necessary
+    int padding = width - i - (is_negative ? 1 : 0);
+    while (padding > 0) {
+        temp[i++] = '0';  // Add padding zeros
+        padding--;
     }
 
+    // Add negative sign if needed
+    if (is_negative) {
+        buffer[len++] = '-';
+    }
+
+    // Copy digits in reverse order to the buffer
     while (i > 0) {
         buffer[len++] = temp[--i];
     }
 
-    buffer[len] = '\0';
+    buffer[len] = '\0';  // Null-terminate the string
     return len;
 }
+
 
 // Function to handle integer-to-string conversion for base 16 (hex)
 int flopitoa_hex(unsigned int value, char *buffer, int width, int is_upper) {
     const char *hex_digits = is_upper ? "0123456789ABCDEF" : "0123456789abcdef";
-    char temp[9]; // Maximum size for an unsigned 32-bit hex value
+    char temp[9]; // Maximum size for an unsigned 32-bit hex value (8 digits + '\0')
     int len = 0;
 
+    // Handle the zero case explicitly
     if (value == 0) {
-        buffer[len++] = '0';
+        temp[len++] = '0';
     }
 
+    // Convert value to hexadecimal
     int i = 0;
     while (value) {
         temp[i++] = hex_digits[value % 16];
         value /= 16;
     }
 
+    // Apply width padding with zeroes
     while (i < width) {
         temp[i++] = '0';
     }
 
+    // Copy the reversed result into the buffer
     while (i > 0) {
         buffer[len++] = temp[--i];
     }
 
-    buffer[len] = '\0';
+    buffer[len] = '\0'; // Null-terminate the string
     return len;
 }
+
+
+
+
+
 
 // Implementation of vsnprintf for handling formatted output
 int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
     size_t pos = 0;
+
     for (const char *ptr = format; *ptr && pos < size - 1; ptr++) {
         if (*ptr == '%' && *(ptr + 1)) {
             ptr++; // Skip the '%' character
             int width = 0;
+            int left_align = 0;
+
+            // Check for '-' flag (left alignment)
+            if (*ptr == '-') {
+                left_align = 1;
+                ptr++;
+            }
 
             // Process width specifier (e.g., %5d)
             while (*ptr >= '0' && *ptr <= '9') {
@@ -464,60 +554,159 @@ int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
             }
 
             switch (*ptr) {
-                case 'd': {  // Handle signed integer format
+                case 'd': { // Handle integers
                     int num = va_arg(args, int);
-                    pos += flopitoa(num, buffer + pos, width);
-                    break;
-                }
-                case 'u': {  // Handle unsigned integer format
-                    unsigned int num = va_arg(args, unsigned int);
-                    pos += flopitoa(num, buffer + pos, width);  // Use itoa for unsigned as well
-                    break;
-                }
-                case 'x': {  // Handle hexadecimal format (lowercase)
-                    unsigned int num = va_arg(args, unsigned int);
-                    pos += flopitoa_hex(num, buffer + pos, width, 0);  // Lowercase hex
-                    break;
-                }
-                case 'X': {  // Handle uppercase hexadecimal format
-                    unsigned int num = va_arg(args, unsigned int);
-                    pos += flopitoa_hex(num, buffer + pos, width, 1);  // Uppercase hex
-                    break;
-                }
-                case 's': {  // Handle string format
-                    char *str = va_arg(args, char*);
-                    while (*str && pos < size - 1) {
-                        buffer[pos++] = *str++;
+                    char temp[12]; // Buffer for number (enough for INT_MIN)
+                    int len = flopitoa(num, temp, 0); // Convert number to string
+                    int padding = (width > len) ? width - len : 0;
+
+                    if (!left_align) {
+                        // Add padding before number
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+
+                    // Copy number
+                    for (int i = 0; i < len && pos < size - 1; i++) {
+                        buffer[pos++] = temp[i];
+                    }
+
+                    if (left_align) {
+                        // Add padding after number
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
                     }
                     break;
                 }
-                case 'c': {  // Handle character format (as unsigned char)
-                    unsigned char ch = (unsigned char)va_arg(args, int);  // Treat as unsigned char
+                case 'u': { // Handle unsigned integers
+                    unsigned int num = va_arg(args, unsigned int);
+                    char temp[12];
+                    int len = flopitoa(num, temp, 0);
+                    int padding = (width > len) ? width - len : 0;
+
+                    if (!left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+
+                    for (int i = 0; i < len && pos < size - 1; i++) {
+                        buffer[pos++] = temp[i];
+                    }
+
+                    if (left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+                    break;
+                }
+                case 'x': case 'X': { // Handle hexadecimal
+                    unsigned int num = va_arg(args, unsigned int);
+                    char temp[12];
+                    int len = flopitoa_hex(num, temp, width, (*ptr == 'X')); // Uppercase for 'X'
+                    int padding = (width > len) ? width - len : 0;
+
+                    if (!left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+
+                    for (int i = 0; i < len && pos < size - 1; i++) {
+                        buffer[pos++] = temp[i];
+                    }
+
+                    if (left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+                    break;
+                }
+                case 's': { // Handle strings
+                    char *str = va_arg(args, char *);
+                    size_t len = 0;
+                    while (str[len]) len++; // Calculate string length
+                    int padding = (width > (int)len) ? width - (int)len : 0;
+
+                    if (!left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+
+                    for (size_t i = 0; i < len && pos < size - 1; i++) {
+                        buffer[pos++] = str[i];
+                    }
+
+                    if (left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+                    break;
+                }
+                case 'c': { // Handle characters
+                    char ch = (char)va_arg(args, int);
+                    int padding = (width > 1) ? width - 1 : 0;
+
+                    if (!left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+
                     buffer[pos++] = ch;
+
+                    if (left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
                     break;
                 }
-                case 'p': {  // Handle pointer format
-                    uintptr_t ptr_value = (uintptr_t)va_arg(args, void*);
-                    // Print pointer as hex
-                    pos += flopitoa_hex(ptr_value, buffer + pos, width, 0);  // Lowercase hex for pointer
+                case 'p': { // Handle pointers
+                    uintptr_t ptr_value = (uintptr_t)va_arg(args, void *);
+                    char temp[20];
+                    int len = flopitoa_hex(ptr_value, temp, width, 0);
+                    int padding = (width > len) ? width - len : 0;
+
+                    if (!left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
+
+                    for (int i = 0; i < len && pos < size - 1; i++) {
+                        buffer[pos++] = temp[i];
+                    }
+
+                    if (left_align) {
+                        while (padding-- > 0 && pos < size - 1) {
+                            buffer[pos++] = ' ';
+                        }
+                    }
                     break;
                 }
-                case '%': {  // Handle literal '%' character
+                case '%': { // Handle literal '%'
                     buffer[pos++] = '%';
                     break;
                 }
-                default: {  // Handle unrecognized format specifier
+                default: { // Unrecognized format
                     buffer[pos++] = '%';
                     buffer[pos++] = *ptr;
                     break;
                 }
             }
         } else {
-            // Handle normal characters
-            buffer[pos++] = *ptr;
+            buffer[pos++] = *ptr; // Regular characters
         }
     }
-    buffer[pos] = '\0'; // Null-terminate the string
+
+    buffer[pos] = '\0'; // Null-terminate
     return pos;
 }
 
@@ -692,42 +881,6 @@ int flopstrichr(const char *str, char c) {
 }
 
 
-// Convert a string to a double-precision floating point number
-double flopstrtod(const char *str) {
-    double result = 0.0;
-    double sign = 1.0;
-    double fraction = 1.0;
-
-    // Skip leading whitespace
-    while (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r') {
-        str++;
-    }
-
-    // Handle optional sign
-    if (*str == '-') {
-        sign = -1.0;
-        str++;
-    } else if (*str == '+') {
-        str++;
-    }
-
-    // Integer part
-    while (*str >= '0' && *str <= '9') {
-        result = result * 10 + (*str - '0');
-        str++;
-    }
-
-    // Fractional part
-    if (*str == '.') {
-        str++;
-        while (*str >= '0' && *str <= '9') {
-            result += (*str - '0') * (fraction /= 10);
-            str++;
-        }
-    }
-
-    return result * sign;
-}
 
 // Return a string representing a binary number (e.g., "1101")
 char *flopitoa_bin(unsigned int value, char *buffer, int width) {
@@ -755,6 +908,79 @@ char *flopitoa_bin(unsigned int value, char *buffer, int width) {
     buffer[len] = '\0';
     return buffer;
 }
+// Helper function to check if a character is a digit
+bool is_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+// Helper function to check if a character is a decimal point
+bool is_decimal_point(char c) {
+    return c == '.';
+}
+
+double flopatof(const char *str) {
+    double result = 0.0;
+    double fraction = 0.0;
+    double sign = 1.0;
+
+    // Handle possible sign at the start
+    if (*str == '-') {
+        sign = -1.0;
+        str++;
+    } else if (*str == '+') {
+        str++;
+    }
+
+    // Process the integer part
+    while (*str >= '0' && *str <= '9') {
+        result = result * 10.0 + (*str - '0');
+        str++;
+    }
+
+    // Process the fractional part, if any
+    if (*str == '.') {
+        str++;
+        double place_value = 0.1;
+        while (*str >= '0' && *str <= '9') {
+            result += (*str - '0') * place_value;
+            place_value *= 0.1;
+            str++;
+        }
+    }
+
+    // Process the exponent part, if any (e.g., "e" or "E")
+    if (*str == 'e' || *str == 'E') {
+        str++;
+        int exp_sign = 1;
+        if (*str == '-') {
+            exp_sign = -1;
+            str++;
+        } else if (*str == '+') {
+            str++;
+        }
+
+        int exponent = 0;
+        while (*str >= '0' && *str <= '9') {
+            exponent = exponent * 10 + (*str - '0');
+            str++;
+        }
+
+        // Apply the exponent
+        while (exponent--) {
+            if (exp_sign == 1) {
+                result *= 10;
+            } else {
+                result /= 10;
+            }
+        }
+    }
+
+    return result * sign;  // Return the result with the correct sign
+}
+
+
+
+
 
 int flopsnprintf(char *buffer, size_t size, const char *format, ...) {
     va_list args;

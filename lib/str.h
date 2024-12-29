@@ -18,6 +18,10 @@ You should have received a copy of the GNU General Public License along with Flo
 #include <stdarg.h>
 #include <stddef.h>  // For size_t
 
+#define INT_MIN (-2147483648)
+#define INT_MAX 2147483647
+
+void flopdtoa(double value, char *buffer, int precision);
 // Copies src string to dest
 void flopstrcopy(char *dst, const char *src, size_t len);
 
@@ -132,4 +136,7 @@ char *flopsubstr(const char *str, size_t start, size_t len);
 void flopstrreplace_char(char *str, char old_char, char new_char);
 
 
+
+double flopatof(const char *str);
 #endif // STR_H
+    
