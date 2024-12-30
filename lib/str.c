@@ -451,7 +451,7 @@ int flopitoa(int value, char *buffer, int width) {
     int len = 0;
     int is_negative = (value < 0);
 
-    // Handle INT_MIN
+    // Handle INT_MIN correctly
     if (value == INT_MIN) {
         const char *int_min_str = "-2147483648";
         while (*int_min_str) {
@@ -461,7 +461,7 @@ int flopitoa(int value, char *buffer, int width) {
         return len;
     }
 
-    // Handle negative values
+    // Handle negative numbers (other than INT_MIN)
     if (is_negative) {
         value = -value;
     }
@@ -472,7 +472,7 @@ int flopitoa(int value, char *buffer, int width) {
         value /= 10;
     } while (value);
 
-    // Apply padding: pad with zeros if necessary
+    // Apply padding (if necessary)
     int padding = width - i - (is_negative ? 1 : 0);
     while (padding > 0) {
         temp[i++] = '0';  // Add padding zeros
@@ -484,14 +484,15 @@ int flopitoa(int value, char *buffer, int width) {
         buffer[len++] = '-';
     }
 
-    // Copy digits in reverse order to the buffer
+    // Copy digits in reverse order
     while (i > 0) {
         buffer[len++] = temp[--i];
     }
 
-    buffer[len] = '\0';  // Null-terminate the string
+    buffer[len] = '\0';  // Null-terminate
     return len;
 }
+
 
 
 // Function to handle integer-to-string conversion for base 16 (hex)
@@ -671,7 +672,7 @@ int flopvsnprintf(char *buffer, size_t size, const char *format, va_list args) {
                 case 'p': { // Handle pointers
                     uintptr_t ptr_value = (uintptr_t)va_arg(args, void *);
                     char temp[20];
-                    int len = flopitoa_hex(ptr_value, temp, width, 0);
+                    int len = flopitoa_hex(ptr_value, temp, width, 0);  // Use flopitoa_hex for pointers
                     int padding = (width > len) ? width - len : 0;
 
                     if (!left_align) {

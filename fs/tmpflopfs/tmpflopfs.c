@@ -27,12 +27,9 @@ void init_tmpflopfs(struct TmpFileSystem *tmp_fs) {
         return;
     }
 
-    // Allocate 1 MB space
     flop_seek(tmp_disk, TMP_DISK_SIZE - 1);
     flop_putc(tmp_disk, 0);
     flop_close(tmp_disk);
-
-    echo("TmpFilesystem initialized!\n", GREEN);
 }
 
 // Create a directory (Note: Directories are logical in this system)

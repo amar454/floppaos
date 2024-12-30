@@ -320,4 +320,5 @@ void textmode_draw_diagonal_line(int x0, int y0, int x1, int y1, uint32_t color)
 void draw_spinning_cube(void);
 void set_vga_mode();
 void test_graphics_mode();
+void vga_place_bold_char(uint16_t x, uint16_t y, char c, uint8_t color);
 #endif // VGAHANDLER_H

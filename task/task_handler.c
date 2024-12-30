@@ -6,7 +6,6 @@
 #include "../lib/str.h"
 #include "../mem/memutils.h"
 #include "../drivers/vga/vgahandler.h"
-#include "../interrupts/interrupts.h"
 int next_pid = 0;  // PID generator
 // Global variables
 Task task_queue[MAX_TASKS];
@@ -25,6 +24,10 @@ void add_task(task_fn task, void *arg, uint8_t priority, const char *name, const
         new_task->pid = next_pid++;  // Assign a unique PID
         new_task->runtime = 0;      // Initialize runtime
         new_task->memory = allocate_page();
+        char buffer[80];
+
+        flopsnprintf(buffer, sizeof(buffer), "allocating page 0x%08X... ", (uintptr_t)new_task->memory);
+        echo(buffer, YELLOW);
         if (!new_task->memory) {
             echo("add_task: Failed to allocate memory page!\n", RED);
             return;

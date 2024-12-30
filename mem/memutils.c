@@ -23,6 +23,7 @@ static inline size_t align_size(size_t size) {
 // Initialize the memory allocator
 void init_memory() {
     free_list = (FlopMemBlockHeader *)simulated_memory;
+    echo("", WHITE);
     free_list->size = MEMORY_SIZE - HEADER_SIZE;
     free_list->next = NULL;
 

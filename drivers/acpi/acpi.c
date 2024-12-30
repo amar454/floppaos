@@ -1,7 +1,8 @@
 #include "acpi.h"
 #include "../io/io.h"
 //#include "shutdown.h"
-
+#include "../../apps/echo.h"
+#include "../vga/vgahandler.h"
 // Function to check for the ACPI signature
 int check_signature(char *signature, char *expected_signature) {
     for (int i = 0; i < 8; i++) {
@@ -47,5 +48,6 @@ void acpi_initialize() {
 
 // ACPI Shutdown function
 void acpi_shutdown() {
+    echo("Sending shutdown signal 0x3400 to port 0x4004...", YELLOW);
     outw(0x4004, 0x3400);
 }

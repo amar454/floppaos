@@ -98,6 +98,57 @@ void vga_place_char(uint16_t x, uint16_t y, char c, uint8_t color) {
         }
     }
 }
+// Function to place a bold character at a specific (x, y) position in the terminal
+void vga_place_bold_char(uint16_t x, uint16_t y, char c, uint8_t color) {
+    // Check for valid coordinates within the terminal boundaries
+    if (x < VGA_WIDTH && y < VGA_HEIGHT) {
+        unsigned int index = y * VGA_WIDTH + x;  // Calculate index based on position
+
+        // If it's a newline character, move to the next line
+        if (c == '\n') {
+            // Move to the start of the next line
+            y++;
+            if (y >= VGA_HEIGHT) {
+                // If we're at the bottom of the screen, scroll up
+                for (int i = 0; i < VGA_WIDTH * (VGA_HEIGHT - 1); i++) {
+                    terminal_buffer[i] = terminal_buffer[i + VGA_WIDTH];
+                }
+                // Clear the last line
+                for (int i = VGA_WIDTH * (VGA_HEIGHT - 1); i < VGA_WIDTH * VGA_HEIGHT; i++) {
+                    terminal_buffer[i] = (color << 8) | ' ';
+                }
+                y = VGA_HEIGHT - 1; // Reset to the last line
+            }
+            x = 0; // Start at the beginning of the new line
+        }
+
+        // Set the character at the (x, y) position
+        terminal_buffer[index] = (color << 8) | (unsigned char)c;
+
+        if (x + 1 < VGA_WIDTH) {
+            terminal_buffer[index + 1] = (color << 8) | (unsigned char)c;
+        }
+
+        // If we move past the end of the line, manually handle the newline
+        if (x >= VGA_WIDTH - 1) {
+            x = 0;
+            y++;
+        }
+
+        // Update the terminal index for the next character
+        if (y >= VGA_HEIGHT) {
+            // Scroll the screen if we are at the bottom
+            for (int i = 0; i < VGA_WIDTH * (VGA_HEIGHT - 1); i++) {
+                terminal_buffer[i] = terminal_buffer[i + VGA_WIDTH];
+            }
+            // Clear the last line
+            for (int i = VGA_WIDTH * (VGA_HEIGHT - 1); i < VGA_WIDTH * VGA_HEIGHT; i++) {
+                terminal_buffer[i] = (color << 8) | ' ';
+            }
+            y = VGA_HEIGHT - 1; // Reset to the last line
+        }
+    }
+}
 
 // Set the cursor to a specific position (x, y)
 void vga_set_cursor_position(uint16_t x, uint16_t y) {
