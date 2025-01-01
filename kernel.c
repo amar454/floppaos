@@ -34,13 +34,6 @@ kernel.c:
 #include "multiboot/multiboot.h"
 int time_ready = 1; 
 
-void clear_screen(void) {
-    int index = 0;
-    while (index < 80 * 25 * 2) {
-        terminal_buffer[index] = ' ';
-        index += 2;
-    }
-}
 void null_task(void *arg)  {
     return;
 }
