@@ -27,7 +27,7 @@ Thank you for checking out **floppaOS**, and for reading my little note (if you 
 ---
 
 ## Compiling Instructions:
-
+*Note: if you're on Windows, you will need a unix like environment such as Cygwin to compile the source code*
 1. **Clone the Repository**  
    To compile from source, clone the repository by running the following command in your terminal:  
    ```bash
