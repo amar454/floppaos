@@ -20,14 +20,14 @@ static inline size_t align_size(size_t size) {
     return (size + ALIGNMENT - 1) & ~(ALIGNMENT - 1);
 }
 
-// Initialize the memory allocator
+// Initialize memory allocator
 void init_memory() {
     free_list = (FlopMemBlockHeader *)simulated_memory;
     echo("", WHITE);
     free_list->size = MEMORY_SIZE - HEADER_SIZE;
     free_list->next = NULL;
 
-    // Initialize the page table
+    // Initialize page table
     for (size_t i = 0; i < MEMORY_SIZE / PAGE_SIZE; i++) {
         page_table[i].physical_address = NULL;
         page_table[i].is_allocated = 0;  // Initialize allocation status to 0
@@ -35,7 +35,7 @@ void init_memory() {
 }
 
 
-// Translate virtual address to physical address
+// Translate virtual address to physical 
 void *virtual_to_physical(void *virtual_address) {
     uintptr_t addr = (uintptr_t)virtual_address;
     size_t page_index = addr / PAGE_SIZE;
@@ -45,9 +45,9 @@ void *virtual_to_physical(void *virtual_address) {
     return NULL;
 }
 
-// Allocate a virtual memory page
+// Allocate virtual memory page
 void *allocate_page() {
-    size_t buffer_zone_pages = 1;  // Define the number of pages to reserve for buffer
+    size_t buffer_zone_pages = 1;  // Define number of pages to reserve for buffer
 
     // Start allocation from the second page onward (skip the first page)
     for (size_t i = buffer_zone_pages; i < MEMORY_SIZE / PAGE_SIZE; i++) {
@@ -148,7 +148,7 @@ void flop_free(void *ptr) {
     }
 }
 
-// Custom memset implementation
+
 void *flop_memset(void *dest, int value, size_t size) {
     uint8_t val = (uint8_t)value;
     asm volatile (
@@ -161,7 +161,7 @@ void *flop_memset(void *dest, int value, size_t size) {
     return dest;
 }
 
-// Custom memcmp implementation
+
 int flop_memcmp(const void *ptr1, const void *ptr2, size_t num) {
     if (!ptr1 || !ptr2) {
         echo("flop_memcmp: NULL pointer detected!\n", RED);
@@ -179,7 +179,8 @@ int flop_memcmp(const void *ptr1, const void *ptr2, size_t num) {
     return 0;
 }
 
-// Custom memcpy implementation
+
+
 void *flop_memcpy(void *dest, const void *src, size_t n) {
     if (!dest || !src) {
         echo("flop_memcpy: NULL pointer detected!\n", RED);
@@ -196,7 +197,6 @@ void *flop_memcpy(void *dest, const void *src, size_t n) {
     return dest;
 }
 
-// Custom memmove implementation
 void *flop_memmove(void *dest, const void *src, size_t n) {
     if (!dest || !src) {
         echo("flop_memmove: NULL pointer detected!\n", RED);
