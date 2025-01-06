@@ -155,32 +155,15 @@ void vga_place_bold_char(uint16_t x, uint16_t y, char c, uint8_t color) {
     }
 }
 
-// Set the cursor to a specific position (x, y)
 void vga_set_cursor_position(uint16_t x, uint16_t y) {
     if (x < VGA_WIDTH && y < VGA_HEIGHT) {
-        unsigned int position = y * VGA_WIDTH + x;  // Calculate linear cursor position
-
-        // Use inline assembly to update VGA cursor position
-        asm volatile (
-            "mov $0x3D4, %%dx\n\t"         // VGA port for cursor index register
-            "mov $0x0F, %%al\n\t"          // Select low cursor byte
-            "out %%al, %%dx\n\t"           // Write to index register
-            "inc %%dx\n\t"                 // Switch to data port
-            "mov %0, %%al\n\t"             // Send low byte of position
-            "out %%al, %%dx\n\t"
-            "dec %%dx\n\t"                 // Switch back to index register
-            "mov $0x0E, %%al\n\t"          // Select high cursor byte
-            "out %%al, %%dx\n\t"
-            "inc %%dx\n\t"                 // Switch to data port
-            "mov %1, %%al\n\t"             // Send high byte of position
-            "out %%al, %%dx\n\t"
-            :
-            : "r"((uint8_t)(position & 0xFF)), "r"((uint8_t)((position >> 8) & 0xFF))
-            : "eax", "dx"
-        );
+        uint16_t position = y * VGA_WIDTH + x;  
+        outb(0x3D4, 0x0E);
+        outb(0x3D5, (position >> 8) & 0xFF);
+        outb(0x3D4, 0x0F);
+        outb(0x3D5, position & 0xFF);
     }
 }
-
 void vga_save_terminal_state() {
     // Save current terminal state
     terminal_buffer_saved = terminal_buffer;
