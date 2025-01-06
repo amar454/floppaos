@@ -261,7 +261,7 @@ void fshell_task(void *arg) {
             echo(" - read <filename>          Read and print file contents\n", WHITE);
             echo(" - sleep <seconds>          Pause execution for specified time\n", WHITE);
             echo(" - license [keyword]        Display license or search by keyword\n", WHITE);
-            //echo(" - flopmath                 Perform a mathematical operation\n", WHITE);  // flopmath command prototype
+            echo(" - tdsp                     Display info about running tasks\n", WHITE);  // flopmath command prototype
             echo(" - help                     Display this help message\n", WHITE);
             echo(" - vgatest                  Test VGA graphics.", WHITE);
             echo(" - exit                     Exit the shell\n", WHITE);

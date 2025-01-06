@@ -62,13 +62,6 @@ int main(int argc, char **argv) {
     }
     sleep_seconds(1);
 
-    echo("\nfloppaOS - Copyright (C) 2024  Amar Djulovic\n\n", WHITE);
-
-
-
-    echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n\n", CYAN);
-
-
     //echo("Initializing ACPI... ", WHITE);
     //acpi_initialize();
 
