@@ -3,7 +3,6 @@
 #include <stddef.h>
 #include "../apps/echo.h"
 #include "../drivers/vga/vgahandler.h"
-#include "../lib/str.h"
 
 // Simulated memory pool
 static uint8_t simulated_memory[MEMORY_SIZE];

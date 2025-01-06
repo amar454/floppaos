@@ -37,7 +37,8 @@ OBJ_FILES = \
     multiboot/multiboot.o \
     apps/floptxt/floptxt.o \
     drivers/acpi/acpi.o \
-    interrupts/interrupts.o
+    interrupts/interrupts.o \
+    drivers/mouse/ps2ms.o
 
     
 
@@ -89,7 +90,8 @@ kernel: \
     multiboot/multiboot.c \
     apps/floptxt/floptxt.c \
     drivers/acpi/acpi.c \
-    interrupts/interrupts.c
+    interrupts/interrupts.c \
+    drivers/mouse/ps2ms.c
 	gcc $(CFLAGS) -c \
         kernel.c \
         apps/echo.c \
@@ -110,7 +112,8 @@ kernel: \
         multiboot/multiboot.c \
         apps/floptxt/floptxt.c \
         drivers/acpi/acpi.c \
-        interrupts/interrupts.c
+        interrupts/interrupts.c \
+        drivers/mouse/ps2ms.c
 # Linker step
 linker: linker.ld $(OBJ_FILES)
 	ld $(LD_FLAGS) -o $(BIN) $(OBJ_FILES)

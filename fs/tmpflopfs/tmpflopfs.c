@@ -30,6 +30,7 @@ void init_tmpflopfs(struct TmpFileSystem *tmp_fs) {
     flop_seek(tmp_disk, TMP_DISK_SIZE - 1);
     flop_putc(tmp_disk, 0);
     flop_close(tmp_disk);
+    //create_tmp_file(tmp_fs, ""); 
 }
 
 // Create a directory (Note: Directories are logical in this system)

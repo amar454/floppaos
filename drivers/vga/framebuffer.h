@@ -33,4 +33,5 @@ void framebuffer_draw_line(framebuffer_t *fb, int x0, int y0, int x1, int y1, ui
 void framebuffer_draw_rect(framebuffer_t *fb, int x, int y, int width, int height, uint32_t color);
 void framebuffer_print_char(framebuffer_t *fb, uint16_t x, uint16_t y, char c, uint32_t color);
 void framebuffer_print_string(framebuffer_t *fb, uint16_t x, uint16_t y, const char *str, uint32_t color);
+void test_framebuffer(framebuffer_t *fb);
 #endif // FRAMEBUFFER_H

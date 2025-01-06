@@ -14,12 +14,27 @@
 #define VGA_GRAPHICS_WIDTH 320
 #define VGA_GRAPHICS_HEIGHT 200
 
-// VGA Graphics Controller Registers (to set mode directly)
-#define VGA_SEQ_PORT    0x03C4
-#define VGA_GC_PORT     0x03CE
-#define VGA_CRTC_PORT   0x03D4
-#define VGA_DAC_PORT    0x03C8
+#define	VGA_AC_INDEX		0x3C0
+#define	VGA_AC_WRITE		0x3C0
+#define	VGA_AC_READ		    0x3C1
+#define	VGA_INSTAT_READ		0x3DA
+#define	VGA_MISC_WRITE		0x3C2
+#define	VGA_MISC_READ		0x3CC
 
+// VGA Graphics Register Ports
+#define VGA_CRTC_INDEX		0x3D4		
+#define VGA_CRTC_DATA		0x3D5		
+#define VGA_GC_INDEX 		0x3CE
+#define VGA_GC_DATA 		0x3CF
+#define VGA_SEQ_INDEX		0x3C4
+#define VGA_SEQ_DATA		0x3C5
+
+#define	VGA_NUM_AC_REGS		21
+#define	VGA_NUM_CRTC_REGS	25
+#define	VGA_NUM_GC_REGS		9
+#define	VGA_NUM_SEQ_REGS	5
+
+// text mode colors
 #define BLACK        0
 #define BLUE         1
 #define GREEN        2
@@ -38,7 +53,7 @@
 #define WHITE        15
 #define YELLOW       14
 
-// Standard VGA Colors (0x00 to 0x0F)
+// Standard VGA graphics colors
 #define VGA_BLACK              0x00
 #define VGA_BLUE               0x01
 #define VGA_GREEN              0x02
@@ -301,10 +316,17 @@
 // External framebuffer structure
 extern framebuffer_t fb;
 
-// VGA functions
+typedef struct {
+    int pos;
+    char name[50];
+    int pid;
+    void *memory;
+
+} Window;
+
 void vga_clear_terminal(void);
 void framebuffer_initialize_wrapper(multiboot_info_t *mbi);
-void vga_clear_screen(uint32_t color);
+void vga_clear_screen();
 void draw_pixel(int x, int y, uint8_t color);
 void draw_line(int y, uint8_t color);
 void vga_place_char(uint16_t x, uint16_t y, char c, uint8_t color);
@@ -321,4 +343,13 @@ void draw_spinning_cube(void);
 void set_vga_mode();
 void test_graphics_mode();
 void vga_place_bold_char(uint16_t x, uint16_t y, char c, uint8_t color);
+void clear_screen(uint8_t color);
+void vga_test();
+void vga_desktop();
+void vga_init();
+void console_render();
+void console_print(const char *str, unsigned short color);
+void console_clear_screen();
+void vga_plot_pixel(int x, int y, unsigned short color);
+void vga_draw_string(int x, int y, const char *str, uint32_t color);
 #endif // VGAHANDLER_H

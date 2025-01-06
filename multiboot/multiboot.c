@@ -104,4 +104,3 @@ void print_multiboot_info(const multiboot_info_t *mb_info) {
         echo_f("  Type: %u\n", WHITE, mb_info->framebuffer_type);
     }
 }
-

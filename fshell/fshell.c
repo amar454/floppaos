@@ -194,7 +194,8 @@ void fshell_task(void *arg) {
         flopstrcmp(cmd, "sleep") == 0 ? 10 :
         flopstrcmp(cmd, "tdsp") == 0 ? 11 :
         flopstrcmp(cmd, "flopmath") == 0 ? 12 :
-        flopstrcmp(cmd, "shutdown") ==  0 ? 13 : 0)
+        flopstrcmp(cmd, "shutdown") == 0 ? 13 :
+        flopstrcmp(cmd, "vgatest") ==  0 ? 14 : 0)
     {
 
         case 1: // "list"
@@ -260,8 +261,9 @@ void fshell_task(void *arg) {
             echo(" - read <filename>          Read and print file contents\n", WHITE);
             echo(" - sleep <seconds>          Pause execution for specified time\n", WHITE);
             echo(" - license [keyword]        Display license or search by keyword\n", WHITE);
-            //echo(" - flopmath                 Perform a mathematical operation\n", WHITE);  // New flopmath command
+            //echo(" - flopmath                 Perform a mathematical operation\n", WHITE);  // flopmath command prototype
             echo(" - help                     Display this help message\n", WHITE);
+            echo(" - vgatest                  Test VGA graphics.", WHITE);
             echo(" - exit                     Exit the shell\n", WHITE);
             break;
 
@@ -286,7 +288,17 @@ void fshell_task(void *arg) {
         case 13: // "shutdown"
             acpi_shutdown();
             break;
-    break;
+        case 14: // "vgatest"
+            vga_init();
+            vga_clear_screen();
+            console_print("Hi, this is a test of my VGA console", YELLOW);
+            sleep_seconds(5);
+            vga_clear_screen();
+            vga_desktop();
+            sleep_seconds(10);
+            vga_clear_screen();
+            break;
+        break;
         default: // Unknown command
             echo("Unknown command. Type 'help' for assistance.\n", RED);
             break;

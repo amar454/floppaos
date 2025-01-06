@@ -74,5 +74,5 @@ typedef struct {
 
 // Print Multiboot information (for debugging purposes)
 void print_multiboot_info(const multiboot_info_t *mb_info);
-
+void test_multiboot_framebuffer(const multiboot_info_t *mb_info) ;
 #endif // MULTIBOOT_H
