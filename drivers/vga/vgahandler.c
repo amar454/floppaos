@@ -154,7 +154,7 @@ void vga_place_bold_char(uint16_t x, uint16_t y, char c, uint8_t color) {
         }
     }
 }
-
+// i actually remember that i have i/o helpers.
 void vga_set_cursor_position(uint16_t x, uint16_t y) {
     if (x < VGA_WIDTH && y < VGA_HEIGHT) {
         uint16_t position = y * VGA_WIDTH + x;  
