@@ -154,14 +154,17 @@ void vga_place_bold_char(uint16_t x, uint16_t y, char c, uint8_t color) {
         }
     }
 }
-// i actually remember that i have i/o helpers.
 void vga_set_cursor_position(uint16_t x, uint16_t y) {
     if (x < VGA_WIDTH && y < VGA_HEIGHT) {
-        uint16_t position = y * VGA_WIDTH + x;  
-        outb(0x3D4, 0x0E);
-        outb(0x3D5, (position >> 8) & 0xFF);
-        outb(0x3D4, 0x0F);
-        outb(0x3D5, position & 0xFF);
+        uint16_t position = y * VGA_WIDTH + x;  // calc linear cursor pos.
+
+        // Set high byte 
+        outb(VGA_CRTC_INDEX, VGA_CURSOR_HIGH_REGISTER);
+        outb(VGA_CRTC_DATA, (position >> 8) & 0xFF);
+
+        // Set low byte
+        outb(VGA_CRTC_INDEX, VGA_CURSOR_LOW_REGISTER);
+        outb(VGA_CRTC_DATA, position & 0xFF);
     }
 }
 void vga_save_terminal_state() {

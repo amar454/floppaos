@@ -36,6 +36,7 @@ Good luck reading half of this. Most of the memory addresses I found on osdev, s
 #define VGA_GRAPHICS_WIDTH 320
 #define VGA_GRAPHICS_HEIGHT 200
 
+
 #define	VGA_AC_INDEX		0x3C0
 #define	VGA_AC_WRITE		0x3C0
 #define	VGA_AC_READ		    0x3C1
@@ -55,6 +56,10 @@ Good luck reading half of this. Most of the memory addresses I found on osdev, s
 #define	VGA_NUM_CRTC_REGS	25
 #define	VGA_NUM_GC_REGS		9
 #define	VGA_NUM_SEQ_REGS	5
+
+// VGA cursor register indices
+#define VGA_CURSOR_HIGH_REGISTER 0x0E
+#define VGA_CURSOR_LOW_REGISTER  0x0F
 
 // text mode colors
 #define BLACK        0
