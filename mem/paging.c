@@ -39,9 +39,9 @@ void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
 
     // Enable paging by setting the PG bit (bit 31) and optionally WP (bit 16) in CR0
     log_step("Modifying CR0 to enable paging...\n", LIGHT_BLUE);
-    log_step("Setting PG (Paging Enable) bit...\n", LIGHT_BLUE);
+    log_step("Setting PG (Paging Enable) (bit 31)  bit...\n", LIGHT_BLUE);
     if (enable_wp) {
-        log_step("Enabling WP (Write Protect) in CR0...\n", LIGHT_BLUE);
+        log_step("Enabling WP (Write Protect) (bit 31) in CR0...\n", LIGHT_BLUE);
     }
     __asm__ volatile(
         "mov %%cr0, %0\n"         // Move CR0 into a temporary variable
@@ -53,7 +53,7 @@ void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
     log_step("CR0 modified successfully.\n", LIGHT_GREEN);
     // Enable PSE (Page Size Extension) if requested by setting the PSE bit (bit 4) in CR4
     if (enable_pse) {
-        log_step("Enabling PSE (Page Size Extension) in CR4...\n", LIGHT_BLUE);
+        log_step("Enabling PSE (Page Size Extension) (bit 4) in CR4...\n", LIGHT_BLUE);
         __asm__ volatile(
             "mov %%cr4, %0\n"      // Move CR4 into a temporary variable
             "or %1, %0\n"          // Set the PSE bit
@@ -78,7 +78,7 @@ void create_first_page_table() {
 
     for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
         uint32_t frame = i * PAGE_SIZE; // Physical address
-
+        log_step("Setting page attributes...", LIGHT_GRAY);
         PageAttributes attributes = {
             .present = 1,
             .rw = 1,
@@ -108,17 +108,18 @@ void create_first_page_table() {
 void create_page_directory() {
     log_step("Creating page directory...\n", LIGHT_GRAY);
 
-    // Initialize all entries
+    log_step("Initializing page directory entries...\n", LIGHT_GRAY);
     for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
         page_directory[i].present = 0;
         page_directory[i].rw = 1;   // Read/Write
         page_directory[i].user = 0; // Supervisor (kernel mode)
         page_directory[i].table_addr = (uint32_t)((uintptr_t)&page_tables[i] >> 12); // Page table base address
     }
-
+    
     // Link the first page table
+    log_step("Linking the first page table...\n", LIGHT_GRAY);
     page_directory[0].present = 1; // Mark the first entry as present
-
+    
     log_step("Page directory created and first table linked.\n", GREEN);
 }
 
