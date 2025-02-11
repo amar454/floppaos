@@ -22,6 +22,11 @@ pmm.c
         - checks if multiboot provides a memory map (it should)
         - prints info about memory map, memory regions, and total memory size in kb, mb, and gb
     
+    pmm_alloc_page() simply allocates a physical page and returns a pointer to it.
+
+    pmm_free_page(...) comparitively deallocates a physical page.
+
+    pmm_is_page_free(...) is a debugging utility to check if a page is free 
 
 
 ------------------------------------------------------------------------------
