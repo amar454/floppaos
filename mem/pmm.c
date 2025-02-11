@@ -1,3 +1,32 @@
+/* 
+
+Copyright 2024-25 Amar Djulovic <aaamargml@gmail.com>
+
+This file is part of FloppaOS.
+
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+
+------------------------------------------------------------------------------
+
+pmm.c
+
+    This is the physical memory manager for floppaOS. It takes the multiboot memory map, creates a bitmap, gives data about memory size, and allows physical pages to be allocated
+
+    pmm_init(...) takes in the multiboot info pointer and checks if it's valid. The steps it takes are:
+        - checks if the pointer is null
+        - displays info flags
+        - checks if multiboot provides a memory map (it should)
+        - prints info about memory map, memory regions, and total memory size in kb, mb, and gb
+    
+
+
+------------------------------------------------------------------------------
+*/
+
 #include <stdint.h>
 #include <stddef.h>
 #include "pmm.h"
