@@ -5,15 +5,21 @@ section .multiboot               ; Multiboot header
 
 section .text
 global start
-extern main                      ; Declared in the kernel
+extern kmain                     ; Declared in the kernel
 
 start:
     cli                          ; Disable interrupts
     mov esp, stack_space         ; Set up stack
-    push dword 0                 ; Push dummy argument count (argc)
-    push ebx                     ; Push Multiboot pointer (argv[1])
-    call main                    ; Call main with arguments
-    hlt                          ; Halt
+
+    push ebx                     ; Push mb_info pointer
+    push eax                     ; Push mb_magic number
+
+    call kmain                   ; Call kernel main function
+
+    cli                          ; Disable interrupts
+    hlt                          ; Halt if main returns
+
 section .bss
+align 16                         ; Ensure proper stack alignment
 resb 8192                        ; 8KB stack space
-stack_space:                     ; Define the stack space
+stack_space:

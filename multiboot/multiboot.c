@@ -2,105 +2,91 @@
 #include "../apps/echo.h" 
 #include "../drivers/vga/vgahandler.h"
 #include "../drivers/time/floptime.h"
-// Print the full multiboot information using echo_f
-void print_multiboot_info(const multiboot_info_t *mb_info) {
-    if (!mb_info) {
-        echo("Error: Multiboot info is NULL!\n", RED);
+#include "../lib/logging.h"
+void print_multiboot_info(multiboot_info_t* mb_info) {
+    if (mb_info == NULL) {
+        log_step("Multiboot info pointer is NULL", RED);
         return;
     }
 
-    // Memory Info
-    sleep_seconds(1);
+    log_step("---- Multiboot Information ----", LIGHT_GRAY);
+
+    log_uint("Flags: ", mb_info->flags);
+
     if (mb_info->flags & MULTIBOOT_INFO_MEMORY) {
-        echo("Memory Info:\n", YELLOW);
-        echo_f("  Lower Memory: %u KB (%u MB)\n", WHITE, mb_info->mem_lower, mb_info->mem_lower / 1024);
-        echo_f("  Upper Memory: %u KB (%u MB)\n", WHITE, mb_info->mem_upper, mb_info->mem_upper / 1024);
+        log_uint("Memory Lower (KB): ", mb_info->mem_lower);
+        log_uint("Memory Upper (KB): ", mb_info->mem_upper);
     }
 
-    // Boot Device Info
     if (mb_info->flags & MULTIBOOT_INFO_BOOTDEV) {
-        echo("Boot Device Info:\n", WHITE);
-        echo_f("  Boot Device: 0x%x\n", WHITE, mb_info->boot_device);
+        log_uint("Boot Device: ", mb_info->boot_device);
     }
 
-    // Command Line
     if (mb_info->flags & MULTIBOOT_INFO_CMDLINE) {
-        echo("Command Line:\n", WHITE);
-        echo_f("  %s\n", WHITE, (const char *)(uintptr_t)mb_info->cmdline);
+        log_address("Command Line Address: ", mb_info->cmdline);
     }
 
-    sleep_seconds(1);
-
-    // Modules Info
     if (mb_info->flags & MULTIBOOT_INFO_MODS) {
-        echo("Modules Info:\n", WHITE);
-        echo_f("  Modules Count: %u\n", WHITE, mb_info->mods_count);
-        echo_f("  Modules Address: 0x%x\n", WHITE, mb_info->mods_addr);
+        log_uint("Modules Count: ", mb_info->mods_count);
+        log_address("Modules Address: ", mb_info->mods_addr);
     }
 
-    // AOUT Symbols Info
     if (mb_info->flags & MULTIBOOT_INFO_AOUT_SYMS) {
-        echo("AOUT Symbols Info:\n", WHITE);
-        echo_f("  Tab Size: %u\n", WHITE, mb_info->aout_sym.tabsize);
-        echo_f("  String Size: %u\n", WHITE, mb_info->aout_sym.strsize);
-        echo_f("  Address: 0x%x\n", WHITE, mb_info->aout_sym.addr);
+        log_step("-- AOUT Symbol Table --", LIGHT_GRAY);
+        log_uint("Tab Size: ", mb_info->u.aout_sym.tabsize);
+        log_uint("Str Size: ", mb_info->u.aout_sym.strsize);
+        log_address("Address: ", mb_info->u.aout_sym.addr);
     }
 
-    sleep_seconds(1);
-
-    // ELF Section Info
     if (mb_info->flags & MULTIBOOT_INFO_ELF_SHDR) {
-        echo("ELF Section Info:\n", WHITE);
-        echo_f("  Number: %u\n", WHITE, mb_info->elf_sec.num);
-        echo_f("  Size: %u\n", WHITE, mb_info->elf_sec.size);
-        echo_f("  Address: 0x%x\n", WHITE, mb_info->elf_sec.addr);
-        echo_f("  Shndx: %u\n", WHITE, mb_info->elf_sec.shndx);
+        log_step("-- ELF Section Header Table --", LIGHT_GRAY);
+        log_uint("Number of Entries: ", mb_info->u.elf_sec.num);
+        log_uint("Size of Entry: ", mb_info->u.elf_sec.size);
+        log_address("Address: ", mb_info->u.elf_sec.addr);
+        log_uint("Index of Section Names: ", mb_info->u.elf_sec.shndx);
     }
 
-    // Memory Map Info
     if (mb_info->flags & MULTIBOOT_INFO_MEM_MAP) {
-        echo("Memory Map:\n", WHITE);
-        multiboot_memory_map_t *mmap = (multiboot_memory_map_t *)(uintptr_t)mb_info->mmap_addr;
-        while ((uintptr_t)mmap < (uintptr_t)(mb_info->mmap_addr + mb_info->mmap_length)) {
-            echo_f("  Base: 0x%x, Length: 0x%x, Type: %u\n", WHITE,
-                   mmap->base_addr, mmap->length, mmap->type);
-            mmap = (multiboot_memory_map_t *)((uintptr_t)mmap + mmap->size + sizeof(mmap->size));
-        }
+        log_step("-- Memory Map --", LIGHT_GRAY);
+        log_uint("Memory Map Length: ", mb_info->mmap_length);
+        log_address("Memory Map Address: ", mb_info->mmap_addr);
     }
 
-    // Drive Info
     if (mb_info->flags & MULTIBOOT_INFO_DRIVE_INFO) {
-        echo("Drive Info:\n", WHITE);
-        echo_f("  Drives Length: %u\n", WHITE, mb_info->drives_length);
-        echo_f("  Drives Address: 0x%x\n", WHITE, mb_info->drives_addr);
+        log_uint("Drives Length: ", mb_info->drives_length);
+        log_address("Drives Address: ", mb_info->drives_addr);
     }
 
-    // Config Table Info
     if (mb_info->flags & MULTIBOOT_INFO_CONFIG_TABLE) {
-        echo("Config Table:\n", WHITE);
-        echo_f("  Address: 0x%x\n", WHITE, mb_info->config_table);
+        log_address("Config Table Address: ", mb_info->config_table);
     }
 
-    // Boot Loader Name
-    if (mb_info->flags & MULTIBOOT_INFO_BOOT_LOADER) {
-        echo("Boot Loader Name:\n", WHITE);
-        echo_f("  %s\n", WHITE, (const char *)(uintptr_t)mb_info->boot_loader_name);
+    if (mb_info->flags & MULTIBOOT_INFO_BOOT_LOADER_NAME) {
+        log_address("Boot Loader Name Address: ", mb_info->boot_loader_name);
     }
 
-    // APM Table Info
     if (mb_info->flags & MULTIBOOT_INFO_APM_TABLE) {
-        echo("APM Table Info:\n", WHITE);
-        echo_f("  Address: 0x%x\n", WHITE, mb_info->apm_table);
+        log_address("APM Table Address: ", mb_info->apm_table);
     }
 
-    // Framebuffer Info
-    if (mb_info->flags & MULTIBOOT_INFO_FRAMEBUFFER) {
-        echo("Framebuffer Info:\n", WHITE);
-        echo_f("  Address: 0x%x\n", WHITE, mb_info->framebuffer_addr);
-        echo_f("  Pitch: %u\n", WHITE, mb_info->framebuffer_pitch);
-        echo_f("  Width: %u\n", WHITE, mb_info->framebuffer_width);
-        echo_f("  Height: %u\n", WHITE, mb_info->framebuffer_height);
-        echo_f("  BPP: %u\n", WHITE, mb_info->framebuffer_bpp);
-        echo_f("  Type: %u\n", WHITE, mb_info->framebuffer_type);
+    if (mb_info->flags & MULTIBOOT_INFO_VBE_INFO) {
+        log_address("VBE Control Info: ", mb_info->vbe_control_info);
+        log_address("VBE Mode Info: ", mb_info->vbe_mode_info);
+        log_uint("VBE Mode: ", mb_info->vbe_mode);
+        log_uint("VBE Interface Segment: ", mb_info->vbe_interface_seg);
+        log_uint("VBE Interface Offset: ", mb_info->vbe_interface_off);
+        log_uint("VBE Interface Length: ", mb_info->vbe_interface_len);
     }
+
+    if (mb_info->flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO) {
+        log_step("-- Framebuffer Info --", LIGHT_GRAY);
+        log_address("Framebuffer Address: ", (uint32_t)mb_info->framebuffer_addr);
+        log_uint("Framebuffer Pitch: ", mb_info->framebuffer_pitch);
+        log_uint("Framebuffer Width: ", mb_info->framebuffer_width);
+        log_uint("Framebuffer Height: ", mb_info->framebuffer_height);
+        log_uint("Framebuffer Bits Per Pixel: ", mb_info->framebuffer_bpp);
+        log_uint("Framebuffer Type: ", mb_info->framebuffer_type);
+    }
+
+    log_step("---- End of Multiboot Information ----", GREEN);
 }

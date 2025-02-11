@@ -22,7 +22,7 @@ char interrupt_stack[ISR_STACK_SIZE];
 
 void init_stack() {
     uint32_t stack_top = (uint32_t)(interrupt_stack + ISR_STACK_SIZE);
-    asm volatile("mov %0, %%esp" :: "r"(stack_top));  // Set the stack pointer to the top of the interrupt stack
+    __asm__ volatile("mov %0, %%esp" :: "r"(stack_top));  // Set the stack pointer to the top of the interrupt stack
 }
 // Initialize the PIC (Programmable Interrupt Controller)
 void init_pic() {
@@ -96,7 +96,7 @@ void set_schedule_flag() {
 
 // PIT interrupt handler (ISR)
 void __attribute__((naked)) pit_isr() {
-    asm volatile (
+    __asm__ volatile (
         // Save registers
         "push %eax\n\t"        // Save EAX
         "push %ebx\n\t"        // Save EBX
@@ -146,5 +146,5 @@ void init_interrupts() {
     init_pic();
     init_pit();
     init_idt();
-    asm volatile("sti");  // Enable interrupts
+    __asm__ volatile("sti");  // Enable interrupts
 }

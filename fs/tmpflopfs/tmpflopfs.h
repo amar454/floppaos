@@ -7,7 +7,8 @@
 #define TMP_FILESYSTEM_TYPE_ID 0x02
 #define MAX_TMP_PATH_LENGTH 100
 #define MAX_TMP_FILES 100
-
+#define TMP_DISK_SIZE (1024 * 1024)  
+#define TMP_DISK_FILENAME "tmpflopfs.bin"
 // Structure representing a file in the embedded filesystem
 struct TmpFile {
     char name[50];

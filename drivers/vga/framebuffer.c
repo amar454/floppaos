@@ -8,7 +8,7 @@
 // Initialize framebuffer using GRUB multiboot information
 void framebuffer_initialize(multiboot_info_t *mbi, framebuffer_t *fb) {
     // Check if the framebuffer information is available in the multiboot info
-    if (!(mbi->flags & MULTIBOOT_INFO_FRAMEBUFFER)) {
+    if (!(mbi->flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO)) {
         fb->framebuffer = NULL;  // No framebuffer available
         return;
     }

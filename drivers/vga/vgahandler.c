@@ -565,38 +565,10 @@ static unsigned char g_8x16_font[4096] =
 	0x00, 0x00, 0x00, 0x00, 0x7C, 0x7C, 0x7C, 0x7C, 0x7C, 0x7C, 0x7C, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
-unsigned char g_320x200x256[] = // mapping crap.
-{
-	0x63,
-	0x03, 0x01, 0x0F, 0x00, 0x0E,
-	0x5F, 0x4F, 0x50, 0x82, 0x54, 0x80, 0xBF, 0x1F,
-	0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x9C, 0x0E, 0x8F, 0x28,	0x40, 0x96, 0xB9, 0xA3,
-	0xFF,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x0F,
-	0xFF,
-	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-	0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-	0x41, 0x00, 0x0F, 0x00,	0x00
-};
-unsigned char g_640x480x256[] = {
-    // MISC
-    0xE3, // 0xE3 for 640x480 with 256 colors
-    // Sequencer
-    0x03, 0x01, 0x0F, 0x00, 0x06,
-    // CRTC
-    0x5F, 0x4F, 0x50, 0x82, 0x54, 0x80, 0xBF, 0x1F,
-    0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x9C, 0x0E, 0x8F, 0x28, 0x40, 0x96, 0xB9, 0xA3,
-    0xFF,
-    // GC
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x0F,
-    0xFF,
-    // AC
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-    0x41, 0x00, 0x0F, 0x00, 0x00
-};
+typedef struct {
+    const char *name;
+    unsigned char r, g, b;
+} VGAColor;
 unsigned char font_8x16[256][16] = {
     [32] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, // Space
     [33] = { 0x00, 0x00, 0x5f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, // !
@@ -694,24 +666,6 @@ unsigned char font_8x16[256][16] = {
     [125] = { 0x1E, 0x21, 0x21, 0x1E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }, // }
     [126] = { 0x00, 0x00, 0x0C, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } // ~
 };
-void vga_plot_pixel(int x, int y, unsigned short color) {
-    unsigned short offset = x + 320 * y;
-    unsigned char *VGA = (unsigned char*)VGA_GRAPHICS_ADDRESS;
-    VGA[offset] = color;
-}
-
-void vga_clear_screen() {
-    for (int i = 0; i < 320; i++) {
-        for (int j = 0; j < 200; j++) {
-            vga_plot_pixel(i,j,COLOR_BLACK);
-        }
-    }
-}
-typedef struct {
-    const char *name;
-    unsigned char r, g, b;
-} VGAColor;
-
 const VGAColor vga_palette[256] = {
     {"Black", 0x00, 0x00, 0x00},            // 0
     {"Blue", 0x00, 0x00, 0xAA},            // 1
@@ -765,21 +719,6 @@ const VGAColor vga_palette[256] = {
     {"Medium Orchid", 0xBA, 0x55, 0xD3},   // 49
     {"Dark Olive Green", 0x55, 0x6B, 0x2F},// 50
 };
-
-void set_palette() {
-    outb(0x3C8, 0); // Start at color 0
-    for (int i = 0; i < 256; i++) {
-        // Retrieve the RGB values from the predefined vga_palette
-        unsigned char r = vga_palette[i].r;
-        unsigned char g = vga_palette[i].g;
-        unsigned char b = vga_palette[i].b;
-
-        // Scale the values from 0-255 to the VGA's 6-bit range (0-63)
-        outb(0x3C9, r / 4); // VGA expects values in the range 0-63
-        outb(0x3C9, g / 4);
-        outb(0x3C9, b / 4);
-    }
-}
 const uint8_t FONT[95][13] = {
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},// space :32
     {0x00, 0x00, 0x18, 0x18, 0x00, 0x00, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18},// ! :33
@@ -943,6 +882,51 @@ const uint8_t SMALL_FONT[95][5] = {
     {0x00, 0x00, 0x00, 0x00, 0x00}  // _ :95
 };
 
+unsigned char g_320x200x256[] = // mapping crap.
+{
+	0x63,
+	0x03, 0x01, 0x0F, 0x00, 0x0E,
+	0x5F, 0x4F, 0x50, 0x82, 0x54, 0x80, 0xBF, 0x1F,
+	0x00, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x9C, 0x0E, 0x8F, 0x28,	0x40, 0x96, 0xB9, 0xA3,
+	0xFF,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x05, 0x0F,
+	0xFF,
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+	0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+	0x41, 0x00, 0x0F, 0x00,	0x00
+};
+
+
+void vga_plot_pixel(int x, int y, unsigned short color) {
+    unsigned short offset = x + 320 * y;
+    unsigned char *VGA = (unsigned char*)VGA_GRAPHICS_ADDRESS;
+    VGA[offset] = color;
+}
+
+void vga_clear_screen() {
+    for (int i = 0; i < 320; i++) {
+        for (int j = 0; j < 200; j++) {
+            vga_plot_pixel(i,j,COLOR_BLACK);
+        }
+    }
+}
+
+void set_palette() {
+    outb(0x3C8, 0); // Start at color 0
+    for (int i = 0; i < 256; i++) {
+        // Retrieve the RGB values from the predefined vga_palette
+        unsigned char r = vga_palette[i].r;
+        unsigned char g = vga_palette[i].g;
+        unsigned char b = vga_palette[i].b;
+
+        // Scale the values from 0-255 to the VGA's 6-bit range (0-63)
+        outb(0x3C9, r / 4); // VGA expects values in the range 0-63
+        outb(0x3C9, g / 4);
+        outb(0x3C9, b / 4);
+    }
+}
+
 void vga_draw_char(int x, int y, char c, uint32_t color) {
     if (c < 32 || c > 126) {
         return;  // Invalid character (outside the printable range)
@@ -959,36 +943,11 @@ void vga_draw_char(int x, int y, char c, uint32_t color) {
     }
 }
 
-void vga_draw_small_char(int x, int y, char c, uint32_t color) {
-    if (c < 32 || c > 126) {
-        return;  // Invalid character (outside the printable range)
-    }
-
-    const uint8_t *bitmap = SMALL_FONT[c - 32];  // Get the bitmap for the character
-
-    for (int row = 0; row < 5; row++) {  // Iterate over 5 rows
-        for (int col = 0; col < 5; col++) {  // Iterate over 8 columns
-            if (bitmap[row] & (0x80 >> col)) {  // Check each bit in the current row
-                vga_plot_pixel(x + col, y + row, color);  // Plot the pixel
-            }
-        }
-    }
-}
-
 void vga_draw_string(int x, int y, const char *str, uint32_t color) {
     int offset_x = 0;
     while (*str) {
         vga_draw_char(x + offset_x, y, *str, color);  // Draw each character
         offset_x += 9;  // Move the position for the next character, scaled width 
-        str++;
-    }
-}
-
-void vga_draw_small_string(int x, int y, const char *str, uint32_t color) {
-    int offset_x = 0;
-    while (*str) {
-        vga_draw_small_char(x + offset_x, y, *str, color);  // Draw each character
-        offset_x += 6;  // Move the position for the next character, scaled width 
         str++;
     }
 }
@@ -1138,12 +1097,13 @@ void draw_desktop() {
     vga_draw_string(x + 6, y + 4, ">", VGA_WHITE); // Command prompt symbol (adjusted y)
     vga_draw_string(x-4, y + 24, "term", VGA_WHITE);  
 
-    vga_draw_small_string(200, 200, "test", VGA_WHITE);
+    //vga_draw_small_string(200, 200, "test", VGA_WHITE);
 }
 #define SCREEN_WIDTH 320
-#define SCREEN_HEIGHT 20  // Number of lines to fit on the screen
-#define LINE_HEIGHT 13    // Height of each line in pixels (for 8x13 font)
-#define CHARACTER_WIDTH 8 // Width of each character in pixels (for 8x13 font)
+#define SCREEN_HEIGHT 200  // Total pixel height of the screen
+#define LINE_HEIGHT 13
+#define CHARACTER_WIDTH 8 
+#define MAX_LINES (SCREEN_HEIGHT / LINE_HEIGHT)
 #define MAX_CHARACTERS_PER_LINE (SCREEN_WIDTH / CHARACTER_WIDTH)
 // Screen buffer for storing text and colors
 static int console_y = 0;  // The current Y position (in terms of lines)
@@ -1151,43 +1111,42 @@ static int console_x = 0;  // The current X position (in characters)
 static char screen_buffer[SCREEN_HEIGHT][MAX_CHARACTERS_PER_LINE];  // Text buffer
 static unsigned short color_buffer[SCREEN_HEIGHT][MAX_CHARACTERS_PER_LINE];  // Color buffer
 
-// Clears the screen by filling the screen buffer with empty spaces and default color
 void console_clear_screen() {
-    for (int i = 0; i < SCREEN_HEIGHT; i++) {
+    for (int i = 0; i < MAX_LINES; i++) {
         for (int j = 0; j < MAX_CHARACTERS_PER_LINE; j++) {
             screen_buffer[i][j] = ' '; // Fill with spaces
             color_buffer[i][j] = VGA_WHITE;  // Default to white color
         }
     }
-    console_x = 0;  // Reset the console X position
-    console_y = 0;  // Reset the console Y position
-    vga_clear_screen();  // Clear the VGA display, assuming you have this function
+    console_x = 0;
+    console_y = 0;
+    vga_clear_screen();  // Function to clear the VGA display
 }
 
 // Scroll the console up by one line
 void console_scroll() {
-    // Shift all lines of text and colors up
-    for (int i = 1; i < SCREEN_HEIGHT; i++) {
+    // Shift all lines up by one
+    for (int i = 1; i < MAX_LINES; i++) {
         for (int j = 0; j < MAX_CHARACTERS_PER_LINE; j++) {
             screen_buffer[i - 1][j] = screen_buffer[i][j];
             color_buffer[i - 1][j] = color_buffer[i][j];
         }
     }
-
     // Clear the last line
     for (int j = 0; j < MAX_CHARACTERS_PER_LINE; j++) {
-        screen_buffer[SCREEN_HEIGHT - 1][j] = ' ';
-        color_buffer[SCREEN_HEIGHT - 1][j] = VGA_WHITE;  // Reset to default color
+        screen_buffer[MAX_LINES - 1][j] = ' ';
+        color_buffer[MAX_LINES - 1][j] = VGA_WHITE;
     }
-
-    // Adjust the console position
-    console_y = SCREEN_HEIGHT - 1;
+    // Update cursor position
+    console_y = MAX_LINES - 1;
     console_x = 0;
 }
 
+
 // Draws the content of the screen buffer on the screen
 void console_render() {
-    for (int i = 0; i < SCREEN_HEIGHT; i++) {
+    vga_clear_screen();  // Clear the VGA display before rendering
+    for (int i = 0; i < MAX_LINES; i++) {
         for (int j = 0; j < MAX_CHARACTERS_PER_LINE; j++) {
             char c = screen_buffer[i][j];
             unsigned short color = color_buffer[i][j];
@@ -1199,41 +1158,33 @@ void console_render() {
 // Prints a string to the console with per-character coloring
 void console_print(const char *str, unsigned short color) {
     while (*str) {
-        // If we need to wrap to the next line
-        if (console_x >= MAX_CHARACTERS_PER_LINE) {
+        if (*str == '\n') {
             console_x = 0;
             console_y++;
-        }
-
-        // If we need to scroll, do it before printing
-        if (console_y >= SCREEN_HEIGHT) {
-            console_scroll();
-            console_y = SCREEN_HEIGHT - 1;  // Reset the line position to the last line
-        }
-
-        // Handle special characters
-        if (*str == '\n') {
-            console_x = 0;  // Move to the beginning of the next line
-            console_y++;
         } else if (*str == '\b') {
-            // Handle backspace
             if (console_x > 0) {
                 console_x--;
                 screen_buffer[console_y][console_x] = ' ';
                 color_buffer[console_y][console_x] = VGA_WHITE;
             }
         } else {
-            // Store the character and color in their respective buffers
             screen_buffer[console_y][console_x] = *str;
             color_buffer[console_y][console_x] = color;
             console_x++;
+            if (console_x >= MAX_CHARACTERS_PER_LINE) {
+                console_x = 0;
+                console_y++;
+            }
         }
-
-        str++;  // Move to the next character
+        if (console_y >= MAX_LINES) {
+            console_scroll();
+            console_y = MAX_LINES - 1;
+        }
+        str++;
     }
-
-    console_render();  // Redraw the console
+    console_render();
 }
+
 void vga_init() {
     write_regs(g_320x200x256);
     set_palette();

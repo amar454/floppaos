@@ -12,35 +12,43 @@ BOOT_PATH := $(ISO_PATH)/boot
 GRUB_PATH := $(BOOT_PATH)/grub
 
 # Compiler flags and linker settings
-CFLAGS = -m32 -ffreestanding -fno-stack-protector
+CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c23
 LD_FLAGS = -m elf_i386 -T linker.ld
 
-# Object files
-OBJ_FILES = \
-    boot.o \
-    kernel.o \
-    apps/echo.o \
-    fshell/fshell.o \
-    fs/flopfs/flopfs.o \
-    fs/tmpflopfs/tmpflopfs.o \
-    lib/str.o \
-    drivers/vga/vgahandler.o \
-    drivers/keyboard/keyboard.o \
-    drivers/time/floptime.o \
-    fs/tmpflopfs/fileutils.o \
-    mem/memutils.o \
-    drivers/io/io.o \
-    task/task_handler.o \
-    lib/flopmath.o \
-    apps/dsp/dsp.o \
-    drivers/vga/framebuffer.o \
-    multiboot/multiboot.o \
-    apps/floptxt/floptxt.o \
-    drivers/acpi/acpi.o \
-    interrupts/interrupts.o \
-    drivers/mouse/ps2ms.o
+# Source files and directories
+ASM_FILES = \
+    boot.asm \
 
-    
+C_FILES = \
+    kernel.c \
+    apps/echo.c \
+    fshell/fshell.c \
+    fs/flopfs/flopfs.c \
+    fs/tmpflopfs/tmpflopfs.c \
+    lib/str.c \
+    drivers/vga/vgahandler.c \
+    drivers/keyboard/keyboard.c \
+    drivers/time/floptime.c \
+    fs/tmpflopfs/fileutils.c \
+    mem/vmm.c \
+    mem/pmm.c \
+    mem/paging.c \
+    mem/utils.c \
+    drivers/io/io.c \
+    task/task_handler.c \
+    lib/flopmath.c \
+    apps/dsp/dsp.c \
+    drivers/vga/framebuffer.c \
+    multiboot/multiboot.c \
+    apps/floptxt/floptxt.c \
+    drivers/acpi/acpi.c \
+    interrupts/interrupts.c \
+    drivers/mouse/ps2ms.c \
+    mem/gdt.c \
+	lib/logging.c 
+
+OBJ_FILES = boot.o \
+            $(C_FILES:.c=.o)
 
 # Dependency check
 CHECK_DEPENDENCIES = \
@@ -54,7 +62,7 @@ check-dependencies:
 	    if ! command -v $$dep &>/dev/null; then \
 	        echo "Error: $$dep is not installed."; \
 	        echo "Please install it using your package manager."; \
-		echo "Try 'make install_guide' for information for your system."; \
+	        echo "Try 'make install-guide' for installation instructions."; \
 	        exit 1; \
 	    fi; \
 	done
@@ -63,60 +71,20 @@ check-dependencies:
 # Main build target
 .PHONY: all
 all: check-dependencies bootloader kernel linker iso
-	@echo "Make has completed."
+	@echo "Build completed successfully."
 
 # Bootloader compilation
-bootloader: boot.asm
-	nasm -f elf32 boot.asm -o boot.o
+bootloader: $(ASM_FILES)
+	nasm -f elf32 boot.asm -o boot.o 
 
 # Kernel compilation
-kernel: \
-    kernel.c \
-    apps/echo.c \
-    fshell/fshell.c \
-    fs/flopfs/flopfs.c \
-    fs/tmpflopfs/tmpflopfs.c \
-    lib/str.c \
-    drivers/vga/vgahandler.c \
-    drivers/keyboard/keyboard.c \
-    drivers/time/floptime.c \
-    fs/tmpflopfs/fileutils.c \
-    mem/memutils.c \
-    drivers/io/io.c \
-    task/task_handler.c \
-    lib/flopmath.c \
-    apps/dsp/dsp.c \
-    drivers/vga/framebuffer.c \
-    multiboot/multiboot.c \
-    apps/floptxt/floptxt.c \
-    drivers/acpi/acpi.c \
-    interrupts/interrupts.c \
-    drivers/mouse/ps2ms.c
-	gcc $(CFLAGS) -c \
-        kernel.c \
-        apps/echo.c \
-        fshell/fshell.c \
-        fs/flopfs/flopfs.c \
-        fs/tmpflopfs/tmpflopfs.c \
-        lib/str.c \
-        drivers/vga/vgahandler.c \
-        drivers/keyboard/keyboard.c \
-        drivers/time/floptime.c \
-        fs/tmpflopfs/fileutils.c \
-        mem/memutils.c \
-        drivers/io/io.c \
-        task/task_handler.c \
-        lib/flopmath.c \
-        apps/dsp/dsp.c \
-        drivers/vga/framebuffer.c \
-        multiboot/multiboot.c \
-        apps/floptxt/floptxt.c \
-        drivers/acpi/acpi.c \
-        interrupts/interrupts.c \
-        drivers/mouse/ps2ms.c
+kernel: $(C_FILES)
+	gcc $(CFLAGS) -c $(C_FILES)
+
 # Linker step
-linker: linker.ld $(OBJ_FILES)
+linker: $(OBJ_FILES)
 	ld $(LD_FLAGS) -o $(BIN) $(OBJ_FILES)
+
 
 # ISO creation
 iso: $(BIN)

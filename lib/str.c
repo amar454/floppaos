@@ -16,7 +16,8 @@ You should have received a copy of the GNU General Public License along with Flo
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include "../mem/memutils.h"
+#include "../mem/utils.h"
+#include "../mem/vmm.h"
 static char *flopstrtok_next = NULL;
 
 // Copies src string to dest
@@ -237,7 +238,7 @@ char *flopstrreplace(char *str, const char *old, const char *new_str) {
     char *result = str;
     size_t old_len = flopstrlen(old);
     size_t new_len = flopstrlen(new_str);
-    char *temp = (char *)flop_malloc(flopstrlen(str) + 1);
+    char *temp = (char *)vmm_malloc(flopstrlen(str) + 1);
     if (temp) {
         size_t pos = 0;
         while (*str) {
@@ -251,7 +252,7 @@ char *flopstrreplace(char *str, const char *old, const char *new_str) {
         }
         temp[pos] = '\0';
         flopstrcopy(result, temp, pos + 1);
-        flop_free(temp);
+        vmm_free(temp, flopstrlen(str) + 1);
     }
     return result;
 }
@@ -266,7 +267,7 @@ char **flopstrsplit(const char *str, const char *delim) {
         s++;
     }
 
-    char **tokens = (char **)flop_malloc((token_count + 2) * sizeof(char *));
+    char **tokens = (char **)vmm_malloc((token_count + 2) * sizeof(char *));
     if (tokens) {
         size_t index = 0;
         s = str;
@@ -276,7 +277,7 @@ char **flopstrsplit(const char *str, const char *delim) {
                 s++;
             }
             size_t len = s - start;
-            tokens[index] = (char *)flop_malloc(len + 1);
+            tokens[index] = (char *)vmm_malloc(len + 1);
             flopstrcopy(tokens[index], start, len + 1);
             index++;
             if (*s) {
@@ -418,7 +419,7 @@ char *flopstrtok_r(char *str, const char *delim, char **saveptr) {
 
 char *flopstrdup(const char *str) {
     size_t len = flopstrlen(str) + 1;
-    char *dup = (char *)flop_malloc(len);
+    char *dup = (char *)vmm_malloc(len);
     if (dup) {
         flopstrcopy(dup, str, len);
     }
@@ -791,10 +792,13 @@ char *flopstristr(const char *haystack, const char *needle) {
     char *n = (char *)needle;
 
     // Convert both haystack and needle to lowercase to perform case-insensitive comparison
-    char *h_lower = flopstrdup(haystack);  // Create a lowercase copy of haystack
-    char *n_lower = flopstrdup(needle);    // Create a lowercase copy of needle
+    char *h_lower = (char *)vmm_malloc(flopstrlen(haystack) + 1);  // Allocate memory for lowercase copy of haystack
+    char *n_lower = (char *)vmm_malloc(flopstrlen(needle) + 1);    // Allocate memory for lowercase copy of needle
 
     if (h_lower && n_lower) {
+        flopstrcopy(h_lower, haystack, flopstrlen(  h_lower));  // Copy haystack to lowercase version
+        flopstrcopy(n_lower, needle, flopstrlen(  n_lower));    // Copy needle to lowercase version
+
         flopstrtolower(h_lower);  // Convert haystack to lowercase
         flopstrtolower(n_lower);  // Convert needle to lowercase
 
@@ -808,14 +812,16 @@ char *flopstristr(const char *haystack, const char *needle) {
             }
 
             if (*n_tmp == '\0') {
+                vmm_free(h_lower, flopstrlen(  h_lower));  // Free allocated memory for lowercase copies
+                vmm_free(n_lower, flopstrlen(  n_lower));
                 return h; // Match found
             }
             h_lower++;
         }
     }
 
-    flop_free(h_lower);  // Free the lowercase copies
-    flop_free(n_lower);
+    vmm_free(h_lower, flopstrlen(  h_lower));  // Free the lowercase copies
+    vmm_free(n_lower, flopstrlen(  n_lower));
     return NULL;  // No match found
 }
 
@@ -825,7 +831,7 @@ char *flopsubstr(const char *str, size_t start, size_t len) {
         return NULL; // Start is out of bounds
     }
 
-    char *sub = (char *)flop_malloc(len + 1);
+    char *sub = (char *)vmm_malloc(len + 1);
     if (!sub) {
         return NULL; // Memory allocation failed
     }
@@ -861,26 +867,28 @@ int flopstrichr(const char *str, char c) {
     int pos = 0;
 
     // Create a temporary copy of the string to avoid modifying the original
-    char *temp_str = flopstrdup(str);
+    char *temp_str = (char *)vmm_malloc(flopstrlen(str) + 1);
     if (temp_str) {
+        // Copy string to temp_str
+        flopstrcopy(temp_str, str,flopstrlen(str));
+        
         // Convert the copied string to lowercase
         flopstrtolower(temp_str);
 
         // Search for the lowercase character in the lowercase string
         while (temp_str[pos] != '\0') {
             if (temp_str[pos] == lower_c) {
-                flop_free(temp_str); // Clean up the temporary string
+                vmm_free(temp_str,flopstrlen(temp_str)); // Clean up the temporary string
                 return pos;
             }
             pos++;
         }
 
-        flop_free(temp_str); // Clean up the temporary string
+        vmm_free(temp_str,flopstrlen(temp_str)); // Clean up the temporary string
     }
 
     return -1; // Character not found
 }
-
 
 
 // Return a string representing a binary number (e.g., "1101")

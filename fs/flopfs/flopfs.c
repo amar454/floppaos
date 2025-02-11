@@ -1,6 +1,5 @@
 #include "flopfs.h"
 #include "../../apps/echo.h"
-#include "../../mem/memutils.h"
 #include "../../lib/str.h"
 #include "../../drivers/vga/vgahandler.h"
 #include "../../drivers/time/floptime.h"
@@ -40,7 +39,7 @@ void safe_strcopy(char *dst, const char *src, size_t max_len) {
  // Custom string copy that doesn't null-terminate the destination
 void flopstrcopy_no_null(char *dst, const char *src, size_t len) {
     // Ensure the length is correct and the source is large enough
-    flop_memcpy(dst, src, len);
+    //flop_memcpy(dst, src, len);
 }
 // Read a sector from disk
 int read_sector(uint32_t lba, void *buffer) {
@@ -163,7 +162,7 @@ void init_filesystem(struct FileSystem *fs) {
     }
 
     // Clear the entire filesystem structure to avoid any garbage data.
-    flop_memset(fs, 0, sizeof(struct FileSystem));
+    //flop_memset(fs, 0, sizeof(struct FileSystem));
 
     // Copy the filesystem signature safely
     flopstrcopy(fs->signature, FILESYSTEM_SIGNATURE, SIGNATURE_LENGTH);
@@ -429,7 +428,7 @@ void load_filesystem(struct FileSystem *fs) {
         // Check if the filesystem signature matches the expected one
         if (flopstrncmp(temp_fs.signature, FILESYSTEM_SIGNATURE, SIGNATURE_LENGTH) == 0) {
             // If signature matches, safely copy the loaded filesystem data
-            flop_memcpy(fs, &temp_fs, sizeof(struct FileSystem));
+            //flop_memcpy(fs, &temp_fs, sizeof(struct FileSystem));
             echo("Filesystem loaded successfully with valid signature.\n", GREEN);
         } else {
             echo("Invalid or corrupted filesystem signature. Initializing a new one...\n", RED);
@@ -464,10 +463,10 @@ void save_filesystem(struct FileSystem *fs) {
     echo("\n", WHITE);
 
     // Compare the signature for validity
-    if (flop_memcmp(fs->signature, FILESYSTEM_SIGNATURE, SIGNATURE_LENGTH) != 0) {
-        echo("Invalid filesystem signature detected. Aborting save operation.\n", RED);
-        return;
-    }
+    //if (/flop_memcmp(fs->signature, FILESYSTEM_SIGNATURE, SIGNATURE_LENGTH) != 0) {
+        //echo("Invalid filesystem signature detected. Aborting save operation.\n", RED);
+        //return;
+    //}
 
     // Check if the disk is writable
     if (!is_disk_writable()) {

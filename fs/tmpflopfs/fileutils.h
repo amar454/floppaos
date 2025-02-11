@@ -2,21 +2,30 @@
 #define FILEUTILS_H
 
 #include <stdint.h>
-#include <stddef.h>
+#include "../../mem/vmm.h"
+#include "../../mem/pmm.h"
+#include "../../drivers/vga/vgahandler.h"
+#include "../../drivers/time/floptime.h"
+#include "../../lib/str.h"
+#include "../../apps/echo.h"
+#include "tmpflopfs.h"
+extern uint8_t *simulated_disk;
+// Define constants for file modes
+#define FILE_MODE_READ  0
+#define FILE_MODE_WRITE 1
 
-// File modes
-#define FILE_MODE_READ  1
-#define FILE_MODE_WRITE 2
+// Next free position in the simulated disk
+extern uint32_t tmp_next_free_offset;
 
-// Temporary file descriptor structure
+// File descriptor structure
 typedef struct TmpFileDescriptor {
-    uint32_t position;    // Current position in the file
-    uint32_t size;        // Size of the file
-    uint8_t *data;        // Pointer to the file data
-    int mode;             // Mode (read or write)
+    uint8_t *data;      // Pointer to file data
+    uint32_t size;      // Size of the file
+    uint32_t position;  // Current position in the file
+    int mode;           // File open mode (read or write)
 } TmpFileDescriptor;
 
-// Function declarations
+// Function prototypes
 TmpFileDescriptor *flop_open(const char *tmp_filename, int mode);
 int flop_close(TmpFileDescriptor *tmp_file);
 int flop_seek(TmpFileDescriptor *tmp_file, uint32_t offset);
