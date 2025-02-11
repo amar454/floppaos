@@ -22,7 +22,8 @@ kernel.c:
     
     panic(...) is used across the kernel for errors that require a restart.
     
-    halt() uses an infinite while-loop
+    halt() uses an infinite while-loop to halt in C. It's not a true cpu halt but it's mainly just for isolating parts of the kernel for debugging
+
     
 
 
