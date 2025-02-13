@@ -56,8 +56,7 @@ void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr,
 
 // Initialize the virtual memory manager
 void vmm_init() {
-    echo("[mem/vmm.c]\n", WHITE);
-    log_step("->Initializing vmm... ", LIGHT_GRAY);
+    log_step("Initializing vmm... ", LIGHT_GRAY);
     flop_memset(page_directory, 0, sizeof(PDE) * PAGE_DIRECTORY_SIZE);  // Initialize the page directory
     log_step("VMM initialized.\n", GREEN);
 }
@@ -82,7 +81,7 @@ void *vmm_malloc(uint32_t size) {
 
                 // If enough contiguous pages found, allocate them
                 if (found_pages == pages_needed) {
-                    log_step("Found enough contiguous virtual pages!", GREEN);
+                    log_step("Found enough contiguous virtual pages!\n", GREEN);
 
                     // Allocate physical memory and map pages
                     for (uint32_t k = 0; k < pages_needed; k++) {

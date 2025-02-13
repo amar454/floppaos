@@ -13,7 +13,7 @@ uint32_t total_pages = 0;  // Total available pages
 
 void pmm_init(multiboot_info_t* mb_info) {
     if (mb_info == NULL) {
-        log_step("Multiboot info pointer is NULL", RED);
+        log_step("Multiboot info pointer is NULL\n", RED);
         return;
     }
 
@@ -51,7 +51,7 @@ void pmm_init(multiboot_info_t* mb_info) {
                 uint32_t page = addr / PAGE_SIZE;
 
                 if (page >= TOTAL_PAGES) {
-                    log_step("pmm: Page index out of bounds, skipping.", YELLOW);
+                    log_step("pmm: Page index out of bounds, skipping.\n", YELLOW);
                     break;
                 }
 
@@ -75,7 +75,7 @@ void pmm_init(multiboot_info_t* mb_info) {
 }
 
 void* pmm_alloc_page() {
-    log_step("pmm: Attempting to allocate page...", LIGHT_GRAY);
+    log_step("pmm: Attempting to allocate page...\n", LIGHT_GRAY);
     
     for (uint32_t i = 0; i < total_pages; i++) {
         uint32_t bit_index = i % 32;
@@ -99,7 +99,7 @@ void pmm_free_page(void* ptr) {
 
     uint32_t page = (uintptr_t)ptr / PAGE_SIZE;
     if (page >= total_pages) {
-        log_step("pmm: Invalid page free request!", RED);
+        log_step("pmm: Invalid page free request!\n", RED);
         return;
     }
 
