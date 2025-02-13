@@ -1,3 +1,38 @@
+/* 
+
+Copyright 2024-25 Amar Djulovic <aaamargml@gmail.com>
+
+This file is part of FloppaOS.
+
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+
+------------------------------------------------------------------------------
+
+vmm.c
+
+    This is the virtual memory manager for floppaOS.
+    It takes physical pages and makes virtual address spaces for each process.
+    In an operating system, this allows each process to have it's own isolated memory space to prevent memory leaks/overwrites.
+    
+    set_page(...) sets the flags for each page table entry using the PageAttributes struct.
+    
+    vmm_map_page(...) maps a virtual address to a physical page.
+
+    vmm_init() initializes the virtual memory manager.
+
+    vmm_malloc(...) allocates the amount of memory given in the size parameter.
+        - It first determines the amount of physical pages needed.
+        - Then, it maps those physical pages to a virtual address.
+        - Lastly, it returns a pointer to the start of the virtual address... (void *)start_virt;
+        - Returns NULL if there isn't enough pages for the size given.
+
+------------------------------------------------------------------------------
+*/
+
 #include "vmm.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../apps/echo.h"
@@ -9,8 +44,6 @@
 #include "../lib/logging.h"
 #include "../lib/str.h"
 
-
-
 // Set flags for a page table entry
 static void set_page(PTE *pte, PageAttributes attrs) {
     if (!pte) return;
@@ -19,7 +52,7 @@ static void set_page(PTE *pte, PageAttributes attrs) {
 }
 
 // Map a page (virtual to physical) in the page directory
-void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr, PageAttributes attrs) {
+void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr, PageAttributes attrs) { // TODO: add kernel and user space seperation
     if (!page_directory) {
         log_step("Invalid page directory!\n", RED);
         return;

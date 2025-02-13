@@ -3,7 +3,7 @@
 #include "../apps/echo.h"
 #include "../drivers/vga/vgahandler.h"
 
-
+// local function for flopitoa for printing unsigned integers and memory addresses.
 char* memflopitoa(uint32_t value, char* buffer, uint32_t base) {
     if (base < 2 || base > 16) {
         buffer[0] = '\0';
@@ -55,7 +55,15 @@ void log_uint(const char* prefix, uint32_t value) {
     echo("\n", LIGHT_GRAY);
 }
 
+// kernel logging function, with a custom message 
 void log_step(const char *message, uint8_t color) {
     echo("-> ", LIGHT_GRAY); // Arrow prefix
+    echo(message, color);   // Custom message and color
+}
+
+void log_error(const char *message, uint8_t color) {
+    echo("-> ", LIGHT_GRAY); // Arrow prefix
+    echo("floppaOS has run into an error.\n", RED);   // Custom message and color
+    echo("-> Error description: ", LIGHT_GRAY); // Arrow prefix
     echo(message, color);   // Custom message and color
 }

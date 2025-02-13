@@ -9,6 +9,7 @@
 #include "../../mem/utils.h"
 #include <stdint.h>
 #include <stdio.h>
+#include "../../lib/logging.h"
 extern Task task_queue[MAX_TASKS];
 #include "../../task/task_handler.h"
 void tmpflopfs_strcopy(char *dest, const char *src) {
@@ -20,7 +21,7 @@ void tmpflopfs_strcopy(char *dest, const char *src) {
 
 void init_tmpflopfs(struct TmpFileSystem *tmp_fs) {
     if (!tmp_fs) {
-        echo("init_tmpflopfs: Invalid TmpFileSystem pointer!\n", RED);
+        log_step("init_tmpflopfs: Invalid TmpFileSystem pointer!\n", RED);
         return;
     }
 
@@ -34,14 +35,14 @@ void init_tmpflopfs(struct TmpFileSystem *tmp_fs) {
 
     simulated_disk = vmm_malloc(TMP_DISK_SIZE);
     if (!simulated_disk) {
-        echo("init_tmpflopfs: Failed to allocate memory for simulated disk!\n", RED);
+        log_step("init_tmpflopfs: Failed to allocate memory for simulated disk!\n", RED);
         return;
     }
 
     // Clear the allocated memory (simulate a blank disk)
     flop_memset(simulated_disk, 0, TMP_DISK_SIZE);
 
-    echo("TmpFlopFS initialized successfully with 10 MB virtual disk space!\n", GREEN);
+    log_step("TmpFlopFS initialized successfully with 10 MB virtual disk space!\n", GREEN);
 }
 void create_tmp_directory(struct TmpFileSystem *tmp_fs, const char *tmp_dirname) {
     if (tmp_fs->tmp_file_count < MAX_TMP_FILES) {

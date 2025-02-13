@@ -53,7 +53,7 @@ void init_gdt() {
     set_gdt_entry(2, 0, 0xFFFFF, 0x92, 0xCF);   // Data Segment
 
     log_step("Flushing gdt...\n", LIGHT_GRAY);
-    gdt_flush((uint32_t)(uintptr_t)&gdt_ptr); // Correctly cast the pointer
+    gdt_flush((uint32_t)(uintptr_t)&gdt_ptr); 
 
     log_step("Gdt initialized. \n ", GREEN);
 }
