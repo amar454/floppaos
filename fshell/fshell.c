@@ -263,7 +263,7 @@ void fshell_task(void *arg) {
             echo(" - license [keyword]        Display license or search by keyword\n", WHITE);
             echo(" - tdsp                     Display info about running tasks\n", WHITE);  // flopmath command prototype
             echo(" - help                     Display this help message\n", WHITE);
-            echo(" - vgatest                  Test VGA graphics.", WHITE);
+            echo(" - vgatest                  Test VGA graphics.\n", WHITE);
             echo(" - exit                     Exit the shell\n", WHITE);
             break;
 
