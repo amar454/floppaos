@@ -2,13 +2,33 @@
 #define PMM_H
 #include <stdint.h>
 #include "../multiboot/multiboot.h"
-#define TOTAL_PAGES 1024
-#define BITMAP_SIZE (TOTAL_PAGES / 32)
-// Physical memory bitmap to keep track of allocated pages
-//static uint32_t memory_bitmap[TOTAL_PAGES / 32];
+#define PAGE_SIZE 4096
+#define MAX_ORDER 10
+
+struct Page {
+    uintptr_t address;
+    int is_free;
+    uint32_t order;
+    struct Page* next;
+};
+
+struct BuddyAllocator {
+    struct Page* free_list[MAX_ORDER + 1];
+    uintptr_t memory_start;
+    uintptr_t memory_end;
+    uint32_t total_pages;
+};
+
+extern struct BuddyAllocator pmm_buddy;
 
 void pmm_init(multiboot_info_t* mb_info);
-void* pmm_alloc_page();
-void pmm_free_page(void* ptr);
+void* pmm_alloc_pages(uint32_t order);
+void* pmm_alloc_page(void);
+void pmm_free_pages(void* addr, uint32_t order);
+void pmm_free_page(void* addr);
 
-#endif
+void buddy_init(uintptr_t start, uint32_t total_pages);
+void buddy_split(uintptr_t addr, uint32_t order);
+void buddy_merge(uintptr_t addr, uint32_t order);
+
+#endif // PMM_H

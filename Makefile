@@ -12,7 +12,7 @@ BOOT_PATH := $(ISO_PATH)/boot
 GRUB_PATH := $(BOOT_PATH)/grub
 
 # Compiler flags and linker settings
-CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c23
+CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11
 LD_FLAGS = -m elf_i386 -T linker.ld
 
 # Source files and directories
@@ -45,32 +45,16 @@ C_FILES = \
     interrupts/interrupts.c \
     drivers/mouse/ps2ms.c \
     mem/gdt.c \
-	lib/logging.c 
+	lib/logging.c \
+    mem/kalloc.c
 
 OBJ_FILES = boot.o \
             $(C_FILES:.c=.o)
 
-# Dependency check
-CHECK_DEPENDENCIES = \
-    nasm gcc ld grub-mkrescue grub-file
-
-# Check dependencies
-.PHONY: check-dependencies
-check-dependencies:
-	@echo "Checking dependencies..."
-	@for dep in $(CHECK_DEPENDENCIES); do \
-	    if ! command -v $$dep &>/dev/null; then \
-	        echo "Error: $$dep is not installed."; \
-	        echo "Please install it using your package manager."; \
-	        echo "Try 'make install-guide' for installation instructions."; \
-	        exit 1; \
-	    fi; \
-	done
-	@echo "All dependencies are installed."
 
 # Main build target
 .PHONY: all
-all: check-dependencies bootloader kernel linker iso
+all:  bootloader kernel linker iso
 	@echo "Build completed successfully."
 
 # Bootloader compilation
@@ -103,24 +87,3 @@ clean:
 cleanobj:
 	$(FIND) . -name "*.o" -exec $(RM) {} \;
 
-# Installation guide
-.PHONY: install-guide
-install-guide:
-	@echo "----------------------------------------------------"
-	@echo "Installation Guide for Dependencies:"
-	@echo "----------------------------------------------------"
-	@echo "1. On Ubuntu/Debian-based systems:"
-	@echo "   sudo apt update"
-	@echo "   sudo apt install nasm gcc grub-pc-bin grub2-common"
-	@echo "   sudo apt install make xorriso"
-	@echo ""
-	@echo "2. On Fedora/RHEL/CentOS-based systems:"
-	@echo "   sudo dnf install nasm gcc grub2-tools"
-	@echo "   sudo dnf install make xorriso"
-	@echo ""
-	@echo "3. On Arch Linux-based systems:"
-	@echo "   sudo pacman -S nasm gcc grub dosfstools"
-	@echo "   sudo pacman -S make xorriso"
-	@echo ""
-	@echo "After installing the dependencies, run 'make' to build the project."
-	@echo "----------------------------------------------------"

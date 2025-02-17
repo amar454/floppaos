@@ -78,7 +78,6 @@ void create_first_page_table() {
 
     for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
         uint32_t frame = i * PAGE_SIZE; // Physical address
-        log_step("Setting page attributes...", LIGHT_GRAY);
         PageAttributes attributes = {
             .present = 1,
             .rw = 1,

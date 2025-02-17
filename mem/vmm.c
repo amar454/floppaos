@@ -48,7 +48,7 @@ vmm.c
 static void set_page(PTE *pte, PageAttributes attrs) {
     if (!pte) return;
     *(PageAttributes *)pte = attrs;
-    echo("Page flags set.\n", CYAN);
+    //echo("Page flags set.\n", CYAN);
 }
 
 // Map a page (virtual to physical) in the page directory
