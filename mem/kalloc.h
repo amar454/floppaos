@@ -3,13 +3,8 @@
 
 #include <stddef.h>
 
-// Function to initialize the memory allocator
-void kalloc_init(void);
-
-// Function to allocate a block of memory
 void* kalloc(size_t size);
-
-// Function to free a previously allocated block of memory
 void kfree(void* ptr);
-
-#endif // KALLOC_H
+void* krealloc(void* ptr, uint32_t size);
+void* kcalloc(uint32_t num, uint32_t size); 
+#endif // KALLOC_H 
