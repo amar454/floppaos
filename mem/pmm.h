@@ -12,11 +12,23 @@ struct Page {
     struct Page* next;
 };
 
+struct PageInfo {
+    uint32_t page;
+    int is_free;
+};
+
+struct PageCache {
+    struct PageInfo* pages;
+    uint32_t capacity;
+    uint32_t count;
+};
+
 struct BuddyAllocator {
     struct Page* free_list[MAX_ORDER + 1];
     uintptr_t memory_start;
     uintptr_t memory_end;
     uint32_t total_pages;
+    struct PageCache cache;
 };
 
 extern struct BuddyAllocator pmm_buddy;

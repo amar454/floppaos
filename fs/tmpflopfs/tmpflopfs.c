@@ -27,17 +27,27 @@ void init_tmpflopfs(struct TmpFileSystem *tmp_fs) {
 
     // Initialize file system metadata
     tmp_fs->type_id = TMP_FILESYSTEM_TYPE_ID;
+
+    // Initialize file system structure
     tmp_fs->tmp_file_count = 0;
+
+    // Initialize the root directory and file system metadata
     tmp_fs->tmp_next_free_offset = 0;
+    log_step("Initializing TmpFlopFS...\n", LIGHT_GRAY);
     flop_memset(tmp_fs->tmp_files, 0, sizeof(tmp_fs->tmp_files));
+    log_step("Setting up root directory...\n", LIGHT_GRAY);
     flop_memset(tmp_fs->tmp_root_directory, 0, MAX_TMP_PATH_LENGTH);
+    
     tmpflopfs_strcopy(tmp_fs->tmp_root_directory, "root");
+
+
 
     simulated_disk = vmm_malloc(TMP_DISK_SIZE);
     if (!simulated_disk) {
         log_step("init_tmpflopfs: Failed to allocate memory for simulated disk!\n", RED);
         return;
     }
+
 
     // Clear the allocated memory (simulate a blank disk)
     flop_memset(simulated_disk, 0, TMP_DISK_SIZE);

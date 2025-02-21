@@ -3,6 +3,16 @@
 #include "../drivers/vga/vgahandler.h"
 #include "../drivers/time/floptime.h"
 #include "../lib/logging.h"
+
+/**
+ * Prints the Multiboot information.
+ * 
+ * @param mb_info Pointer to the Multiboot information structure.
+ * @return void
+ * @note This function assumes that the Multiboot information structure is valid and properly populated.
+ * @note This function will only work assuming mb_info was passed to kmain() by the Multiboot loader in the eax register.
+ */
+void print_multiboot_info(multiboot_info_t* mb_info);
 void print_multiboot_info(multiboot_info_t* mb_info) {
     if (mb_info == NULL) {
         log_step("Multiboot info pointer is NULL", RED);
@@ -79,7 +89,7 @@ void print_multiboot_info(multiboot_info_t* mb_info) {
     }
 
     if (mb_info->flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO) {
-        log_step("-- Framebuffer Info --", LIGHT_GRAY);
+        log_step("Framebuffer Info", LIGHT_GRAY);
         log_address("Framebuffer Address: ", (uint32_t)mb_info->framebuffer_addr);
         log_uint("Framebuffer Pitch: ", mb_info->framebuffer_pitch);
         log_uint("Framebuffer Width: ", mb_info->framebuffer_width);
@@ -88,5 +98,5 @@ void print_multiboot_info(multiboot_info_t* mb_info) {
         log_uint("Framebuffer Type: ", mb_info->framebuffer_type);
     }
 
-    log_step("---- End of Multiboot Information ----", GREEN);
+    log_step("Multiboot information valid.", GREEN);
 }

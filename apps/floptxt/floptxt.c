@@ -263,7 +263,7 @@ void floptxt_task(void *arg) {
 
     while (1) {
         draw_text();
-        c = try_get_char();
+        //c = try_get_char();
         TmpFileDescriptor *fd = flop_open((const char *)arg, FILE_MODE_READ);
         if (c) process_input(c, (const char *)arg);
 

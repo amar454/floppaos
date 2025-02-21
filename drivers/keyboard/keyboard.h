@@ -1,7 +1,9 @@
 #ifndef KEYBOARD_H
 #define KEYBOARD_H
-#include <stdbool.h>
 
+#include <stdbool.h>
+#include "../../task/task_handler.h"
+#include "../../interrupts/interrupts.h"
 // Arrow keys
 #define ARROW_UP             0x48
 #define ARROW_DOWN           0x50
@@ -25,11 +27,17 @@
 #define KEY_EXTENDED         0xE0
 
 // Converts a keyboard scan code to an ASCII character
-void keyboard_task(void *arg);
 const char *key_to_char(unsigned char key);
 
 // Reads a key scan code from the keyboard
 unsigned char try_read_key(void);
 char get_char(void);
 char try_get_char(void);
+
+// Initializes the keyboard driver 
+void init_keyboard(void);
+__attribute__((interrupt)) void keyboard_isr( interrupt_frame_t* frame);
+// Keyboard task to handle keypresses and display them
+void keyboard_task(void *arg);
+
 #endif // KEYBOARD_H

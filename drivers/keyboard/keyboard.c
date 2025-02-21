@@ -1,7 +1,5 @@
 /*
 
-keyboard.c - keyboard driver for FloppaOS. It uses the io library to read and scan for keyboard interrupts, with tracking for shift to allow capital letters and additional symbols.
-
 Copyright 2024 Amar Djulovic <aaamargml@gmail.com>
 
 This file is part of FloppaOS.
@@ -12,15 +10,41 @@ FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARR
 
 You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
 
+------------------------------------------------------------------------------
+
+    keyboard.c
+
+        This is the keyboard driver for FloppaOS. It handles keyboard input and keypress events.
+        It includes functions to convert scan codes to ASCII characters, read key events, and manage keyboard interrupts.
+        The keyboard driver is initialized during system startup and runs as a task to handle keypresses.
+        The driver uses a key buffer to store keypresses and provides functions to read characters from the buffer.
+        It also supports modifier keys like Shift, Ctrl, and Alt.
+        
+
+        - key_to_char(...) converts a keyboard scan code to an ASCII character
+        - try_read_key(...) tries to read a key scan code from the keyboard
+        - get_char(...) gets a character from the keyboard
+        - try_get_char(...) tries to get a character from the keyboard
+        - keyboard_isr(...) is the keyboard interrupt service routine
+        - init_keyboard(...) initializes the keyboard driver
+        - keyboard_task(...) handles keypresses and displays them
+    
+    keyboard.c 
+
+------------------------------------------------------------------------------
+
 */
 
 #include "keyboard.h"
 #include "../../apps/echo.h"
 #include "../../fshell/fshell.h"
-#include "../../fshell/command.h"  // Include the shared command header
+#include "../../fshell/command.h" 
+#include "../../interrupts/interrupts.h"
 #include "../vga/vgahandler.h"
 #include "../io/io.h"
+#include "../../task/task_handler.h"
 #include <stdint.h>
+#include <stdbool.h>
 
 // Modifier key states
 static int shift_pressed = 0;
@@ -30,6 +54,16 @@ static int alt_pressed = 0;
 // Define the command buffer
 char command[MAX_COMMAND_LENGTH];
 int command_ready = 0;  // Initialize the flag as 0 (no command is ready)
+
+// Key buffer for storing keypresses
+#define KEY_BUFFER_SIZE 256
+char *key_buffer;
+int *key_buffer_start;
+int *key_buffer_end;
+
+// Flag to signal the keyboard task to wake up
+volatile int keyboard_task_wakeup = 0;
+
 
 const char *key_to_char(unsigned char key) {
     // Check for modifier keys
@@ -139,44 +173,82 @@ const char *key_to_char(unsigned char key) {
     return "";  // Unsupported or non-printable key
 }
 
-// Updated function to check for a scancode without blocking
-unsigned char try_read_key(void) {
-    if (inb(0x64) & 0x1) {
-        return inb(0x60);  
-    }
-    return 0;
-}
+// Function to handle keyboard interrupts
+void handle_keyboard_interrupt() {
+    unsigned char scancode = inb(0x60); // Read the scancode from the keyboard port
+    char c = *key_to_char(scancode); // Convert scancode to character
 
-// Non-blocking function to get a character
-char try_get_char(void) {
-    unsigned char scancode = try_read_key();
-    if (scancode != 0) {
-        return *key_to_char(scancode);
+    if (c != 0) {
+        // Store the character in the key buffer
+        key_buffer[*key_buffer_end] = c;
+        // Update the key buffer end index
+        *key_buffer_end = (*key_buffer_end + 1) % KEY_BUFFER_SIZE; 
     }
-    return 0;  // Return 0 if no character is available
+
+    // Signal the keyboard task to wake up
+    keyboard_task_wakeup = 1;
 }
 
 // Keyboard task to handle keypresses and display them
 void keyboard_task(void *arg) {
+    Task *task = (Task *)arg;
+
+    if (!key_buffer) { // alloc memory for the key buffer
+        key_buffer = (char *)task_alloc_memory(task, KEY_BUFFER_SIZE);
+        key_buffer_start = (int *)task_alloc_memory(task, sizeof(int));
+        key_buffer_end = (int *)task_alloc_memory(task, sizeof(int));
+
+        // Initialize buffer indices
+        *key_buffer_start = 0;
+        *key_buffer_end = 0;
+    }
+
     static int pos = 0; 
-    char c = try_get_char();
 
-    if (c == 0) {
-        return;  // No keypress, yield to scheduler
-    }
+    while (1) {
+        if (!keyboard_task_wakeup) {
+            break;
+        }
 
-    if (c == '\b' && pos > 0) {               // Backspace
-        pos--;
-        vga_index--;                          // Move cursor back
-        put_char(' ', BLACK);        // Clear character
-        vga_index--; 
-    } else if (c == '\n') {                   // Enter key
-        command[pos] = '\0';                  // Null-terminate command
-        echo("\n", WHITE);
-        command_ready = 1;    // Signal that command is ready to be parsed (hook for fshell in ../../fshell/command.h)
-        pos = 0;              // Reset buffer position
-    } else if (c >= 32 && c <= 126 && pos < MAX_COMMAND_LENGTH - 1) { 
-        command[pos++] = c;
-        put_char(c, WHITE);
+        // Reset the wakeup flag
+        keyboard_task_wakeup = 0;
+
+        while (*key_buffer_start != *key_buffer_end) {
+            char c = key_buffer[*key_buffer_start];
+            *key_buffer_start = (*key_buffer_start + 1) % KEY_BUFFER_SIZE;
+
+            if (c == '\b' && pos > 0) {   // Backspace
+                pos--;                    
+                vga_index--;              // Move cursor back
+                put_char(' ', BLACK);     // Clear character
+                vga_index--; 
+            } else if (c == '\n') {       // Enter key
+                command[pos] = '\0';      // Null-terminate command
+                echo("\n", WHITE);
+                command_ready = 1;        // Signal that command is ready to be parsed (hook for fshell in ../../fshell/command.h)
+                pos = 0;                  // Reset buffer position
+            } else if (c >= 32 && c <= 126 && pos < MAX_COMMAND_LENGTH - 1) { 
+                command[pos++] = c;
+                put_char(c, WHITE);
+            }
+        }
     }
+}
+
+// Initialize the keyboard driver
+void init_keyboard() {
+    // Add the keyboard task
+    add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c");
+}
+
+// Keyboard ISR handler in C
+__attribute__((interrupt)) void keyboard_isr(interrupt_frame_t* frame) {
+    // Call the keyboard interrupt handler
+    handle_keyboard_interrupt(); 
+
+    // Signal a context switch is needed
+    schedule_needed = 1;
+
+    // Send End of Interrupt (EOI) to PIC
+    outb(0x20, 0x20);  // Send EOI to PIC1
 }

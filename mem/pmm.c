@@ -1,5 +1,7 @@
 /* 
 
+Copyright 2024-25 Amar Djulovic <aaamargml@gmail.com>
+
 This file is part of FloppaOS.
 
 FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -13,19 +15,29 @@ You should have received a copy of the GNU General Public License along with Flo
 pmm.c
 
     This is the physical memory manager for FloppaOS. 
-    It uses the multiboot memory map to set up a buddy allocator, which helps manage physical pages.
-    The virtual memory manager (vmm.c) uses this to allocate physical pages to virtual addresses.
+    It takes the multiboot memory map, initializes a buddy allocator, gives data about memory size, and allows physical pages to be allocated.
+    The virtual memory manager (vmm.c in this same directory) allocates physical pages to virtual address spaces.
     
-    The buddy system splits memory into power-of-two sized blocks. When a block is freed, it's merged with its buddy if possible.
+    The buddy system is a memory allocation algorithm that divides memory into partitions to try to satisfy a memory request as suitably as possible. 
+    Each partition is a power of two in size, and each allocation is rounded up to the nearest power of two. 
+    When a partition is freed, it is merged with its buddy (if the buddy is also free) to form a larger partition.
 
-    pmm_init(...) sets up the buddy allocator using the multiboot info.
+    pmm_init(...) takes in the multiboot info pointer and checks if it's valid. The steps it takes are:
+        - checks if the pointer is null
+        - displays info flags
+        - checks if multiboot provides a memory map (it should)
+        - prints info about memory map, memory regions, and total memory size in kb, mb, and gb
     
-    pmm_alloc_page() allocates a single physical page.
-    
-    pmm_free_page(...) frees a single physical page.
+    pmm_alloc_page() simply allocates a physical page and returns a pointer to it.
+
+    pmm_free_page(...) deallocates a physical page.
+
+    pmm_is_page_free(...) is a debugging utility to check if a page is free 
 
 ------------------------------------------------------------------------------
 */
+
+
 
 #include "pmm.h"
 #include "../drivers/vga/vgahandler.h"
@@ -38,7 +50,6 @@ void insert_free_page(uintptr_t addr, uint32_t order) {
     struct Page* new_page = (struct Page*)addr;
     new_page->address = addr;
     new_page->is_free = 1;
-    new_page->order = order;
     new_page->next = pmm_buddy.free_list[order];
     pmm_buddy.free_list[order] = new_page;
 }
@@ -76,7 +87,7 @@ void pmm_init(multiboot_info_t* mb_info) {
     log_uint("-> KB: ", total_memory / 1024);
     log_uint("-> MB: ", total_memory / (1024 * 1024));
     log_uint("-> GB: ", total_memory / (1024 * 1024 * 1024));
-    log_uint("Total Usable Pages: ", pmm_buddy.total_pages); 
+    log_uint("Total Usable Pages: ", pmm_buddy.total_pages); // 
     log_step("pmm: Buddy allocator initialized\n", GREEN);
 }
 
@@ -100,13 +111,11 @@ void* pmm_alloc_pages(uint32_t order) {
                 i--;
                 buddy_split(addr, i);
             }
-            struct Page* page = (struct Page*)addr;
-            page->order = order;
             return (void*)addr;
         }
     }
 
-    log_step("pmm: Out of memory!\n", RED);
+    //log_step("pmm: Out of memory!\n", RED);
     return NULL;
 }
 
@@ -129,14 +138,12 @@ void buddy_split(uintptr_t addr, uint32_t order) {
 
     page->address = addr;
     page->is_free = 1;
-    page->order = order;
     page->next = pmm_buddy.free_list[order];
     pmm_buddy.free_list[order] = page;
 
     page = (struct Page*)buddy;
     page->address = buddy;
     page->is_free = 1;
-    page->order = order;
     page->next = pmm_buddy.free_list[order];
     pmm_buddy.free_list[order] = page;
 }
