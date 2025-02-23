@@ -34,6 +34,7 @@ kernel.c:
 #include "fs/tmpflopfs/tmpflopfs.h"
 #include "fshell/fshell.h"
 #include "drivers/keyboard/keyboard.h"
+#include "lib/str.h"
 #include "mem/pmm.h"
 #include "mem/vmm.h"
 #include "mem/gdt.h"
@@ -43,16 +44,37 @@ kernel.c:
 #include "lib/logging.h"
 #include "multiboot/multiboot.h"
 #include "drivers/vga/framebuffer.h"
+#include <stdlib.h>
 int time_ready = 1; 
 
-// rudimentary halt function for debugging.
+/**
+ * @brief Software halt function.
+ *
+ * @note This function halts the kernel by entering an infinite while loop in C.
+ *
+ * @warning This function does not halt the CPU, but rather enters an infinite loop in C.
+ * @warning This function will leave the system in an unusable state.
+ */
 void halt() { 
     while (1) {
         continue;
     }
 }
 
-// panic function, with an address, message, and error type.
+
+void cpuhalt() {
+    __asm__ volatile("hlt");
+}
+/**
+ * @brief Kernel panic function.
+
+ * @param address The address that caused the panic.
+ * @param msg The error message.
+ * @param err The error name.
+ * 
+ * @note This function is used to panic the kernel when an error occurs.
+ * @
+ */
 void panic(uint32_t address, const char* msg, const char* err) {  
     log_step("KERNEL PANIC ***********************\n:(\n", LIGHT_RED);
     for(int i = 1; i > 6; i++) {
@@ -60,70 +82,47 @@ void panic(uint32_t address, const char* msg, const char* err) {
         }
     
     log_step("floppaOS kernel has reached a panic state and needs to be restarted.\n", LIGHT_RED);
+    log_step("Error address ", RED);
     log_address("", address);
     log_step("Error name ", RED);
+    echo(err, RED);
 
-    log_step(msg, YELLOW);
-
+    log_step("Error message ", RED);
+    echo(msg, YELLOW);
+    
 }
 
-// loaded by the boot.asm
-int kmain(uint32_t magic, multiboot_info_t *mb_info) {
-    echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
 
-    // check for Multiboot magic number
-    if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-        panic((uint32_t)&magic, "Invalid Multiboot magic number!", "System halted.");
-        halt();
+/**
+ * @brief Memory dump function.
+ *
+ * @param address The address to start dumping memory from.
+ * @param length The number of bytes to dump.
+
+ * @note This function assumes that the memory is 32-bit aligned.
+
+ * @warning This function can easily fill up the screen with a lot of data, so make sure the range is small.
+ */
+void mem_dump(uint32_t address, uint32_t length) {
+    uint32_t *ptr = (uint32_t *)address;
+    for (uint32_t i = 0; i < length; i++) {
+        if (i % 16 == 0) {
+            echo("\n", WHITE);
+        }
+        log_address("", ptr[i]);
     }
-    log_step("Valid Multiboot magic number detected.", GREEN);
-    // Ensure info pointer is valid
-    if (!mb_info) {
-        panic(0, "Multiboot info pointer is NULL!", "System halted.");
-        halt();
-    }
-    // Print Multiboot information
-    print_multiboot_info(mb_info);
-    sleep_seconds(3);
+    echo("\n", WHITE);
+}
+/**
+ * @brief Draws the floppaOS logo in ASCII art.
+ *
+ * @note This function uses malloc to allocate memory for the ASCII art.
+ * 
+ * @warning Make sure the pmm is initialized before calling this function.
+ */
+void draw_floppaos_logo() {
 
-    // initialize memory
-    init_gdt();
-    pmm_init(mb_info);
-    halt();
-    sleep_seconds(3);
-    paging_init();
-    sleep_seconds(1);
-    vmm_init();
-    
-    sleep_seconds(1);
 
-    echo("[fs/tmpflopfs/tmpflopfs.c]\n", WHITE);
-    echo(" Loading tmpflopfs File System... ", LIGHT_GRAY);
-    struct TmpFileSystem tmp_fs;
-    init_tmpflopfs(&tmp_fs);  
-    echo("Success! \n", GREEN);
-    //halt();
-    sleep_seconds(1);
-    echo("[task/task_handler.c]\n", WHITE);
-    echo(" Initializing task_handler... ", LIGHT_GRAY);
-    initialize_task_system();
-    echo("Success! \n", GREEN);
-    
-
-    echo(" Adding fshell_task... ", LIGHT_GRAY);
-    add_task(fshell_task, &tmp_fs, 0, "fshell", "floppaos://fshell/fshell.c");  
-    echo("Success! \n", GREEN);
-
-    echo(" Adding keyboard_task... ", LIGHT_GRAY);
-    add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c");
-    echo("Success! \n", GREEN);
-
-    echo(" Adding time_task... ", LIGHT_GRAY);
-    struct Time system_time; 
-    add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c");
-    echo("Success! \n", GREEN);
-
-    sleep_seconds(1);
     const char *ascii_art = 
     "  __ _                          ___  ____   \n"
     " / _| | ___  _ __  _ __   __ _ / _ \\/ ___|  \n"
@@ -131,14 +130,104 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     "|  _| | (_) | |_) | |_) | (_| | |_| |___) | \n"
     "|_| |_|\\___/| .__/| .__/ \\__,_|\\___/|____/ v0.1.1-alpha \n"
     "            |_|   |_|                      \n";
-    sleep_seconds(1);
-    echo(ascii_art, YELLOW); // print cool stuff
+    char *ascii_art_mem = (char *)malloc(flopstrlen(ascii_art) + 1);
 
-    echo("floppaOS - Copyright (C) 2024  Amar Djulovic\n", YELLOW); // copyright notice
+    if (!ascii_art_mem) {
+        panic(0, "Failed to allocate memory for ASCII art!", "System halted.");
+        halt();
+    }
+
+
+    flopstrcopy(ascii_art_mem, ascii_art, flopstrlen(ascii_art) + 1);
+
+
+    echo(ascii_art_mem, YELLOW);
+
+
+    free(ascii_art_mem);
+
+
+    sleep_seconds(1);
+
+
+    echo(ascii_art, YELLOW); // print cool stuff
+}
+
+static void check_multiboot_magic(uint32_t magic) {
+    if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
+        panic(0, "Multiboot magic number mismatch!", "System halted.");
+        halt();
+    }
+}
+
+static void check_multiboot_info(multiboot_info_t *mb_info) {
+    if (!mb_info) {
+        panic(0, "Multiboot info structure is NULL!", "System halted.");
+        halt();
+    }
+}
+
+
+/**
+ * @brief Main kernel entry point
+ *
+ * @param magic Multiboot magic number
+ * @param mb_info Multiboot information structure
+ *
+ * @return int 0 on success
+ *
+ * @note This function is responsible for initializing the kernel and setting up the environment for the rest of the kernel to run.
+ *
+ * @warning This function should not be called anywhere else in the kernel.
+ */
+int kmain(uint32_t magic, multiboot_info_t *mb_info) {
+    echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
+
+    // check if multiboot magic and info exist and are valid
+    check_multiboot_magic(magic);
+    check_multiboot_info(mb_info);
+    
+    // Print Multiboot information
+    print_multiboot_info(mb_info);
+    sleep_seconds(3);
+
+    // initialize memory
+    init_gdt();
+    pmm_init(mb_info);
+    sleep_seconds(3); // debugging
+    paging_init();
+    sleep_seconds(1);
+    vmm_init();
+    sleep_seconds(1);
+
+
+    // init file system
+    struct TmpFileSystem tmp_fs;
+    init_tmpflopfs(&tmp_fs);  
+    sleep_seconds(1);
+
+    // init task system
+    initialize_task_system();
+
+    // init tasks
+    add_task(fshell_task, &tmp_fs, 0, "fshell", "floppaos://fshell/fshell.c");  
+    add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c");
+
+    // make time struct and add task
+    struct Time system_time; 
+    add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c");
+ 
+
+    sleep_seconds(1);
+    
+    draw_floppaos_logo();
+
+    // copyright notice
+    echo("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
     echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n", CYAN); // license notice
 
     while (1) {
-        scheduler();  // start the scheduler, which runs kernel tasks.
+        scheduler(); 
     }
 }
 

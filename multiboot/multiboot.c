@@ -3,6 +3,8 @@
 #include "../drivers/vga/vgahandler.h"
 #include "../drivers/time/floptime.h"
 #include "../lib/logging.h"
+
+
 void print_multiboot_info(multiboot_info_t* mb_info) {
     if (mb_info == NULL) {
         log_step("Multiboot info pointer is NULL", RED);

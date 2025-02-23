@@ -43,7 +43,6 @@ vmm.c
 #include <stddef.h>
 #include "../lib/logging.h"
 #include "../lib/str.h"
-
 // Set flags for a page table entry
 static void set_page(PTE *pte, PageAttributes attrs) {
     if (!pte) return;
@@ -141,6 +140,7 @@ void *vmm_malloc(uint32_t size) {
     log_step("Virtual memory allocation failed. Not enough contiguous space.\n", RED);
     return NULL;
 }
+
 
 // Free virtual memory and unmap physical pages
 void vmm_free(void *start_virt, uint32_t size) {

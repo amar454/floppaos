@@ -118,13 +118,15 @@ void add_task(task_fn task, void *arg, uint8_t priority, const char *name, const
         log_step("Task queue is full!\n", RED);
         return;
     }
-
+    log_step("Adding task...\n", LIGHT_GRAY);
     Task *new_task = &task_queue[task_count];
     new_task->function = task;
     new_task->arg = arg;
     new_task->priority = priority;
     new_task->pid = next_pid++;
     new_task->runtime = 0;
+
+
 
     // Initialize the task's virtual memory
     vmm_init_task(new_task);
@@ -134,7 +136,9 @@ void add_task(task_fn task, void *arg, uint8_t priority, const char *name, const
     new_task->name[MAX_TASK_NAME_LENGTH - 1] = '\0';
     flopstrncpy(new_task->source_path, source_path, MAX_SOURCE_PATH_LENGTH - 1);
     new_task->source_path[MAX_SOURCE_PATH_LENGTH - 1] = '\0';
-
+    log_step("Task added successfully. Name: ", GREEN);
+    echo(new_task->name, GREEN);
+    echo("\n", GREEN);
     task_count++;
 }
 

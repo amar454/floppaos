@@ -1,9 +1,18 @@
 #include "pmm.h"
-#include "kmalloc.h"
+#include "alloc.h"
 #include "utils.h"
 #include <stdint.h> 
+/**
+ * @name malloc
 
-void* kmalloc(uint32_t size) {
+ * @brief Allocate a block of memory
+
+ * @param size The size of the block to allocate
+ * @return A pointer to the allocated block, or NULL if the allocation failed
+
+ 
+ */
+void* malloc(uint32_t size) {
     if (size == 0) return NULL;
     
     uint32_t order = 0;
@@ -17,36 +26,36 @@ void* kmalloc(uint32_t size) {
     return addr;
 }
 
-void* kcalloc(uint32_t num, uint32_t size) {
+void* calloc(uint32_t num, uint32_t size) {
     uint32_t total_size = num * size;
-    void* addr = kmalloc(total_size);
+    void* addr = malloc(total_size);
     if (addr) {
         flop_memset(addr, 0, total_size);
     }
     return addr;
 }
 
-void* krealloc(void* ptr, uint32_t size) {
+void* realloc(void* ptr, uint32_t size) {
     if (!ptr) {
-        return kmalloc(size);
+        return malloc(size);
     }
 
     if (size == 0) {
-        kfree(ptr);
+        free(ptr);
         return NULL;
     }
 
-    void* new_ptr = kmalloc(size);
+    void* new_ptr = malloc(size);
     if (new_ptr) {
         struct Page* page = (struct Page*)ptr;
         uint32_t old_size = (1 << page->order) * PAGE_SIZE - sizeof(struct Page);
         flop_memcpy(new_ptr, ptr, old_size < size ? old_size : size);
-        kfree(ptr);
+        free(ptr);
     }
     return new_ptr;
 }
 
-void kfree(void* ptr) {
+void free(void* ptr) {
     if (!ptr) return;
     pmm_free_pages(ptr, 0);
 }

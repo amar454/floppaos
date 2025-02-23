@@ -12,7 +12,7 @@ BOOT_PATH := $(ISO_PATH)/boot
 GRUB_PATH := $(BOOT_PATH)/grub
 
 # Compiler flags and linker settings
-CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11
+CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 -Wall -Wextra
 LD_FLAGS = -m elf_i386 -T linker.ld
 
 # Source files and directories
@@ -46,11 +46,19 @@ C_FILES = \
     drivers/mouse/ps2ms.c \
     mem/gdt.c \
 	lib/logging.c \
-    mem/kmalloc.c
+    mem/alloc.c
 
 OBJ_FILES = boot.o \
             $(C_FILES:.c=.o)
 
+# Clean build artifacts
+.PHONY: clean cleanobj
+clean:
+	$(RM) $(BIN) *.iso $(ISO_PATH)
+	$(FIND) . -name "*.o" -exec $(RM) {} \;
+
+cleanobj:
+	$(FIND) . -name "*.o" -exec $(RM) {} \;
 
 # Main build target
 .PHONY: all
@@ -78,12 +86,12 @@ iso: $(BIN)
 	grub-file --is-x86-multiboot $(BOOT_PATH)/$(BIN)
 	grub-mkrescue -o floppaOS-alpha.iso $(ISO_PATH)
 
-# Clean build artifacts
-.PHONY: clean cleanobj
-clean:
-	$(RM) $(BIN) *.iso $(ISO_PATH)
-	$(FIND) . -name "*.o" -exec $(RM) {} \;
 
-cleanobj:
-	$(FIND) . -name "*.o" -exec $(RM) {} \;
+
+.PHONY : qemu
+
+# Run the OS in QEMU
+qemu: all
+	qemu-system-i386 -cdrom floppaOS-alpha.iso
+
 

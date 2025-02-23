@@ -1,7 +1,9 @@
+#include <stdarg.h>
 #include <stdint.h>
 #include <stddef.h>
 #include "../apps/echo.h"
 #include "../drivers/vga/vgahandler.h"
+#include "str.h"
 
 // local function for flopitoa for printing unsigned integers and memory addresses.
 char* memflopitoa(uint32_t value, char* buffer, uint32_t base) {
