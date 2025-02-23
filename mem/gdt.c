@@ -42,7 +42,7 @@ void set_gdt_entry(int num, uint32_t base, uint32_t limit, uint8_t access, uint8
 void init_gdt() {
     gdt_ptr.limit = (sizeof(GDTEntry) * GDT_ENTRIES) - 1;
     gdt_ptr.base = (uintptr_t)&gdt; // Explicit cast
-    echo("[mem/gdt.c]\n", WHITE);
+
     log_step("Initializing gdt... \n", LIGHT_GRAY);
     log_step("Setting null descriptor entry...\n", LIGHT_GRAY);
     set_gdt_entry(0, 0, 0, 0, 0);               // Null Descriptor

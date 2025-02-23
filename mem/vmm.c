@@ -89,7 +89,7 @@ void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr,
 
 // Initialize the virtual memory manager
 void vmm_init() {
-    log_step("Initializing vmm... ", LIGHT_GRAY);
+    log_step("Initializing vmm...\n ", LIGHT_GRAY);
     flop_memset(page_directory, 0, sizeof(PDE) * PAGE_DIRECTORY_SIZE);  // Initialize the page directory
     log_step("VMM initialized.\n", GREEN);
 }

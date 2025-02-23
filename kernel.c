@@ -24,8 +24,6 @@ kernel.c:
     
     halt() uses an infinite while-loop to halt in C. It's not a true cpu halt but it's mainly just for isolating parts of the kernel for debugging
 
-    
-
 
 ------------------------------------------------------------------------------
 */
@@ -91,11 +89,12 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     // initialize memory
     init_gdt();
     pmm_init(mb_info);
+    halt();
     sleep_seconds(3);
     paging_init();
     sleep_seconds(1);
     vmm_init();
-
+    
     sleep_seconds(1);
 
     echo("[fs/tmpflopfs/tmpflopfs.c]\n", WHITE);

@@ -46,7 +46,7 @@ C_FILES = \
     drivers/mouse/ps2ms.c \
     mem/gdt.c \
 	lib/logging.c \
-    mem/kalloc.c
+    mem/kmalloc.c
 
 OBJ_FILES = boot.o \
             $(C_FILES:.c=.o)

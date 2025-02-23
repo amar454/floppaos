@@ -125,7 +125,6 @@ void create_page_directory() {
 // Initialize paging
 void paging_init() {
 
-    echo("[mem/paging.c]\n", WHITE);
     log_step("Initializing paging... \n ", LIGHT_GRAY);
 
     create_page_directory();  // Create and initialize the page directory

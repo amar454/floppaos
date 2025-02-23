@@ -4,7 +4,7 @@
 #include "../multiboot/multiboot.h"
 #define PAGE_SIZE 4096
 #define MAX_ORDER 10
-
+#define PAGE_SHIFT 12
 struct Page {
     uintptr_t address;
     int is_free;
