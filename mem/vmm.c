@@ -50,7 +50,17 @@ static void set_page(PTE *pte, PageAttributes attrs) {
     //echo("Page flags set.\n", CYAN);
 }
 
-// Map a page (virtual to physical) in the page directory
+/**
+ * @name vmm_map_page
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Maps a virtual address to a physical page.
+ * 
+ * @param page_directory - The page directory to map the page to.
+ * @param virt_addr - The virtual address to map the page to.
+ * @param phys_addr - The physical address to map the page to.
+ * @param attrs - The attributes to set for the page.
+ */
 void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr, PageAttributes attrs) { // TODO: add kernel and user space seperation
     if (!page_directory) {
         log_step("Invalid page directory!\n", RED);
@@ -86,7 +96,14 @@ void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr,
     });
 }
 
-// Initialize the virtual memory manager
+/**
+ * @name vmm_init
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Initializes the virtual memory manager.
+ *
+ * @note This function doesn't really do anything besides initializing the page directory.
+ */
 void vmm_init() {
     log_step("Initializing vmm...\n ", LIGHT_GRAY);
     flop_memset(page_directory, 0, sizeof(PDE) * PAGE_DIRECTORY_SIZE);  // Initialize the page directory
@@ -96,7 +113,7 @@ void vmm_init() {
 // Allocate virtual memory by mapping physical pages
 void *vmm_malloc(uint32_t size) {
     log_step("Allocating virtual memory...\n", WHITE);
-
+    
     uint32_t pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE;  // Calculate required pages
     uintptr_t start_virt = 0;  // Start of virtual memory allocation
     uint32_t found_pages = 0;

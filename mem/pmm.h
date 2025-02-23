@@ -13,7 +13,7 @@
 #define MIN_USER_HEAP_SIZE 1024 * 1024
 
 
-
+// page info struct
 struct Page {
     uintptr_t address;
     uint32_t order;
@@ -21,6 +21,7 @@ struct Page {
     struct Page* next;
 };
 
+// buddy allocator struct
 struct BuddyAllocator {
     struct Page* free_list[MAX_ORDER + 1];
     struct Page* page_info; // Tracks all pages
@@ -29,9 +30,10 @@ struct BuddyAllocator {
     uintptr_t memory_end;
 };
 
-
+//
 extern struct BuddyAllocator pmm_buddy;
 
+// Function prototypes
 void pmm_init(multiboot_info_t* mb_info);
 void* pmm_alloc_pages(uint32_t order);
 void* pmm_alloc_page(void);
