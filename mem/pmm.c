@@ -46,6 +46,7 @@ void pmm_init(multiboot_info_t* mb_info) {
         return;
     }
 
+    // Iterate over the memory map and count total available memory
     uintptr_t mmap_addr = (uintptr_t)mb_info->mmap_addr;
     uintptr_t mmap_end = mmap_addr + mb_info->mmap_length;
     multiboot_memory_map_t* mmap = (multiboot_memory_map_t*)mmap_addr;
@@ -57,31 +58,32 @@ void pmm_init(multiboot_info_t* mb_info) {
         }
         mmap = (multiboot_memory_map_t*)((uintptr_t)mmap + mmap->size + sizeof(uint32_t));
     }
+
+    // Initialize buddy allocator metadata
     pmm_buddy.total_pages = total_memory / PAGE_SIZE;
     pmm_buddy.memory_start = (uintptr_t)mb_info->mmap_addr;
     pmm_buddy.memory_end = pmm_buddy.memory_start + pmm_buddy.total_pages * PAGE_SIZE;
-    // Allocate page metadata array
+
+    // Allocate and initialize page metadata array
     pmm_buddy.page_info = (struct Page*)pmm_buddy.memory_start;
     pmm_buddy.memory_start += pmm_buddy.total_pages * sizeof(struct Page);
-    for (uint32_t i = 0; i < pmm_buddy.total_pages; i++) {
-        pmm_buddy.page_info[i].address = pmm_buddy.memory_start + (i * PAGE_SIZE);
-        pmm_buddy.page_info[i].order = 0;
-        pmm_buddy.page_info[i].is_free = 1;
-        pmm_buddy.page_info[i].next = NULL;
-    }
+
     for (uint32_t i = 0; i < pmm_buddy.total_pages; i++) {
         struct Page* page = &pmm_buddy.page_info[i];
-        page->order = MAX_ORDER; 
+        page->address = pmm_buddy.memory_start + (i * PAGE_SIZE);
+        page->order = MAX_ORDER;
         page->is_free = 1;
         page->next = pmm_buddy.free_list[MAX_ORDER];
         pmm_buddy.free_list[MAX_ORDER] = page;
     }
-    log_address("pmm: Memory end addr: ", pmm_buddy.memory_end);
+
+    // Log memory statistics
     log_address("pmm: Memory start addr: ", pmm_buddy.memory_start);
+    log_address("pmm: Memory end addr: ", pmm_buddy.memory_end);
     log_uint("pmm: Total memory (KB): ", total_memory / 1024);
     log_uint("pmm: Total memory (MB): ", total_memory / (1024 * 1024));
     log_uint("pmm: Total memory (GB): ", total_memory / (1024 * 1024 * 1024));
-    log_uint("pmm: Total pages", pmm_buddy.total_pages);
+    log_uint("pmm: Total pages: ", pmm_buddy.total_pages);
 
     log_step("pmm: Buddy allocator initialized\n", GREEN);
 }
