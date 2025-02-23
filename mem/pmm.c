@@ -19,10 +19,16 @@ pmm.c
     The buddy system splits memory into power-of-two sized blocks. When a block is freed, it's merged with its buddy if possible.
 
     pmm_init(...) sets up the buddy allocator using the multiboot info.
+
+    pmm_alloc_pages(...) allocates a block of physical memory of the specified order.
+
+    pmm_free_pages(...) frees a block of physical memory of the specified order.
     
     pmm_alloc_page() allocates a single physical page.
     
     pmm_free_page(...) frees a single physical page.
+
+    print_mem_info() prints memory usage information.
 
 ------------------------------------------------------------------------------
 */
