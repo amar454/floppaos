@@ -1,5 +1,7 @@
 /* 
 
+Copyright 2024-25 Amar Djulovic <aaamargml@gmail.com>
+
 This file is part of FloppaOS.
 
 FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
