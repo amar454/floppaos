@@ -49,6 +49,7 @@ void* pmm_alloc_page();
 void pmm_free_page(void* page);
 void* pmm_alloc_pages(uint32_t order);
 void pmm_free_pages(void* addr, uint32_t order);
+
 uint32_t page_index(uintptr_t addr);
 
 /**
@@ -126,6 +127,12 @@ struct Page* page_from_address(uintptr_t addr) {
     return &pmm_buddy.page_info[index];
 }
 
+void log_page_info(struct Page* page) {
+    log_address("pmm: Page address: ", page->address);
+    log_uint("pmm: Page order: ", page->order);
+    log_uint("pmm: Page is_free: ", page->is_free);
+    log_address("pmm: Page next: ", (uintptr_t)page->next);
+}
 /**
  * @name pmm_alloc_pages
  * @author Amar Djulovic <aaamargml@gmail.com>

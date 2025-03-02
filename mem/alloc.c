@@ -1,7 +1,17 @@
+
 #include "pmm.h"
 #include "alloc.h"
 #include "utils.h"
 #include <stdint.h> 
+
+// forward declarations
+
+void* malloc(uint32_t size);
+void free(void* ptr);
+void* realloc(void* ptr, uint32_t size);
+void* calloc(uint32_t num, uint32_t size);
+
+
 /**
  * @name malloc
  * @author Amar Djulovic <aaamargml@gmail.com>

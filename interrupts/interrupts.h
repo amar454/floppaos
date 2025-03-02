@@ -2,37 +2,51 @@
 #define INTERRUPTS_H
 
 #include <stdint.h>
-extern volatile int schedule_needed;
-// Define the structure for the IDT entry
+
+// IDT entry structure
 typedef struct {
-    uint16_t base_low;       // Lower 16 bits of the address to jump to when this interrupt is called
-    uint16_t sel;            // Kernel segment selector
-    uint8_t always0;         // This must always be 0
-    uint8_t flags;           // Flags for the interrupt gate
-    uint16_t base_high;      // Upper 16 bits of the address to jump to
+    uint16_t base_low;
+    uint16_t sel;
+    uint8_t always0;
+    uint8_t flags;
+    uint16_t base_high;
 } __attribute__((packed)) idt_entry_t;
 
-// Define the structure for the IDT pointer (used for loading the IDT)
+// IDT pointer structure
 typedef struct {
-    uint16_t limit;          // Size of the IDT (number of bytes minus 1)
-    uint32_t base;           // Base address of the IDT
+    uint16_t limit;
+    uint32_t base;
 } __attribute__((packed)) idt_ptr_t;
 
-// Define a structure for the interrupt frame (used in ISR handling)
-typedef struct {
-    uint32_t ds;             // Data segment
-    uint32_t edi, esi, ebx, edx, ecx, eax;  // Pushed registers
-    uint32_t int_no, err_code;  // Interrupt number and error code (if applicable)
-    uint32_t eip, cs, eflags, useresp, ss;  // Registers pushed by the interrupt
+// ISR function pointer type
+typedef void (*isr_t)(void);
 
-    // Optional segment registers for saving the context during interrupts
-    uint32_t es, fs, gs;    // Extra, FS, and GS segment registers (optional but common)
-} interrupt_frame_t;
+// Interrupt Descriptor Table (IDT) size
+#define IDT_SIZE 256
+#define ISR_STACK_SIZE 8192  // 8 KB Stack for Interrupts
+static uint8_t interrupt_stack[ISR_STACK_SIZE] __attribute__((aligned(16)));  // Ensure stack is aligned
 
+// Kernel code segment selector
+#define KERNEL_CODE_SEGMENT 0x08
+
+// PIC Ports
+#define PIC1_COMMAND 0x20
+#define PIC1_DATA    0x21
+#define PIC2_COMMAND 0xA0
+#define PIC2_DATA    0xA1
+
+// PIT Frequency (in Hz)
+#define PIT_FREQUENCY 1000  // 1ms interval
+
+// Function declarations
+void init_interrupts();
+void init_idt();
 void init_pic();
 void init_pit();
-void init_idt();
-void init_interrupts();
-void __attribute__((naked)) pit_isr();
+void set_idt_entry(int n, uint32_t base, uint16_t sel, uint8_t flags);
 
-#endif
+// ISR Handlers
+void __attribute__((interrupt, no_caller_saved_registers)) pit_isr(void *frame);
+void __attribute__((interrupt, no_caller_saved_registers)) keyboard_isr(void *frame);
+
+#endif // INTERRUPTS_H

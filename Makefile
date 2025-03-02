@@ -12,12 +12,15 @@ BOOT_PATH := $(ISO_PATH)/boot
 GRUB_PATH := $(BOOT_PATH)/grub
 
 # Compiler flags and linker settings
+CC = gcc
+LD = ld
+NASM = nasm
 CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 -Wall -Wextra
+INTERRUPT_FLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 -Wall -Wextra -mgeneral-regs-only
 LD_FLAGS = -m elf_i386 -T linker.ld
 
 # Source files and directories
-ASM_FILES = \
-    boot.asm \
+ASM_FILES = boot.asm
 
 C_FILES = \
     kernel.c \
@@ -42,14 +45,12 @@ C_FILES = \
     multiboot/multiboot.c \
     apps/floptxt/floptxt.c \
     drivers/acpi/acpi.c \
-    interrupts/interrupts.c \
     drivers/mouse/ps2ms.c \
     mem/gdt.c \
-	lib/logging.c \
+    lib/logging.c \
     mem/alloc.c
 
-OBJ_FILES = boot.o \
-            $(C_FILES:.c=.o)
+OBJ_FILES = boot.o $(C_FILES:.c=.o) interrupts.o
 
 # Clean build artifacts
 .PHONY: clean cleanobj
@@ -62,21 +63,24 @@ cleanobj:
 
 # Main build target
 .PHONY: all
-all:  bootloader kernel linker iso
+all: bootloader kernel interrupts linker iso
 	@echo "Build completed successfully."
 
 # Bootloader compilation
 bootloader: $(ASM_FILES)
-	nasm -f elf32 boot.asm -o boot.o 
+	$(NASM) -f elf32 boot.asm -o boot.o 
 
-# Kernel compilation
+# Kernel compilation (excluding interrupts.c)
 kernel: $(C_FILES)
-	gcc $(CFLAGS) -c $(C_FILES)
+	$(CC) $(CFLAGS) -c $(C_FILES)
+
+# Compile interrupts.c separately with special flags
+interrupts: interrupts/interrupts.c
+	$(CC) $(INTERRUPT_FLAGS) -c interrupts/interrupts.c -o interrupts.o
 
 # Linker step
 linker: $(OBJ_FILES)
-	ld $(LD_FLAGS) -o $(BIN) $(OBJ_FILES)
-
+	$(LD) $(LD_FLAGS) -o $(BIN) $(OBJ_FILES)
 
 # ISO creation
 iso: $(BIN)
@@ -86,12 +90,8 @@ iso: $(BIN)
 	grub-file --is-x86-multiboot $(BOOT_PATH)/$(BIN)
 	grub-mkrescue -o floppaOS-alpha.iso $(ISO_PATH)
 
-
-
-.PHONY : qemu
+.PHONY: qemu
 
 # Run the OS in QEMU
 qemu: all
 	qemu-system-i386 -cdrom floppaOS-alpha.iso
-
-

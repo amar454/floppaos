@@ -34,8 +34,10 @@ kernel.c:
 #include "fs/tmpflopfs/tmpflopfs.h"
 #include "fshell/fshell.h"
 #include "drivers/keyboard/keyboard.h"
+#include "interrupts/interrupts.h"
 #include "lib/str.h"
 #include "mem/pmm.h"
+#include "mem/utils.h"
 #include "mem/vmm.h"
 #include "mem/gdt.h"
 #include "task/task_handler.h"
@@ -114,11 +116,11 @@ void mem_dump(uint32_t address, uint32_t length) {
     echo("\n", WHITE);
 }
 /**
- * @brief Draws the floppaOS logo in ASCII art.
+ * @name draw_floppaos_logo
+ * @author Amar Djulovic
+ * @date 2-23-2025
  *
- * @note This function uses malloc to allocate memory for the ASCII art.
- * 
- * @warning Make sure the pmm is initialized before calling this function.
+ * @brief Draws the floppaOS logo in ASCII art.
  */
 void draw_floppaos_logo() {
 
@@ -130,28 +132,15 @@ void draw_floppaos_logo() {
     "|  _| | (_) | |_) | |_) | (_| | |_| |___) | \n"
     "|_| |_|\\___/| .__/| .__/ \\__,_|\\___/|____/ v0.1.1-alpha \n"
     "            |_|   |_|                      \n";
-    char *ascii_art_mem = (char *)malloc(flopstrlen(ascii_art) + 1);
 
-    if (!ascii_art_mem) {
-        panic(0, "Failed to allocate memory for ASCII art!", "System halted.");
-        halt();
-    }
+    echo(ascii_art, YELLOW);
 
 
-    flopstrcopy(ascii_art_mem, ascii_art, flopstrlen(ascii_art) + 1);
-
-
-    echo(ascii_art_mem, YELLOW);
-
-
-    free(ascii_art_mem);
 
 
     sleep_seconds(1);
-
-
-    echo(ascii_art, YELLOW); // print cool stuff
 }
+
 
 static void check_multiboot_magic(uint32_t magic) {
     if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
@@ -169,14 +158,19 @@ static void check_multiboot_info(multiboot_info_t *mb_info) {
 
 
 /**
+ * @name kmain
+ * @author Amar Djulovic
+ * @date 10-24-2024
+ *
  * @brief Main kernel entry point
  *
  * @param magic Multiboot magic number
  * @param mb_info Multiboot information structure
  *
- * @return int 0 on success
- *
+ * @return void
+ 
  * @note This function is responsible for initializing the kernel and setting up the environment for the rest of the kernel to run.
+ * @note magic and mb_info should be in eax and ebx respectively.
  *
  * @warning This function should not be called anywhere else in the kernel.
  */
@@ -200,6 +194,8 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     vmm_init();
     sleep_seconds(1);
 
+    init_interrupts();
+    __asm__ volatile("sti");
 
     // init file system
     struct TmpFileSystem tmp_fs;
@@ -211,8 +207,9 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
 
     // init tasks
     add_task(fshell_task, &tmp_fs, 0, "fshell", "floppaos://fshell/fshell.c");  
-    add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c");
-
+    add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c"); // mainly here for fun
+    
+    
     // make time struct and add task
     struct Time system_time; 
     add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c");
@@ -222,10 +219,13 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     
     draw_floppaos_logo();
 
+
+    init_interrupts();
+
     // copyright notice
     echo("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
     echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n", CYAN); // license notice
-
+    echo("Type help for a list of commands\n", CYAN); // help notice
     while (1) {
         scheduler(); 
     }
