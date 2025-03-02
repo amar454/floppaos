@@ -1,6 +1,9 @@
-<div style="text-align: center;"> <img src="https://github.com/amar454/floppaos/blob/main/floppaOS_logo.jpeg?raw=true" alt="floppaOS Logo" width="100"> </div>
+<div style="text-align: center;">  
+  <img src="https://github.com/amar454/floppaos/blob/main/floppaOS_logo.jpeg?raw=true" alt="floppaOS Logo" width="100">  
+</div>  
 
-# floppaOS 
+# **floppaOS**  
+
 ```
   __ _                          ___  ____  
  / _| | ___  _ __  _ __   __ _ / _ \/ ___| 
@@ -8,81 +11,83 @@
 |  _| | (_) | |_) | |_) | (_| | |_| |___) |
 |_| |_|\___/| .__/| .__/ \__,_|\___/|____/ 
             |_|   |_|                             
+```  
 
+### **Copyright © Amar Djulovic 2024-25**  
+
+**floppaOS** is a free and open-source 32-bit operating system written in C, built entirely from scratch—except for the GNU GRUB bootloader.  
+
+This project is meant to be the **magnum opus** of my programming portfolio, created both for job opportunities and my deep interest in low-level programming.  
+
+I chose **not** to conform to UNIX standards, which are common in OS development. My reasoning? **GNU/Linux already exists and represents the peak of UNIX operating systems.** Rather than competing with that, I aim to build something distinct from the usual UNIX-based systems.  
+
+Obviously, **floppaOS** is not intended for production use in its current state. OS development is **time-consuming**, and updates will be **inconsistent**, especially during this alpha stage.  
+
+**Contributions and help are always welcome!** If you're interested, feel free to fork the project, submit pull requests, or reach out on Discord: **@amarat**.  
+
+Thank you for checking out **floppaOS**—and if you read all this, I appreciate it!  
+
+---
+
+## **Compiling Instructions**  
+
+> *Note: If you're on Windows, you'll need a UNIX-like environment such as Cygwin to compile the source code.*  
+
+### **1. Clone the Repository**  
+Run the following command in your terminal:  
+```bash
+git clone https://github.com/amar454/floppaos.git
 ```
-### Copyright Amar Djulovic 2024-25
 
-**floppaOS** is a free and open-source 32-bit operating system made in C. Everything is coded by me from scratch, aside from the GNU GRUB bootloader.
+### **2. Build the OS**  
+Navigate to the repository directory and compile with:  
+```bash
+make all
+```  
+This will generate an **ISO image**, which can be attached to a **virtual machine** or written to a **USB device**.  
 
-This project is intended to be the "magnum opus" of my programming portfolio. I am making it for both job opportunities and personal interest in low-level programming.
+### **2a. Build and Run in QEMU** *(Recommended)*  
+To compile and immediately launch the OS in **QEMU**, use:  
+```bash
+make qemu
+```  
+Since **QEMU** is the targeted emulator, this is the best option for testing.  
 
-Obviously, this will not be a production or professional operating system in its current state. I chose not to conform to UNIX standards, which are common in OS development, as I am focusing on creating something unique. In my view, GNU/Linux already exists and represents the peak of UNIX operating systems, so I don’t see the need to compete with that. Instead, I want to create something that stands apart from the typical UNIX-based systems.
+### **3. Clean Up**  
+To remove compiled binaries:  
+```bash
+make clean
+```  
 
-Operating system programming is a tough and time-consuming endeavor. As a result, updates and new versions will be inconsistent, especially while the operating system is still in its alpha stage.
-
-Help and contributions are highly appreciated! This is a time-consuming project, and I have my own career and life as well. Feel free to fork the project, submit pull requests, or contact me on my Discord at **@amarat**.
-
-Thank you for checking out **floppaOS**, and for reading my little note (if you did).
-
----
-
-## Compiling Instructions:
-*Note: if you're on Windows, you will need a unix like environment such as Cygwin to compile the source code*
-1. **Clone the Repository**  
-   To compile from source, clone the repository by running the following command in your terminal:  
-   ```bash
-   git clone https://github.com/amar454/floppaos.git
-   ```
-
-2. **Build the OS**  
-   Navigate to the repository directory and type:  
-   ```bash
-   make all
-   ```  
-   *This will generate the ISO image, which you can then attach to a virtual machine or write to a USB device.*
-
-2a. **Build OS and then run in qemu**
-   Simply type: 
-   ```bash
-   make qemu
-   ```  
-   *This is recommended, as qemu is the emulator I target*
-  
-3. **Clean Up**  
-   After building, you can optionally clean up the binaries by running:  
-   ```bash
-   make clean
-   ```  
-   
-4. **Clean Object Files**  
-   If you want to keep the ISO binary but remove C and assembly object files, run:  
-   ```bash
-   make cleanobj
-   ```  
-   *(This is the recommended action after compilation.)*
+### **4. Clean Object Files** *(Without Deleting the ISO)*  
+To remove C and assembly object files while keeping the ISO:  
+```bash
+make cleanobj
+```  
+*(This is the recommended step after compilation.)*  
 
 ---
 
-## Feature Overview:
+## **Feature Overview**  
 
-- Simple and lightweight command-line operating system
-- Custom command-line scripting language (fshell)
-- Memory handler
-- VGA text mode and graphics (graphics work in progress)
-- Task handler
-- Basic file system
-- Command-line scientific calculator (some functions in progress, wrapper not yet complete)
+✅ Simple and lightweight command-line OS  
+✅ Custom scripting language (**fshell**)  
+✅ Memory handler  
+✅ VGA text mode & graphics *(graphics WIP)*  
+✅ Task handler  
+✅ Basic file system  
+✅ Command-line scientific calculator *(some functions WIP, wrapper not yet complete)*  
 
 ---
 
-## Goals:
+## **Project Goals**  
 
-- [x] **Run on low hardware requirements**
-- [x] **Completely built from scratch**
-- [ ] **Uniqueness factor**  
-- [ ] **Thorough documentation**
-- [ ] **Focus on security through cryptography**
-- [x] **Small OS size** (As of 12/13/2024, floppaOS is only **27.65MB**!)
-- [ ] **Unique file system with permissions** (Not POSIX)
+- [x] **Runs on minimal hardware**  
+- [x] **Completely built from scratch**  
+- [ ] **Uniqueness factor** *(Still in progress)*  
+- [ ] **Thorough documentation**  
+- [ ] **Focus on security through cryptography**  
+- [x] **Small OS size** *(As of 12/13/2024, floppaOS is only **27.65MB**!)*  
+- [ ] **Unique file system with permissions** *(Not POSIX-compliant)*  
 
 ---
