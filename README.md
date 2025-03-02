@@ -41,6 +41,13 @@ Thank you for checking out **floppaOS**, and for reading my little note (if you 
    ```  
    *This will generate the ISO image, which you can then attach to a virtual machine or write to a USB device.*
 
+2a. **Build OS and then run in qemu**
+   Simply type: 
+   ```bash
+   make qemu
+   ```  
+   *This is recommended, as qemu is the emulator I target*
+  
 3. **Clean Up**  
    After building, you can optionally clean up the binaries by running:  
    ```bash
