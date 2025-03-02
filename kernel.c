@@ -124,7 +124,7 @@ void mem_dump(uint32_t address, uint32_t length) {
  */
 void draw_floppaos_logo() {
 
-
+     
     const char *ascii_art = 
     "  __ _                          ___  ____   \n"
     " / _| | ___  _ __  _ __   __ _ / _ \\/ ___|  \n"
@@ -218,9 +218,6 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     sleep_seconds(1);
     
     draw_floppaos_logo();
-
-
-    init_interrupts();
 
     // copyright notice
     echo("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
