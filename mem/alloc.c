@@ -10,7 +10,11 @@ void* malloc(uint32_t size);
 void free(void* ptr);
 void* realloc(void* ptr, uint32_t size);
 void* calloc(uint32_t num, uint32_t size);
-
+struct AllocNode {
+    void* addr;
+    uint32_t order;
+    struct AllocNode* next;
+};
 
 /**
  * @name malloc
@@ -24,31 +28,63 @@ void* calloc(uint32_t num, uint32_t size);
  *
  * @note This function allocates a block of memory of the specified size, closest to the order of the size
  */
+
 void* malloc(uint32_t size) {
     if (size == 0) return NULL;
 
     uint32_t total_size = size + sizeof(struct Page);
-    uint32_t pages_needed = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;  // Round up to full pages
+    uint32_t pages_needed = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;  // Round up
 
-    void* first_addr = NULL;  // Store the first allocated block
+    void* first_addr = NULL;
     uint32_t allocated_pages = 0;
+    struct AllocNode* head = NULL;
 
-    // Start from the largest possible order and allocate downwards
+    // Try allocating from the largest possible order down to the smallest
     for (int order = 31; order >= 0 && allocated_pages < pages_needed; order--) {
-        uint32_t order_size = (1 << order) / PAGE_SIZE; // Convert order to pages
+        uint32_t order_size = (1 << order) / PAGE_SIZE;  // Convert order to pages
 
         while (allocated_pages + order_size <= pages_needed) {
             void* addr = pmm_alloc_pages(order);
-            if (!addr) break;  // Stop if allocation fails for this order
+            if (!addr) break;  // Stop if allocation fails
+
+            // Track allocation for cleanup in case of failure
+            struct AllocNode* node = (struct AllocNode*)pmm_alloc_pages(0); // Single-page allocation for tracking
+            if (!node) {
+                // If we fail to allocate the tracking node, free already allocated memory
+                while (head) {
+                    struct AllocNode* temp = head;
+                    pmm_free_pages(head->addr, head->order);
+                    head = head->next;
+                    pmm_free_pages(temp, 0); // Free tracking node
+                }
+                return NULL;
+            }
+            node->addr = addr;
+            node->order = order;
+            node->next = head;
+            head = node;
 
             if (!first_addr) first_addr = addr;  // Store the first allocated block
             allocated_pages += order_size;
         }
     }
 
+    // If we didn't allocate enough, clean up and return NULL
     if (allocated_pages < pages_needed) {
-        // Failed to allocate everything, should implement cleanup logic here
+        while (head) {
+            struct AllocNode* temp = head;
+            pmm_free_pages(head->addr, head->order);
+            head = head->next;
+            pmm_free_pages(temp, 0); // Free tracking node
+        }
         return NULL;
+    }
+
+    // Free tracking list since allocation was successful
+    while (head) {
+        struct AllocNode* temp = head;
+        head = head->next;
+        pmm_free_pages(temp, 0); // Free tracking node
     }
 
     return first_addr;
