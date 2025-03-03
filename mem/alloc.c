@@ -26,17 +26,34 @@ void* calloc(uint32_t num, uint32_t size);
  */
 void* malloc(uint32_t size) {
     if (size == 0) return NULL;
-    
-    uint32_t order = 0;
+
     uint32_t total_size = size + sizeof(struct Page);
-    while ((1 << order) < total_size) {
-        order++;
+    uint32_t pages_needed = (total_size + PAGE_SIZE - 1) / PAGE_SIZE;  // Round up to full pages
+
+    void* first_addr = NULL;  // Store the first allocated block
+    uint32_t allocated_pages = 0;
+
+    // Start from the largest possible order and allocate downwards
+    for (int order = 31; order >= 0 && allocated_pages < pages_needed; order--) {
+        uint32_t order_size = (1 << order) / PAGE_SIZE; // Convert order to pages
+
+        while (allocated_pages + order_size <= pages_needed) {
+            void* addr = pmm_alloc_pages(order);
+            if (!addr) break;  // Stop if allocation fails for this order
+
+            if (!first_addr) first_addr = addr;  // Store the first allocated block
+            allocated_pages += order_size;
+        }
     }
 
-    void* addr = pmm_alloc_pages(order);
-    if (!addr) return NULL;
-    return addr;
+    if (allocated_pages < pages_needed) {
+        // Failed to allocate everything, should implement cleanup logic here
+        return NULL;
+    }
+
+    return first_addr;
 }
+
 
 /**
  * @name calloc
