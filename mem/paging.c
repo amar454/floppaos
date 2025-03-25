@@ -44,23 +44,25 @@ void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
         log_step("Enabling WP (Write Protect) (bit 31) in CR0...\n", LIGHT_BLUE);
     }
     __asm__ volatile(
-        "mov %%cr0, %0\n"         // Move CR0 into a temporary variable
-        "or %1, %0\n"             // Set the PG (bit 31) and optionally WP (bit 16)
-        "mov %0, %%cr0"           // Write the modified value back to CR0
+        "mov %%cr0, %0\n"
+        "or %1, %0\n"
+        "mov %0, %%cr0"
         : "=r"(cr0) 
-        : "r"(enable_wp ? 0x80010001 : 0x80000001)
+        : "r"(enable_wp ? 0x80010000 : 0x80000000) // 0x80010000 -> PG + WP
     );
     log_step("CR0 modified successfully.\n", LIGHT_GREEN);
     // Enable PSE (Page Size Extension) if requested by setting the PSE bit (bit 4) in CR4
     if (enable_pse) {
         log_step("Enabling PSE (Page Size Extension) (bit 4) in CR4...\n", LIGHT_BLUE);
         __asm__ volatile(
-            "mov %%cr4, %0\n"      // Move CR4 into a temporary variable
-            "or %1, %0\n"          // Set the PSE bit
-            "mov %0, %%cr4"        // Write the modified value back to CR4
-            : "=r"(cr4) 
-            : "r"(0x00000010)
+            "mov %%cr0, %0\n"
+            "or %1, %0\n"
+            "mov %0, %%cr0"
+            : "=r"(cr0)
+            : "r"(enable_wp ? 0x80010000 : 0x80000000)
+            : "memory"
         );
+        
 
         // Log the updated CR4 value
         log_step("PSE enabled successfully in CR4.\n", LIGHT_GREEN);
@@ -112,7 +114,8 @@ void create_page_directory() {
         page_directory[i].present = 0;
         page_directory[i].rw = 1;   // Read/Write
         page_directory[i].user = 0; // Supervisor (kernel mode)
-        page_directory[i].table_addr = (uint32_t)((uintptr_t)&page_tables[i] >> 12); // Page table base address
+        page_directory[i].table_addr = ((uintptr_t)&page_tables[i] >> 12) & 0xFFFFF;
+
     }
     
     // Link the first page table

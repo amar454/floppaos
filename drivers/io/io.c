@@ -26,7 +26,7 @@ volatile bool io_locked = false;
 
 void lock_io() {
     while (__sync_lock_test_and_set(&io_locked, true)) {
-        // Busy-wait until the lock is released
+        __asm__ volatile ("pause");
     }
 }
 

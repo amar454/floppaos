@@ -6,16 +6,11 @@
 
 
 void print_multiboot_info(multiboot_info_t* mb_info) {
-    if (mb_info == NULL) {
-        log_step("Multiboot info pointer is NULL", RED);
-        return;
-    }
-
-    log_step("---- Multiboot Information ----", LIGHT_GRAY);
-
+    log_step("Multiboot Information:\n", YELLOW);
     log_uint("Flags: ", mb_info->flags);
 
     if (mb_info->flags & MULTIBOOT_INFO_MEMORY) {
+
         log_uint("Memory Lower (KB): ", mb_info->mem_lower);
         log_uint("Memory Upper (KB): ", mb_info->mem_upper);
     }
@@ -29,19 +24,19 @@ void print_multiboot_info(multiboot_info_t* mb_info) {
     }
 
     if (mb_info->flags & MULTIBOOT_INFO_MODS) {
-        log_uint("Modules Count: ", mb_info->mods_count);
+        log_uint("Modules Count:\n ", mb_info->mods_count);
         log_address("Modules Address: ", mb_info->mods_addr);
     }
 
     if (mb_info->flags & MULTIBOOT_INFO_AOUT_SYMS) {
-        log_step("-- AOUT Symbol Table --", LIGHT_GRAY);
+        log_step("AOUT Symbol Table:\n", LIGHT_GRAY);
         log_uint("Tab Size: ", mb_info->u.aout_sym.tabsize);
         log_uint("Str Size: ", mb_info->u.aout_sym.strsize);
         log_address("Address: ", mb_info->u.aout_sym.addr);
     }
 
     if (mb_info->flags & MULTIBOOT_INFO_ELF_SHDR) {
-        log_step("-- ELF Section Header Table --", LIGHT_GRAY);
+        log_step("ELF Section Header Table\n", LIGHT_GRAY);
         log_uint("Number of Entries: ", mb_info->u.elf_sec.num);
         log_uint("Size of Entry: ", mb_info->u.elf_sec.size);
         log_address("Address: ", mb_info->u.elf_sec.addr);
@@ -49,7 +44,7 @@ void print_multiboot_info(multiboot_info_t* mb_info) {
     }
 
     if (mb_info->flags & MULTIBOOT_INFO_MEM_MAP) {
-        log_step("-- Memory Map --", LIGHT_GRAY);
+        log_step("Memory Map:\n", LIGHT_GRAY);
         log_uint("Memory Map Length: ", mb_info->mmap_length);
         log_address("Memory Map Address: ", mb_info->mmap_addr);
     }
@@ -81,7 +76,7 @@ void print_multiboot_info(multiboot_info_t* mb_info) {
     }
 
     if (mb_info->flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO) {
-        log_step("-- Framebuffer Info --", LIGHT_GRAY);
+        log_step("Framebuffer Info:\n", LIGHT_GRAY);
         log_address("Framebuffer Address: ", (uint32_t)mb_info->framebuffer_addr);
         log_uint("Framebuffer Pitch: ", mb_info->framebuffer_pitch);
         log_uint("Framebuffer Width: ", mb_info->framebuffer_width);
@@ -90,5 +85,5 @@ void print_multiboot_info(multiboot_info_t* mb_info) {
         log_uint("Framebuffer Type: ", mb_info->framebuffer_type);
     }
 
-    log_step("---- End of Multiboot Information ----", GREEN);
+    log_step("Done printing multiboot info.\n", GREEN);
 }

@@ -23,6 +23,7 @@ You should have received a copy of the GNU General Public License along with Flo
 #include "../drivers/acpi/acpi.h"
 #include "../task/task_handler.h"
 #include "../drivers/time/floptime.h"
+#include "../mem/alloc.h"
 #include "command.h"  // Include the shared command header
 #include <stddef.h>
 #include <stdint.h>
@@ -136,7 +137,10 @@ void handle_flopmath_command(char *arguments[], int arg_count) {
     echo("\n", WHITE);
 }
 
-
+void handle_test_alloc_command(int arg_count, char *arguments[]) {
+    test_alloc();
+    return;
+}
 void fshell_task(void *arg) {
     static int initialized = 0; // Track initialization
     char *arguments[MAX_ARGUMENTS];
@@ -195,7 +199,9 @@ void fshell_task(void *arg) {
         flopstrcmp(cmd, "tdsp") == 0 ? 11 :
         flopstrcmp(cmd, "flopmath") == 0 ? 12 :
         flopstrcmp(cmd, "shutdown") == 0 ? 13 :
-        flopstrcmp(cmd, "vgatest") ==  0 ? 14 : 0)
+        flopstrcmp(cmd, "vgatest") ==  0 ? 14 :
+        flopstrcmp(cmd, "test_alloc") ==  0 ? 15 : 0
+    )
     {
 
         case 1: // "list"
@@ -264,6 +270,7 @@ void fshell_task(void *arg) {
             echo(" - tdsp                     Display info about running tasks\n", WHITE);  // flopmath command prototype
             echo(" - help                     Display this help message\n", WHITE);
             echo(" - vgatest                  Test VGA graphics.\n", WHITE);
+            echo(" - test_alloc               Test memory allocation\n", WHITE);
             echo(" - exit                     Exit the shell\n", WHITE);
             break;
 
@@ -286,7 +293,7 @@ void fshell_task(void *arg) {
             //handle_flopmath_command(arguments, arg_count);
             break;
         case 13: // "shutdown"
-            acpi_shutdown();
+            acpi_power_off();
             break;
         case 14: // "vgatest"
             vga_init();
@@ -298,7 +305,9 @@ void fshell_task(void *arg) {
             sleep_seconds(10);
             vga_clear_screen();
             break;
-        break;
+        case 15: // "test_alloc"
+            test_alloc();
+            break;
         default: // Unknown command
             echo("Unknown command. Type 'help' for assistance.\n", RED);
             break;

@@ -69,3 +69,13 @@ void log_error(const char *message, uint8_t color) {
     echo("-> Error description: ", LIGHT_GRAY); // Arrow prefix
     echo(message, color);   // Custom message and color
 }
+#define LOG_BUF_SIZE 256
+
+void log_f(const char* fmt, ...) {
+    char buf[LOG_BUF_SIZE];
+    va_list args;
+    va_start(args, fmt);
+    flopsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    log_step(buf, LIGHT_GRAY);
+}

@@ -9,9 +9,9 @@
 #define MAX_ORDER 10
 // minimum kernel heap size
 
-#define MIN_HEAP_SIZE 256 * 1024
-#define MIN_USER_HEAP_SIZE 1024 * 1024
-
+#define PAGE_SIZE 4096
+#define SLAB_BUCKETS 8  // 16, 32, 64, 128, 256, 512, 1024, 2048
+#define SLAB_CACHE_LIMIT 4  // max cached slabs per bucket
 
 // page info struct
 struct Page {
@@ -30,7 +30,7 @@ struct BuddyAllocator {
     uintptr_t memory_end;
 };
 
-//
+// buddy allocator struct
 extern struct BuddyAllocator pmm_buddy;
 
 // Function prototypes

@@ -61,7 +61,7 @@ static void set_page(PTE *pte, PageAttributes attrs) {
  * @param phys_addr - The physical address to map the page to.
  * @param attrs - The attributes to set for the page.
  */
-void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr, PageAttributes attrs) { // TODO: add kernel and user space seperation
+ void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr, PageAttributes attrs) {
     if (!page_directory) {
         log_step("Invalid page directory!\n", RED);
         return;
@@ -88,6 +88,15 @@ void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr,
 
     // Map the physical page in the page table
     PTE *page_table = (PTE *)(page_directory[dir_idx].table_addr << 12);
+
+    if (page_table[table_idx].present) {
+        // Avoid double mapping
+        if ((page_table[table_idx].frame_addr << 12) != phys_addr) {
+            log_step("Page already mapped, skipping remap!\n", YELLOW);
+            return;
+        }
+    }
+
     set_page(&page_table[table_idx], (PageAttributes){
         .present = attrs.present,
         .rw = attrs.rw,
@@ -114,30 +123,35 @@ void vmm_init() {
 void *vmm_malloc(uint32_t size) {
     log_step("Allocating virtual memory...\n", WHITE);
     
-    uint32_t pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE;  // Calculate required pages
-    uintptr_t start_virt = 0;  // Start of virtual memory allocation
+    if (size == 0) return NULL;
+
+    // Ensure alignment to PAGE_SIZE
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+
+    uint32_t pages_needed = size / PAGE_SIZE;
+    uintptr_t start_virt = 0;
     uint32_t found_pages = 0;
 
-    // Iterate through page directory and find free contiguous pages
     for (uint32_t i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
         for (uint32_t j = 0; j < PAGE_TABLE_SIZE; j++) {
-            if (!page_tables[i][j].present) {  // Free page found
+            if (!page_tables[i][j].present) {
                 if (found_pages == 0) {
-                    start_virt = (i << 22) | (j << 12);  // Start tracking contiguous free space
+                    start_virt = (i << 22) | (j << 12);
                 }
 
                 found_pages++;
 
-                // If enough contiguous pages found, allocate them
                 if (found_pages == pages_needed) {
-                    log_step("Found enough contiguous virtual pages!\n", GREEN);
-
-                    // Allocate physical memory and map pages
+                    // Allocate and map physical pages
                     for (uint32_t k = 0; k < pages_needed; k++) {
                         uintptr_t virt_addr = start_virt + (k * PAGE_SIZE);
-                        void *phys_addr = pmm_alloc_page();  // Allocate a physical page
+                        void *phys_addr = pmm_alloc_page();
+                        if (!phys_addr) {
+                            log_step("Failed to allocate physical memory!\n", RED);
+                            return NULL;
+                        }
 
-                        // Map the virtual address to the physical page
+                        // Map virtual address to physical address
                         vmm_map_page(page_directory, virt_addr, (uintptr_t)phys_addr, (PageAttributes){
                             .present = 1,
                             .rw = 1,
@@ -149,38 +163,42 @@ void *vmm_malloc(uint32_t size) {
                     return (void *)start_virt;
                 }
             } else {
-                found_pages = 0;  // Reset if not contiguous
+                found_pages = 0;
             }
         }
     }
 
-    log_step("Virtual memory allocation failed. Not enough contiguous space.\n", RED);
+    log_step("Virtual memory allocation failed.\n", RED);
     return NULL;
 }
 
-
 // Free virtual memory and unmap physical pages
 void vmm_free(void *start_virt, uint32_t size) {
+    if (!start_virt || size == 0) return;
+
     uint32_t pages_to_free = (size + PAGE_SIZE - 1) / PAGE_SIZE;
 
     for (uint32_t i = 0; i < pages_to_free; i++) {
-        uintptr_t virt_addr = (uintptr_t)start_virt + i * PAGE_SIZE;
+        uintptr_t virt_addr = (uintptr_t)start_virt + (i * PAGE_SIZE);
         uint32_t dir_idx = virt_addr >> 22;
         uint32_t table_idx = (virt_addr >> 12) & 0x3FF;
 
-        // Check if the page is mapped
         if (page_tables[dir_idx][table_idx].present) {
             void *phys_addr = (void *)(page_tables[dir_idx][table_idx].frame_addr << 12);
-            pmm_free_page(phys_addr);  // Free the physical page
-            flop_memset(&page_tables[dir_idx][table_idx], 0, sizeof(PTE));  // Clear the page table entry
+            pmm_free_page(phys_addr);
+            flop_memset(&page_tables[dir_idx][table_idx], 0, sizeof(PTE));
         }
     }
 
-    echo("Virtual memory freed.\n", GREEN);
+    log_step("Virtual memory freed.\n", GREEN);
 }
 
-// Resolve physical address for a given virtual address
-uintptr_t vmm_get_physical_address(PDE *page_directory, uintptr_t virt_addr) {
+/**
+ * @name vmm_get_physical_address
+ *
+ * @brief Resolves physical address for a given virtual address.
+ */
+ uintptr_t vmm_get_physical_address(PDE *page_directory, uintptr_t virt_addr) {
     uint32_t dir_idx = virt_addr >> 22;
     uint32_t table_idx = (virt_addr >> 12) & 0x3FF;
 
@@ -195,3 +213,41 @@ uintptr_t vmm_get_physical_address(PDE *page_directory, uintptr_t virt_addr) {
 
     return (page_table[table_idx].frame_addr << 12) | (virt_addr & 0xFFF);
 }
+
+void* vmm_map_kernel_region(uintptr_t virt_addr, uintptr_t phys_addr, uint32_t size) {
+    uint32_t pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE;
+    uint32_t found_pages = 0;
+    uintptr_t start_virt = 0;
+
+    for (uint32_t i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
+        for (uint32_t j = 0; j < PAGE_TABLE_SIZE; j++) {
+            if (!page_tables[i][j].present) {
+                if (found_pages == 0) {
+                    start_virt = (i << 22) | (j << 12);
+                }
+
+                found_pages++;
+
+                if (found_pages == pages_needed) {
+                    // Map the kernel region
+                    for (uint32_t k = 0; k < pages_needed; k++) {
+                        uintptr_t virt_addr = start_virt + (k * PAGE_SIZE);
+                        void *phys_addr = (void *)(phys_addr + (k * PAGE_SIZE));
+                        vmm_map_page(page_directory, virt_addr, (uintptr_t)phys_addr, (PageAttributes){
+                            .present = 1,
+                            .rw = 1,
+                            .user = 1
+                        });
+                    }
+
+                    log_step("vmm: Mapped kernel region successfully.\n", GREEN);
+                    return (void *)start_virt;
+                }
+            } else {
+                found_pages = 0;
+            }
+        }
+    }
+    return NULL;
+}
+

@@ -1,109 +1,87 @@
-
+#include "slab.h"
 #include "pmm.h"
-#include "alloc.h"
 #include "utils.h"
-#include <stdint.h> 
+#include "../lib/logging.h"
+#include "../drivers/vga/vgahandler.h"
+#define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
 
-// forward declarations
-
-void* malloc(uint32_t size);
-void free(void* ptr);
-void* realloc(void* ptr, uint32_t size);
-void* calloc(uint32_t num, uint32_t size);
-
-
-/**
- * @name malloc
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Allocate a block of memory
- *
- * @param size The size of the block to allocate
- * @return void* 
- * @returns A pointer to the allocated block of memory
- *
- * @note This function allocates a block of memory of the specified size, closest to the order of the size
- */
-void* malloc(uint32_t size) {
+void *kmalloc(size_t size) {
     if (size == 0) return NULL;
-    
-    uint32_t order = 0;
-    uint32_t total_size = size + sizeof(struct Page);
-    while ((1 << order) < total_size) {
-        order++;
+
+    // Use slab allocator for small allocations
+    if (size <= SLAB_MAX_SIZE) {
+        void *ptr = slab_alloc(size);
+        if (ptr) return ptr;
     }
 
-    void* addr = pmm_alloc_pages(order);
-    if (!addr) return NULL;
-    return addr;
-}
-
-/**
- * @name calloc
- * @author Amar Djulovic <aaamargml@gmail.com>
- * 
- * @brief Allocate and clear memory
- *
- * @param num 
- * @param size 
- * @return void* 
- * @returns A pointer to the allocated block of memory
- *
- * @note This will allocate memory and set it to zero, then return a pointer to the memory.
- */
-void* calloc(uint32_t num, uint32_t size) {
-    uint32_t total_size = num * size;
-    void* addr = malloc(total_size);
-    if (addr) {
-        flop_memset(addr, 0, total_size);
-    }
-    return addr;
-}
-
-/**
- * @name realloc
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Reallocate memory
- * 
- * @param ptr 
- * @param size 
- * @return void* 
- * @returns A pointer to the allocated block of memory
- *
- * @note This function reallocates memory, copying the old data to the new block
- */
-void* realloc(void* ptr, uint32_t size) {
+    // Use PMM for larger allocations
+    size_t pages = (ALIGN_UP(size, SLAB_PAGE_SIZE) / SLAB_PAGE_SIZE);
+    void *ptr = pmm_alloc_pages(pages);
     if (!ptr) {
-        return malloc(size);
-    }
-
-    if (size == 0) {
-        free(ptr);
+        log_step("kmalloc: failed to allocate large block", size);
         return NULL;
     }
 
-    void* new_ptr = malloc(size);
-    if (new_ptr) {
-        struct Page* page = (struct Page*)ptr;
-        uint32_t old_size = (1 << page->order) * PAGE_SIZE - sizeof(struct Page);
-        flop_memcpy(new_ptr, ptr, old_size < size ? old_size : size);
-        free(ptr);
+    return ptr;
+}
+
+void kfree(void *ptr, size_t size) {
+    if (!ptr || size == 0) return;
+
+    // Free small allocations using slab allocator
+    if (size <= SLAB_MAX_SIZE) {
+        slab_free(ptr);
+        return;
     }
+
+    // Free large allocations using PMM
+    size_t pages = (ALIGN_UP(size, SLAB_PAGE_SIZE) / SLAB_PAGE_SIZE);
+    pmm_free_pages(ptr, pages);
+}
+
+void *kcalloc(size_t num, size_t size) {
+    size_t total_size = num * size;
+    void *ptr = kmalloc(total_size);
+    if (ptr) {
+        flop_memset(ptr, 0, total_size);
+    }
+    return ptr;
+}
+
+void *krealloc(void *ptr, size_t old_size, size_t new_size) {
+    if (!ptr) return kmalloc(new_size);
+    if (new_size == 0) {
+        kfree(ptr, old_size);
+        return NULL;
+    }
+
+    void *new_ptr = kmalloc(new_size);
+    if (!new_ptr) return NULL;
+
+    // Copy existing data to new allocation
+    size_t copy_size = (old_size < new_size) ? old_size : new_size;
+    flop_memcpy(new_ptr, ptr, copy_size);
+
+    kfree(ptr, old_size);
     return new_ptr;
 }
-/**
- * @name free
- * @author Amar Djulovic <aaamargml@gmail.com>
 
- * @brief Free memory
- * 
- * @param ptr 
- * @return void
- *
- * @note This function frees memory, and sets the pointer to NULL
- */
-void free(void* ptr) {
-    if (!ptr) return;
-    pmm_free_pages(ptr, 0);
+void test_alloc() {
+    
+    void *ptr1 = kmalloc(100);
+    void *ptr2 = kmalloc(200);
+    void *ptr3 = kmalloc(300);
+    if (ptr1) {
+        log_step("kmalloc test passed for size 100\n", GREEN);
+    }
+    if (ptr2) {
+        log_step("kmalloc test passed for size 200\n", GREEN);
+    }
+    if (ptr3) {
+        log_step("kmalloc test passed for size 300\n", GREEN);
+    }
+    kfree(ptr1, 100);
+    kfree(ptr2, 200);
+    kfree(ptr3, 300);
+    log_step("kfree test passed\n", GREEN);
 }

@@ -38,16 +38,16 @@ kernel.c:
 #include "lib/str.h"
 #include "mem/pmm.h"
 #include "mem/utils.h"
+#include "mem/slab.h"
 #include "mem/vmm.h"
 #include "mem/gdt.h"
+#include "mem/alloc.h"
 #include "task/task_handler.h"
 #include "drivers/vga/vgahandler.h"
 #include "mem/paging.h"
 #include "lib/logging.h"
 #include "multiboot/multiboot.h"
 #include "drivers/vga/framebuffer.h"
-#include <stdlib.h>
-int time_ready = 1; 
 
 /**
  * @brief Software halt function.
@@ -67,6 +67,8 @@ void halt() {
 void cpuhalt() {
     __asm__ volatile("hlt");
 }
+
+
 /**
  * @brief Kernel panic function.
 
@@ -78,24 +80,55 @@ void cpuhalt() {
  * @
  */
 void panic(uint32_t address, const char* msg, const char* err) {  
-    log_step("KERNEL PANIC ***********************\n:(\n", LIGHT_RED);
-    for(int i = 1; i > 6; i++) {
-        echo("***********************\n", LIGHT_RED);
-        }
+    // Top border
+    echo("+", RED);
+    for(int i = 0; i < 30; i++) echo("-", RED);
+    echo("+\n", RED);
+
+    // Header
+    echo("|", RED);
+    echo("    KERNEL PANIC ERROR     ", RED);
+    echo("|\n", RED);
+
+    // Separator
+    echo("|", RED);
+    for(int i = 0; i < 30; i++) echo("-", RED);
+    echo("|\n", RED);
+
+    // Info lines with padding
+    char line[32];
     
-    log_step("floppaOS kernel has reached a panic state and needs to be restarted.\n", LIGHT_RED);
-    log_step("Error address ", RED);
-    log_address("", address);
-    log_step("Error name ", RED);
-    echo(err, RED);
+    flopsnprintf(line, 31, "| Address: %x", address);
+    echo(line, RED);
+    for(int i = flopstrnlen(line, 32); i < 31; i++) echo(" ", RED);
+    echo("|\n", RED);
 
-    log_step("Error message ", RED);
-    echo(msg, YELLOW);
-    
-}
+    echo("| Message: ", RED);
+    echo(msg, LIGHT_RED);
+    for(int i = flopstrnlen(msg, 256) + 10; i < 31; i++) echo(" ", RED);
+    echo("|\n", RED);
 
+    echo("| Type: ", RED);
+    echo(err, LIGHT_RED);
+    for(int i = flopstrnlen(err, 256) + 7; i < 31; i++) echo(" ", RED);
+    echo("|\n", RED);
 
-/**
+    // Separator
+    echo("|", RED);
+    for(int i = 0; i < 30; i++) echo("-", RED);
+    echo("|\n", RED);
+
+    // Contact info
+    echo("| Contact: ", YELLOW);
+    echo("aaamargml@gmail.com", YELLOW);
+    for(int i = 27; i < 31; i++) echo(" ", YELLOW);
+    echo("|\n", YELLOW);
+
+    // Bottom border
+    echo("+", RED);
+    for(int i = 0; i < 30; i++) echo("-", RED);
+    echo("+\n", RED);
+}/**
  * @brief Memory dump function.
  *
  * @param address The address to start dumping memory from.
@@ -123,8 +156,6 @@ void mem_dump(uint32_t address, uint32_t length) {
  * @brief Draws the floppaOS logo in ASCII art.
  */
 void draw_floppaos_logo() {
-
-     
     const char *ascii_art = 
     "  __ _                          ___  ____   \n"
     " / _| | ___  _ __  _ __   __ _ / _ \\/ ___|  \n"
@@ -132,16 +163,11 @@ void draw_floppaos_logo() {
     "|  _| | (_) | |_) | |_) | (_| | |_| |___) | \n"
     "|_| |_|\\___/| .__/| .__/ \\__,_|\\___/|____/ v0.1.1-alpha \n"
     "            |_|   |_|                      \n";
-
     echo(ascii_art, YELLOW);
-
-
-
-
     sleep_seconds(1);
 }
 
-
+// cute helper function to check if the multiboot magic number is valid
 static void check_multiboot_magic(uint32_t magic) {
     if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         panic(0, "Multiboot magic number mismatch!", "System halted.");
@@ -149,11 +175,13 @@ static void check_multiboot_magic(uint32_t magic) {
     }
 }
 
+// cute helper function to check if the multiboot info structure is valid
 static void check_multiboot_info(multiboot_info_t *mb_info) {
     if (!mb_info) {
-        panic(0, "Multiboot info structure is NULL!", "System halted.");
-        halt();
+        panic((uintptr_t)mb_info, "The multiboot info structure could not be found!", "MultibootInfoNullError");
+        
     }
+
 }
 
 
@@ -183,46 +211,41 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     
     // Print Multiboot information
     print_multiboot_info(mb_info);
-    sleep_seconds(3);
-
+    sleep_seconds(1);
     // initialize memory
     init_gdt();
     pmm_init(mb_info);
-    sleep_seconds(3); // debugging
+    slab_init();
+
+    
+    sleep_seconds(1); // debugging
     paging_init();
     sleep_seconds(1);
     vmm_init();
+    test_alloc();
     sleep_seconds(1);
-
     init_interrupts();
     __asm__ volatile("sti");
-
     // init file system
     struct TmpFileSystem tmp_fs;
     init_tmpflopfs(&tmp_fs);  
-    sleep_seconds(1);
-
     // init task system
     initialize_task_system();
-
-    // init tasks
+    // init tasks (fshell and keyboard)
     add_task(fshell_task, &tmp_fs, 0, "fshell", "floppaos://fshell/fshell.c");  
     add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c"); // mainly here for fun
-    
-    
     // make time struct and add task
     struct Time system_time; 
-    add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c");
- 
-
-    sleep_seconds(1);
-    
-    draw_floppaos_logo();
+    add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c"); // cool little time display
+    draw_floppaos_logo(); // print cool stuff
 
     // copyright notice
     echo("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
     echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n", CYAN); // license notice
     echo("Type help for a list of commands\n", CYAN); // help notice
+    
+    
+    // start scheduler
     while (1) {
         scheduler(); 
     }

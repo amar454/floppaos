@@ -2,8 +2,7 @@
 #define VMM_H
 #include "../task/task_handler.h"
 #include "paging.h"
-#define KERNEL_PAGE_START 768 // Kernel space starts at the 3GB mark
-#define TASK_STACK_START 0xBFFFF000 // Task stack virtual address (below 3GB)
+
 
 
 void vmm_init();

@@ -15,8 +15,8 @@ GRUB_PATH := $(BOOT_PATH)/grub
 CC = gcc
 LD = ld
 NASM = nasm
-CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 -Wall -Wextra
-INTERRUPT_FLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 -Wall -Wextra -mgeneral-regs-only
+CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 -Wall -Wextra 
+INTERRUPT_FLAGS = -m32 -ffreestanding -fno-stack-protector -std=c23 -Wall -Wextra -mgeneral-regs-only 
 LD_FLAGS = -m elf_i386 -T linker.ld
 
 # Source files and directories
@@ -48,7 +48,8 @@ C_FILES = \
     drivers/mouse/ps2ms.c \
     mem/gdt.c \
     lib/logging.c \
-    mem/alloc.c
+    mem/alloc.c \
+    mem/slab.c 
 
 OBJ_FILES = boot.o $(C_FILES:.c=.o) interrupts.o
 
@@ -62,7 +63,8 @@ cleanobj:
 	$(FIND) . -name "*.o" -exec $(RM) {} \;
 
 # Main build target
-.PHONY: all
+.PHONY: all bootloader kernel interrupts linker iso
+
 all: bootloader kernel interrupts linker iso
 	@echo "Build completed successfully."
 
@@ -90,8 +92,12 @@ iso: $(BIN)
 	grub-file --is-x86-multiboot $(BOOT_PATH)/$(BIN)
 	grub-mkrescue -o floppaOS-alpha.iso $(ISO_PATH)
 
-.PHONY: qemu
+.PHONY: qemu, qemu-debug, qemu-log
 
 # Run the OS in QEMU
 qemu: all
-	qemu-system-i386 -cdrom floppaOS-alpha.iso
+	qemu-system-i386 -cdrom floppaOS-alpha.iso --no-shutdown
+
+# Run the OS in QEMU with logging
+qemu-log: all
+	qemu-system-i386 -d int,cpu_reset,exec -cdrom floppaOS-alpha.iso

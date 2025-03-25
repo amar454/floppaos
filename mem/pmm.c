@@ -51,6 +51,65 @@ void* pmm_alloc_pages(uint32_t order);
 void pmm_free_pages(void* addr, uint32_t order);
 
 uint32_t page_index(uintptr_t addr);
+/**
+ * @name buddy_split
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Split a page into two pages of the same order
+ * 
+ * @param addr 
+ * @param order 
+ *
+ * @note the orders are the same as above.
+ */
+ void buddy_split(uintptr_t addr, uint32_t order) {
+    uintptr_t buddy_addr = addr + (1 << (order - 1)) * PAGE_SIZE;
+    struct Page* page = page_from_address(addr);
+    struct Page* buddy_page = page_from_address(buddy_addr);
+
+    if (page && buddy_page) {
+        page->order = order - 1;
+        buddy_page->order = order - 1;
+        page->next = pmm_buddy.free_list[order - 1];
+        pmm_buddy.free_list[order - 1] = page;
+    }
+}
+/**
+ * @name buddy_merge
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Merge two pages of the same order into one page of the next higher order
+ * 
+ * @param addr 
+ * @param order 
+ *
+ * @note the orders are the same as above.
+ * @note this function is called recursively until the order is 0
+ */
+void buddy_merge(uintptr_t addr, uint32_t order) {
+    uintptr_t buddy_addr = addr ^ (1 << order) * PAGE_SIZE;
+    struct Page* page = page_from_address(addr);
+    struct Page* buddy_page = page_from_address(buddy_addr);
+
+    if (buddy_page && buddy_page->is_free && buddy_page->order == order) {
+        // Remove buddy from free list
+        struct Page** prev = &pmm_buddy.free_list[order];
+        while (*prev && *prev != buddy_page) {
+            prev = &(*prev)->next;
+        }
+        if (*prev) {
+            *prev = buddy_page->next;
+        }
+
+        // Merge the pages
+        uintptr_t merged_addr = (addr < buddy_addr) ? addr : buddy_addr;
+        buddy_merge(merged_addr, order + 1);
+    } else {
+        page->next = pmm_buddy.free_list[order];
+        pmm_buddy.free_list[order] = page;
+    }
+}
+
 
 /**
  * @name pmm_init
@@ -115,7 +174,9 @@ void pmm_init(multiboot_info_t* mb_info) {
 
     log_step("pmm: Buddy allocator initialized\n", GREEN);
 }
-
+int pmm_get_memory_size() {
+    return pmm_buddy.total_pages * PAGE_SIZE;
+}
 /* Return the index of the page that contains the given address */
 uint32_t page_index(uintptr_t addr) {
     return (addr - pmm_buddy.memory_start) / PAGE_SIZE;
@@ -133,30 +194,7 @@ void log_page_info(struct Page* page) {
     log_uint("pmm: Page is_free: ", page->is_free);
     log_address("pmm: Page next: ", (uintptr_t)page->next);
 }
-/**
- * @name pmm_alloc_pages
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Allocate physical pages based off of an order
- 
- * @param order 
- * @return void* 
- * @returns a pointer to the allocated page
- *
- * @note the orders are as follows:
- * @note 0 - 4KB
- * @note 1 - 8KB
- * @note 2 - 16KB
- * @note 3 - 32KB
- * @note 4 - 64KB
- * @note 5 - 128KB
- * @note 6 - 256KB
- * @note 7 - 512KB
- * @note 8 - 1024KB
- * @note 9 - 2048KB
- * @note 10 - 4096KB
- * @note these are called "orders" because they are powers of two
- */
+
 void* pmm_alloc_pages(uint32_t order) {
     if (order > MAX_ORDER) return NULL;
 
@@ -164,7 +202,6 @@ void* pmm_alloc_pages(uint32_t order) {
         if (pmm_buddy.free_list[i]) {
             struct Page* page = pmm_buddy.free_list[i];
             pmm_buddy.free_list[i] = page->next;
- 
             page->is_free = 0;
             page->order = order;
 
@@ -181,18 +218,6 @@ void* pmm_alloc_pages(uint32_t order) {
     return NULL;
 }
 
-/**
- * @name pmm_alloc_pages
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
- * @brief Free pages based off of an order
- * 
- * @param addr 
- * @param order 
- * @return void
- *
- * @note the orders are the same as above.
- */
 void pmm_free_pages(void* addr, uint32_t order) {
     if (!addr || order > MAX_ORDER) return;
 
@@ -203,78 +228,11 @@ void pmm_free_pages(void* addr, uint32_t order) {
     buddy_merge(page->address, order);
 }
 
-
-/**
- * @name buddy_split
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Split a page into two pages of the same order
- * 
- * @param addr 
- * @param order 
- *
- * @note the orders are the same as above.
- */
-void buddy_split(uintptr_t addr, uint32_t order) {
-    uintptr_t buddy_addr = addr + (1 << (order - 1)) * PAGE_SIZE;
-    struct Page* page = page_from_address(addr);
-    struct Page* buddy_page = page_from_address(buddy_addr);
-
-    if (page && buddy_page) {
-        page->order = order - 1;
-        buddy_page->order = order - 1;
-        page->next = pmm_buddy.free_list[order - 1];
-        pmm_buddy.free_list[order - 1] = page;
-    }
-}
-/**
- * @name buddy_merge
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Merge two pages of the same order into one page of the next higher order
- * 
- * @param addr 
- * @param order 
- *
- * @note the orders are the same as above.
- * @note this function is called recursively until the order is 0
- */
-void buddy_merge(uintptr_t addr, uint32_t order) {
-    uintptr_t buddy_addr = addr ^ (1 << order) * PAGE_SIZE;
-    struct Page* page = page_from_address(addr);
-    struct Page* buddy_page = page_from_address(buddy_addr);
-
-    if (buddy_page && buddy_page->is_free && buddy_page->order == order) {
-        // Remove buddy from free list
-        struct Page** prev = &pmm_buddy.free_list[order];
-        while (*prev && *prev != buddy_page) {
-            prev = &(*prev)->next;
-        }
-        if (*prev) {
-            *prev = buddy_page->next;
-        }
-
-        // Merge the pages
-        uintptr_t merged_addr = (addr < buddy_addr) ? addr : buddy_addr;
-        buddy_merge(merged_addr, order + 1);
-    } else {
-        page->next = pmm_buddy.free_list[order];
-        pmm_buddy.free_list[order] = page;
-    }
-}
-
-// helper functions for allocating singular o(0) pages
 void* pmm_alloc_page() {
     return pmm_alloc_pages(0);
 }
+
 void pmm_free_page(void* addr) {
     pmm_free_pages(addr, 0);
 }
 
-// print memory usage info
-void print_mem_info() {
-    echo_f("Total memory: %d KB\n", pmm_buddy.total_pages * PAGE_SIZE / 1024);
-    echo_f("Free memory: %d KB\n", (pmm_buddy.total_pages - sizeof(pmm_buddy.free_list)) * PAGE_SIZE / 1024);
-    echo_f("Used memory: %d KB\n", sizeof(pmm_buddy.free_list) * PAGE_SIZE / 1024);
-
-}
