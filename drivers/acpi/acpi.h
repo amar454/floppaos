@@ -1,86 +1,51 @@
+// SPDX-License-Identifier: GPL-3.0 
 #ifndef ACPI_H
 #define ACPI_H
 
-#include <stdint.h>
 #include <stddef.h>
 
-// ACPI Signature Definitions
-#define RSDP_SIG "RSD PTR "
-#define RSDT_SIG "RSDT"
-#define XSDT_SIG "XSDT"
-#define FADT_SIG "FACP"
+static unsigned int *SMI_CMD;
+static unsigned char ACPI_ENABLE;
+static unsigned char ACPI_DISABLE;
+static unsigned int *PM1a_CNT;
+static unsigned int *PM1b_CNT;
+static unsigned short SLP_TYPa;
+static unsigned short SLP_TYPb;
+static unsigned short SLP_EN;
+static unsigned short SCI_EN;
+static unsigned char PM1_CNT_LEN;
 
-// ACPI Table Structures
-#pragma pack(push, 1)
-typedef struct {
-    char signature[8];          // "RSD PTR "
-    uint8_t checksum;
-    char oem_id[6];
-    uint8_t revision;
-    uint32_t rsdt_address;
-    uint32_t length;
-    uint64_t xsdt_address;
-    uint8_t extended_checksum;
-    uint8_t reserved[3];
-} RSDP;
+// root system description pointer
+struct RSDPtr {
+    char Signature[8];
+    unsigned char CheckSum;
+    char OemID[6];
+    unsigned char Revision;
+    unsigned int *RsdtAddress;
+};
 
-typedef struct {
-    char signature[4];          // "RSDT"
-    uint32_t length;
-    uint8_t revision;
-    uint8_t checksum;
-    char oem_id[6];
-    char oem_table_id[8];
-    uint32_t oem_revision;
-    uint32_t creator_id;
-    uint32_t creator_revision;
-    uint32_t entry[1];          // Array of ACPI table pointers (32-bit entries)
-} RSDT;
+//
+struct FACP {
+    char Signature[4];
+    unsigned int Length;
+    char unused1[32];
+    unsigned int *DSDT;
+    char unused2[4];
+    unsigned int *SMI_CMD;
+    unsigned char ACPI_ENABLE;
+    unsigned char ACPI_DISABLE;
+    char unused3[10];
+    unsigned int *PM1a_CNT_BLK;
+    unsigned int *PM1b_CNT_BLK;
+    char unused4[17];
+    unsigned char PM1_CNT_LEN;
+};
+// Initializes ACPI and prepares it for power management.
+// Returns 0 on success, -1 on failure.
+int init_acpi(void);
 
-typedef struct {
-    char signature[4];          // "XSDT"
-    uint32_t length;
-    uint8_t revision;
-    uint8_t checksum;
-    char oem_id[6];
-    char oem_table_id[8];
-    uint32_t oem_revision;
-    uint32_t creator_id;
-    uint32_t creator_revision;
-    uint64_t entry[1];          // Array of ACPI table pointers (64-bit entries)
-} XSDT;
-
-typedef struct {
-    char signature[4];          // "FACP"
-    uint32_t length;
-    uint8_t revision;
-    uint8_t checksum;
-    char oem_id[6];
-    char oem_table_id[8];
-    uint32_t oem_revision;
-    uint32_t creator_id;
-    uint32_t creator_revision;
-    uint32_t firmware_ctrl;
-    uint32_t dsdt;
-    uint8_t model;
-    uint8_t reserved[3];
-    uint32_t pm_tmr_blk;
-    uint32_t gpe0_blk;
-    uint32_t gpe1_blk;
-    uint8_t pm1a_evt_blk;
-    uint8_t pm1b_evt_blk;
-    uint8_t pm1a_ctrl_blk;
-    uint8_t pm1b_ctrl_blk;
-    uint32_t sleep_ctrl;
-    uint32_t sleep_status;
-} FADT;
-#pragma pack(pop)
-
-// ACPI Functions
-RSDP *find_rsdp();
-void *parse_rsdt(RSDT *rsdt);
-void acpi_initialize();
-void acpi_shutdown();
-int check_signature(char *signature, char *expected_signature);
+// Powers off the system using ACPI. 
+// Requires `init_acpi()` to be called first.
+void acpi_power_off(void);
 
 #endif // ACPI_H
