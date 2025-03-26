@@ -1196,3 +1196,46 @@ void vga_desktop() {
     return;
     
 }
+
+void draw_box(uint16_t x_start, uint16_t y_start, uint16_t width, uint16_t height, 
+              const char* content, uint8_t border_color, uint8_t text_color) {
+    // ASCII box-drawing characters
+    char top_left = '\xDA';     // ╔
+    char top_right = '\xBF';    // ╗
+    char bottom_left = '\xC0';  // ╚
+    char bottom_right = '\xD9'; // ╝
+    char horizontal = '\xC4';   // ═
+    char vertical = '\xB3';     // ║
+
+    // Clear the area where the box will be drawn
+    for (uint16_t y = 0; y < height; y++) {
+        for (uint16_t x = x_start; x < x_start + width; x++) {
+            vga_place_char(x, y_start + y, ' ', border_color);
+        }
+    }
+
+    // Draw top border
+    vga_place_char(x_start, y_start, top_left, border_color);
+    for (uint16_t i = 1; i < width - 1; i++) {
+        vga_place_char(x_start + i, y_start, horizontal, border_color);
+    }
+    vga_place_char(x_start + width - 1, y_start, top_right, border_color);
+
+    // Draw sides and content
+    for (uint16_t y = 1; y < height - 1; y++) {
+        vga_place_char(x_start, y_start + y, vertical, border_color);
+        if (y == 1 && content) {
+            for (size_t i = 0; i < flopstrlen(content) && i < width - 2; i++) {
+                vga_place_char(x_start + 1 + i, y_start + y, content[i], text_color);
+            }
+        }
+        vga_place_char(x_start + width - 1, y_start + y, vertical, border_color);
+    }
+
+    // Draw bottom border
+    vga_place_char(x_start, y_start + height - 1, bottom_left, border_color);
+    for (uint16_t i = 1; i < width - 1; i++) {
+        vga_place_char(x_start + i, y_start + height - 1, horizontal, border_color);
+    }
+    vga_place_char(x_start + width - 1, y_start + height - 1, bottom_right, border_color);
+}
