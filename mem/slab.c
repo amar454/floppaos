@@ -28,8 +28,16 @@ slab.c:
 
     slab_free(...) frees memory allocated by the slab allocator.
 
+---------------------------------------------------------------------------
+
+Update log:
+    march 23, 2025 - successfully created slab allocator 
+    tuesday 25, 2025 - added many helper functions, aligned alloc, and documentation
+
 ------------------------------------------------------------------------------
+
 */
+
 #include "slab.h"
 #include "paging.h"
 #include "pmm.h"
@@ -45,7 +53,6 @@ static slab_cache_t *slab_caches[SLAB_ORDER_COUNT];
 
 /**
  * @name get_order
-  
  *
  * @brief Calculates the order for a given size
  * @param size Size to calculate order for
@@ -64,7 +71,6 @@ static size_t get_order(size_t size) {
 
 /**
  * @name create_slab_cache
- * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Creates a new slab cache
  * @param size Size of objects in cache
@@ -92,8 +98,7 @@ static slab_cache_t *create_slab_cache(size_t size) {
 
 /**
  * @name create_slab
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
+ * 
  * @brief Creates a new slab
  * @param cache Cache to create slab for
  * @param order Size order of slab
@@ -136,8 +141,7 @@ static slab_t *create_slab(slab_cache_t *cache, size_t order) {
 
 /**
  * @name slab_init
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
+ * 
  * @brief Initializes the slab allocator
  */
 void slab_init(void) {
@@ -156,8 +160,7 @@ void slab_init(void) {
 
 /**
  * @name slab_alloc
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
+ * 
  * @brief Allocates memory from slab allocator
  * @param size Size to allocate
  * @return Pointer to allocated memory or NULL if failed
@@ -200,7 +203,6 @@ void *slab_alloc(size_t size) {
 
 /**
  * @name remove_slab_from_cache
- * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Removes a slab from its cache
  * @param cache Cache containing the slab
@@ -222,8 +224,7 @@ static void remove_slab_from_cache(slab_cache_t *cache, slab_t *slab) {
 
 /**
  * @name find_containing_cache
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
+ * 
  * @brief Finds cache containing a slab
  * @param containing_slab Slab to find cache for
  * @param out_order Order of found cache
@@ -256,8 +257,7 @@ static slab_cache_t* find_containing_cache(slab_t *containing_slab, size_t *out_
 
 /**
  * @name add_to_free_list
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
+ * 
  * @brief Adds memory to free list
  * @param cache Cache to add to
  * @param ptr Memory to add
@@ -270,8 +270,7 @@ static void add_to_free_list(slab_cache_t *cache, void *ptr) {
 
 /**
  * @name slab_free
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
+ * 
  * @brief Frees memory allocated by slab allocator
  * @param ptr Memory to free
  */
@@ -301,8 +300,7 @@ void slab_free(void *ptr) {
 
 /**
  * @name slab_debug
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
+ * 
  * @brief Prints debug information about slab allocator
  */
 void slab_debug(void) {
@@ -323,7 +321,6 @@ void slab_debug(void) {
 
 /**
  * @name slab_realloc
- * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Destroys a slab
  * @param slab Slab to destroy
@@ -334,6 +331,7 @@ static void destroy_slab(slab_t *slab, size_t order) {
 }
 
 /**
+ * @name is_slab_empty
  * @brief Checks if slab is empty
  * @param slab Slab to check
  * @return true if empty, false otherwise
@@ -344,7 +342,6 @@ static bool is_slab_empty(slab_t *slab) {
 
 /**
  * @name slab_realloc
- * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Validates pointer
  * @param ptr Pointer to validate
@@ -373,7 +370,6 @@ static slab_t* get_containing_slab(void *ptr) {
 
 /**
  * @name slab_realloc
- * @author Amar Djulovic <aaamargml@gmail.com>
  *
  * @brief Reallocates memory
  * @param ptr Pointer to reallocate
@@ -403,8 +399,7 @@ void* slab_realloc(void *ptr, size_t new_size) {
 
 /**
  * @name slab_realloc
- * @author Amar Djulovic <aaamargml@gmail.com> 
- *
+ * 
  * @brief Allocates zeroed memory
  * @param num Number of elements
  * @param size Size of each element
@@ -419,6 +414,7 @@ void* slab_calloc(size_t num, size_t size) {
 }
 
 /**
+ * 
  * @brief Allocates aligned memory
  * @param alignment Alignment requirement
  * @param size Size to allocate
