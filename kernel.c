@@ -118,8 +118,6 @@ void mem_dump(uint32_t address, uint32_t length) {
 }
 /**
  * @name draw_floppaos_logo
- * @author Amar Djulovic
- * @date 2-23-2025
  *
  * @brief Draws the floppaOS logo in ASCII art.
  */
