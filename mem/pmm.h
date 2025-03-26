@@ -39,7 +39,6 @@ void* pmm_alloc_pages(uint32_t order);
 void* pmm_alloc_page(void);
 void pmm_free_pages(void* addr, uint32_t order);
 void pmm_free_page(void* addr);
-
 void buddy_init(uintptr_t start, uint32_t total_pages);
 void buddy_split(uintptr_t addr, uint32_t order);
 void buddy_merge(uintptr_t addr, uint32_t order);

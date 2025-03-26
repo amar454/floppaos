@@ -222,8 +222,8 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     paging_init();
     sleep_seconds(1);
     vmm_init();
-    test_alloc();
     sleep_seconds(1);
+
     init_interrupts();
     __asm__ volatile("sti");
     // init file system

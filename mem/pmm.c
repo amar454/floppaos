@@ -177,11 +177,33 @@ void pmm_init(multiboot_info_t* mb_info) {
 int pmm_get_memory_size() {
     return pmm_buddy.total_pages * PAGE_SIZE;
 }
-/* Return the index of the page that contains the given address */
+/**
+ * @name page_index
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Return the index of the page that contains the given address
+ * 
+ * @param addr 
+ * @return uint32_t 
+ */ 
 uint32_t page_index(uintptr_t addr) {
     return (addr - pmm_buddy.memory_start) / PAGE_SIZE;
 }
-/* Returns the page struct for a given address */
+/* 
+ * @name page_from_address
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Returns the page struct for a given address
+ * 
+ * @param addr 
+ * @return struct Page*
+ * @returns A pointer to the page struct for the given address
+ *
+ * @note This function returns a pointer to the page struct for the given address.
+ * @note It takes the address as input and calculates the index of the page using the page_index function.
+ * @note It then checks if the index is within the bounds of the page_info array.
+ * @note If the index is within bounds, it returns a pointer to the page struct at the specified index.
+ */
 struct Page* page_from_address(uintptr_t addr) {
     uint32_t index = page_index(addr);
     if (index >= pmm_buddy.total_pages) return NULL;
@@ -194,7 +216,21 @@ void log_page_info(struct Page* page) {
     log_uint("pmm: Page is_free: ", page->is_free);
     log_address("pmm: Page next: ", (uintptr_t)page->next);
 }
-
+/** 
+ * @name pmm_alloc_pages    
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Allocate a block of physical memory of the specified order
+ * 
+ * @param order 
+ * @return void* 
+ * @returns A pointer to the allocated block of physical memory
+ *
+ * @note This function allocates a block of physical memory of the specified order.
+ * @note It uses the buddy allocator to manage physical pages.
+ * @note The buddy allocator is a binary tree-based allocator that allocates and deallocates memory blocks of various sizes.
+ * @note It reduces memory fragmentation by merging free blocks when possible.     
+ */
 void* pmm_alloc_pages(uint32_t order) {
     if (order > MAX_ORDER) return NULL;
 
@@ -217,7 +253,15 @@ void* pmm_alloc_pages(uint32_t order) {
     log_step("pmm: Out of memory!\n", RED);
     return NULL;
 }
-
+/**
+ * @name pmm_free_pages
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *     
+ * @brief Free a block of physical memory of the specified order
+ * 
+ * @param addr 
+ * @param order 
+ */
 void pmm_free_pages(void* addr, uint32_t order) {
     if (!addr || order > MAX_ORDER) return;
 
@@ -228,10 +272,12 @@ void pmm_free_pages(void* addr, uint32_t order) {
     buddy_merge(page->address, order);
 }
 
+// allocate a single physical page
 void* pmm_alloc_page() {
     return pmm_alloc_pages(0);
 }
 
+// free a single physical page 
 void pmm_free_page(void* addr) {
     pmm_free_pages(addr, 0);
 }
