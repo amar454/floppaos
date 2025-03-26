@@ -44,7 +44,7 @@ slab.c:
 static slab_cache_t *slab_caches[SLAB_ORDER_COUNT];
 
 /**
- * @name slab_realloc
+ * @name get_order
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Calculates the order for a given size
@@ -63,7 +63,7 @@ static size_t get_order(size_t size) {
 }
 
 /**
- * @name slab_realloc
+ * @name create_slab_cache
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Creates a new slab cache
@@ -91,7 +91,7 @@ static slab_cache_t *create_slab_cache(size_t size) {
 }
 
 /**
- * @name slab_realloc
+ * @name create_slab
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Creates a new slab
@@ -135,7 +135,7 @@ static slab_t *create_slab(slab_cache_t *cache, size_t order) {
 }
 
 /**
- * @name slab_realloc
+ * @name slab_init
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Initializes the slab allocator
@@ -155,7 +155,7 @@ void slab_init(void) {
 }
 
 /**
- * @name slab_realloc
+ * @name slab_alloc
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Allocates memory from slab allocator
@@ -199,7 +199,7 @@ void *slab_alloc(size_t size) {
 }
 
 /**
- * @name slab_realloc
+ * @name remove_slab_from_cache
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Removes a slab from its cache
@@ -221,7 +221,7 @@ static void remove_slab_from_cache(slab_cache_t *cache, slab_t *slab) {
 }
 
 /**
- * @name slab_realloc
+ * @name find_containing_cache
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Finds cache containing a slab
@@ -231,6 +231,7 @@ static void remove_slab_from_cache(slab_cache_t *cache, slab_t *slab) {
  */
 static slab_cache_t* find_containing_cache(slab_t *containing_slab, size_t *out_order) {
     size_t order = 0;
+    
     while (order < SLAB_ORDER_COUNT) {
         slab_cache_t *cache = slab_caches[order];
         if (!cache) {
@@ -254,7 +255,7 @@ static slab_cache_t* find_containing_cache(slab_t *containing_slab, size_t *out_
 }
 
 /**
- * @name slab_realloc
+ * @name add_to_free_list
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Adds memory to free list
@@ -268,7 +269,7 @@ static void add_to_free_list(slab_cache_t *cache, void *ptr) {
 }
 
 /**
- * @name slab_realloc
+ * @name slab_free
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Frees memory allocated by slab allocator
@@ -299,16 +300,16 @@ void slab_free(void *ptr) {
 }
 
 /**
- * @name slab_realloc
+ * @name slab_debug
  * @author Amar Djulovic <aaamargml@gmail.com> 
  *
  * @brief Prints debug information about slab allocator
  */
 void slab_debug(void) {
+    // print all caches, slabs, and their free lists
     for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
         slab_cache_t *cache = slab_caches[i];
-        if (!cache) continue;
-
+        if (!cache) continue; 
         log_f("Slab cache size:", cache->object_size);
         log_f("  Free count:", cache->free_count);
 
@@ -394,6 +395,7 @@ void* slab_realloc(void *ptr, size_t new_size) {
     slab_cache_t *old_cache = find_containing_cache(old_slab, &old_order);
     if (!old_cache) return new_ptr;
 
+    // copy from ptr to new_ptr, and free new_ptr    
     flop_memcpy(new_ptr, ptr, MIN(new_size, old_cache->object_size));
     slab_free(ptr);
     return new_ptr;
@@ -411,6 +413,7 @@ void* slab_realloc(void *ptr, size_t new_size) {
 void* slab_calloc(size_t num, size_t size) {
     size_t total = num * size;
     void *ptr = slab_alloc(total);
+    // set ptr=0 
     if (ptr) flop_memset(ptr, 0, total);
     return ptr;
 }
@@ -456,12 +459,17 @@ void *slab_resize(void *ptr, size_t new_size) {
         slab_free(ptr);
         return NULL;
     }
+    
+    // get the slab where ptr is stored
     slab_t *slab = get_containing_slab(ptr);
     size_t order;
     slab_cache_t *cache = find_containing_cache(slab, &order);
     if (!cache) return NULL;
+    
+    // alloc new slab size and copy old slab to it
     void *new_ptr = slab_alloc(new_size);
     flop_memcpy(new_ptr, ptr, cache->object_size);
+    // free old slab
     slab_free(ptr);
     return new_ptr;     
 }
