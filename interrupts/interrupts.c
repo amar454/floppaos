@@ -13,19 +13,18 @@ void init_stack() {
     uint32_t stack_top = (uint32_t)(interrupt_stack + ISR_STACK_SIZE);
     __asm__ volatile("mov %0, %%esp" :: "r"(stack_top));  // Set ESP to the top of the stack
 }
-// PIT ISR (IRQ0)
 void __attribute__((interrupt, no_caller_saved_registers)) pit_isr(void *frame) {
-    //(void)frame;  // Unused
-    //outb(PIC1_COMMAND, 0x20);  // Send EOI to PIC
+    (void)frame; // Unused
+    
+    // Call the scheduler on each timer tick
+    scheduler();
+    
+    outb(PIC1_COMMAND, 0x20); // Send EOI to PIC
 }
 
 // Keyboard ISR (IRQ1)
 void __attribute__((interrupt, no_caller_saved_registers)) keyboard_isr(void *frame) {
-
-    //uint8_t scancode = inb(0x60);  // Read from keyboard data port
-    //handle_keyboard_input(scancode);  // Process key press. for now, vga text mode
-
-    //outb(PIC1_COMMAND, 0x20);  // Send EOI to PIC
+    (void)frame;  // Unused
 }
 // Set an IDT entry
 void set_idt_entry(int n, uint32_t base, uint16_t sel, uint8_t flags) {
@@ -51,7 +50,7 @@ void init_pic() {
     outb(PIC2_DATA, 0x01);
 
     // Enable keyboard (IRQ1) and PIT (IRQ0)
-    outb(PIC1_DATA, 0xFD);  // 0b11111101 (Enable only IRQ1)
+    outb(PIC1_DATA, 0xFC);  // 0b11111100 (Enable IRQ0 and IRQ1)
     outb(PIC2_DATA, 0xFF);  // Disable all IRQs on PIC2
 }
 
@@ -77,8 +76,8 @@ void init_idt() {
     log_step("Setting up IDT entries...\n", LIGHT_GRAY);
 
     // Set up ISR for PIT (IRQ0) and keyboard (IRQ1)
-    set_idt_entry(32, (uint32_t)&pit_isr, KERNEL_CODE_SEGMENT, 0x8E);
-    set_idt_entry(33, (uint32_t)&keyboard_isr, KERNEL_CODE_SEGMENT, 0x8E);
+    set_idt_entry(32, (uint32_t)(uintptr_t)&pit_isr, KERNEL_CODE_SEGMENT, 0x8E);    
+    set_idt_entry(33, (uint32_t)(uintptr_t)&keyboard_isr, KERNEL_CODE_SEGMENT, 0x8E);
 
     // Load the IDT
     __asm__ volatile ("lidt (%0)" :: "r"(&idtp) : "memory");

@@ -1,3 +1,35 @@
+/* 
+
+Copyright 2024-25 Amar Djulovic <aaamargml@gmail.com>
+
+This file is part of FloppaOS.
+
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+
+------------------------------------------------------------------------------
+
+slab.c:
+
+    This is the slab allocator for floppaOS.
+    The slab allocator uses a cache of "slabs" to allocate memory.
+    Each slab is a fixed-size block of memory that can be allocated and freed.
+    The cache is divided into multiple "slab caches" based on the size of the objects in the cache.
+    Each slab cache has a fixed number of slabs, and each slab has a fixed size.
+    When a slab is freed, it's merged with its neighboring slabs to create larger slabs.
+    This process continues until the slab is the size of the cache.
+
+    slab_init(...) initializes the slab allocator.
+
+    slab_alloc(...) allocates memory from the slab allocator.
+
+    slab_free(...) frees memory allocated by the slab allocator.
+
+------------------------------------------------------------------------------
+*/
 #include "slab.h"
 #include "paging.h"
 #include "pmm.h"
@@ -5,11 +37,20 @@
 #include "../drivers/vga/vgahandler.h"
 #include "utils.h"
 #include "vmm.h"
+#include "../kernel.h"
 #include <stdbool.h>
 #define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
 
 static slab_cache_t *slab_caches[SLAB_ORDER_COUNT];
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Calculates the order for a given size
+ * @param size Size to calculate order for
+ * @return Size order
+ */
 static size_t get_order(size_t size) {
     if (size == 0) return 0;
     size_t order = 0;
@@ -21,6 +62,14 @@ static size_t get_order(size_t size) {
     return order;
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Creates a new slab cache
+ * @param size Size of objects in cache
+ * @return Pointer to created cache or NULL if failed
+ */
 static slab_cache_t *create_slab_cache(size_t size) {
     if (size == 0) return NULL;
     size_t order = get_order(size);
@@ -41,25 +90,39 @@ static slab_cache_t *create_slab_cache(size_t size) {
     return cache;
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Creates a new slab
+ * @param cache Cache to create slab for
+ * @param order Size order of slab
+ * @return Pointer to created slab or NULL if failed
+ */
 static slab_t *create_slab(slab_cache_t *cache, size_t order) {
-    if (!cache) return NULL;
-
+    if (!cache) {
+        log_step("slab: Invalid cache!\n", RED);
+        PANIC_INVALID_SLAB_CACHE((uintptr_t)cache);
+        return NULL;
+    }
     slab_t *slab = (slab_t *)pmm_alloc_pages(order);
-    if (!slab) return NULL;
+    if (!slab) {
+        log_step("slab: Failed to allocate slab!\n", RED);
+        PANIC_FAILED_TO_CREATE_SLAB((uintptr_t)slab);
+        return NULL;
+    }
 
     slab->num_objects = cache->num_objects;
     slab->free_count = slab->num_objects;
     slab->next = cache->slab_list;
     cache->slab_list = slab;
 
-    // Calculate available space after slab header
     size_t available_space = (SLAB_PAGE_SIZE * (1 << order)) - sizeof(slab_t);
     if (available_space < cache->object_size * slab->num_objects) {
         pmm_free_pages(slab, order);
         return NULL;
     }
 
-    // Initialize the free list within the slab
     uint8_t *ptr = (uint8_t *)(slab + 1);
     for (size_t i = 0; i < slab->num_objects; i++) {
         *(uint8_t **)ptr = cache->free_list;
@@ -71,13 +134,18 @@ static slab_t *create_slab(slab_cache_t *cache, size_t order) {
     return slab;
 }
 
-
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Initializes the slab allocator
+ */
 void slab_init(void) {
     log_step("Initializing slab allocator", LIGHT_GRAY);
 
     for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
         size_t size = SLAB_MIN_SIZE << i;
-        if (size == 0) continue;  // Prevent overflow
+        if (size == 0) continue;
         slab_caches[i] = create_slab_cache(size);
         if (slab_caches[i]) {
             log_step("Initialized slab cache for size: ", GREEN);
@@ -86,6 +154,14 @@ void slab_init(void) {
     }
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Allocates memory from slab allocator
+ * @param size Size to allocate
+ * @return Pointer to allocated memory or NULL if failed
+ */
 void *slab_alloc(size_t size) {
     if (size == 0 || size > SLAB_MAX_SIZE) return NULL;
 
@@ -93,9 +169,12 @@ void *slab_alloc(size_t size) {
     if (order >= SLAB_ORDER_COUNT) return NULL;
 
     slab_cache_t *cache = slab_caches[order];
-    if (!cache) return NULL;
+    if (!cache) {
+        log_step("slab: Invalid cache!\n", RED);
+        PANIC_INVALID_SLAB_CACHE((uintptr_t)cache);
+        return NULL;
+    }
 
-    // Try to allocate from existing free list
     if (cache->free_count > 0 && cache->free_list) {
         void *ptr = cache->free_list;
         cache->free_list = *(uint8_t **)ptr;
@@ -103,18 +182,30 @@ void *slab_alloc(size_t size) {
         return ptr;
     }
 
-    // If empty, create a new slab
-    if (!create_slab(cache, order)) return NULL;
-
-    // Try again after creating slab
-    if (cache->free_count == 0 || !cache->free_list) return NULL;
+    if (!create_slab(cache, order)) {
+        log_step("slab: Failed to create slab!\n", RED);
+        PANIC_FAILED_TO_CREATE_SLAB((uintptr_t)cache->free_list); 
+        return NULL;
+    }
+    if (cache->free_count == 0 || !cache->free_list) {
+        log_step("slab: Failed to allocate memory from slab!\n", RED);
+        PANIC_FAILED_SLAB_ALLOCATION((uintptr_t)cache->free_list);
+        return NULL;
+    }
     void *ptr = cache->free_list;
     cache->free_list = *(uint8_t **)ptr;
     cache->free_count--;
     return ptr;
 }
 
-
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Removes a slab from its cache
+ * @param cache Cache containing the slab
+ * @param slab Slab to remove
+ */
 static void remove_slab_from_cache(slab_cache_t *cache, slab_t *slab) {
     if (slab == cache->slab_list) {
         cache->slab_list = slab->next;
@@ -129,6 +220,15 @@ static void remove_slab_from_cache(slab_cache_t *cache, slab_t *slab) {
     }
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Finds cache containing a slab
+ * @param containing_slab Slab to find cache for
+ * @param out_order Order of found cache
+ * @return Pointer to found cache or NULL if not found
+ */
 static slab_cache_t* find_containing_cache(slab_t *containing_slab, size_t *out_order) {
     size_t order = 0;
     while (order < SLAB_ORDER_COUNT) {
@@ -148,15 +248,32 @@ static slab_cache_t* find_containing_cache(slab_t *containing_slab, size_t *out_
         }
         order++;
     }
+    log_step("slab: Failed to find cache containing slab!\n", RED);
+    PANIC_FAILED_TO_FIND_CACHE_CONTAINING_SLAB((uintptr_t)containing_slab);
     return NULL;
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Adds memory to free list
+ * @param cache Cache to add to
+ * @param ptr Memory to add
+ */
 static void add_to_free_list(slab_cache_t *cache, void *ptr) {
     *(uint8_t **)ptr = cache->free_list;
     cache->free_list = ptr;
     cache->free_count++;
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Frees memory allocated by slab allocator
+ * @param ptr Memory to free
+ */
 void slab_free(void *ptr) {
     if (!ptr) return;
 
@@ -168,8 +285,10 @@ void slab_free(void *ptr) {
 
     size_t order;
     slab_cache_t *cache = find_containing_cache(containing_slab, &order);
-    if (!cache) return;
-
+    if (!cache) {
+        PANIC_SLAB_CACHE_NOT_FOUND((uintptr_t)cache);
+        return;
+    }
     add_to_free_list(cache, ptr);
     containing_slab->free_count++;
 
@@ -179,7 +298,12 @@ void slab_free(void *ptr) {
     }
 }
 
-
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Prints debug information about slab allocator
+ */
 void slab_debug(void) {
     for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
         slab_cache_t *cache = slab_caches[i];
@@ -196,24 +320,65 @@ void slab_debug(void) {
     }
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Destroys a slab
+ * @param slab Slab to destroy
+ * @param order Order of slab
+ */
 static void destroy_slab(slab_t *slab, size_t order) {
     pmm_free_pages(slab, order);
 }
 
+/**
+ * @brief Checks if slab is empty
+ * @param slab Slab to check
+ * @return true if empty, false otherwise
+ */
 static bool is_slab_empty(slab_t *slab) {
     return slab->free_count == slab->num_objects;
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Validates pointer
+ * @param ptr Pointer to validate
+ * @param page_addr Page address
+ * @return true if valid, false otherwise
+ */
 static bool is_ptr_valid(void *ptr, uintptr_t page_addr) {
     uintptr_t ptr_addr = (uintptr_t)ptr;
     return ptr && ptr_addr >= page_addr + sizeof(slab_t);
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Gets slab containing pointer
+ * @param ptr Pointer to find slab for
+ * @return Pointer to containing slab
+ */
 static slab_t* get_containing_slab(void *ptr) {
     uintptr_t ptr_addr = (uintptr_t)ptr;
     return (slab_t *)(ptr_addr & ~(SLAB_PAGE_SIZE - 1));
 }
+
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com>
+ *
+ * @brief Reallocates memory
+ * @param ptr Pointer to reallocate
+ * @param new_size New size
+ * @return Pointer to reallocated memory or NULL if failed
+ */
 void* slab_realloc(void *ptr, size_t new_size) {
     if (!ptr) return slab_alloc(new_size);
     if (!new_size) {
@@ -234,6 +399,15 @@ void* slab_realloc(void *ptr, size_t new_size) {
     return new_ptr;
 }
 
+/**
+ * @name slab_realloc
+ * @author Amar Djulovic <aaamargml@gmail.com> 
+ *
+ * @brief Allocates zeroed memory
+ * @param num Number of elements
+ * @param size Size of each element
+ * @return Pointer to allocated memory or NULL if failed
+ */
 void* slab_calloc(size_t num, size_t size) {
     size_t total = num * size;
     void *ptr = slab_alloc(total);
@@ -241,6 +415,12 @@ void* slab_calloc(size_t num, size_t size) {
     return ptr;
 }
 
+/**
+ * @brief Allocates aligned memory
+ * @param alignment Alignment requirement
+ * @param size Size to allocate
+ * @return Pointer to allocated memory or NULL if failed
+ */
 void* slab_aligned_alloc(size_t alignment, size_t size) {
     if (!alignment || (alignment & (alignment - 1))) return NULL;
     size_t padded_size = size + alignment - 1;
@@ -251,6 +431,11 @@ void* slab_aligned_alloc(size_t alignment, size_t size) {
     return (void*)aligned;
 }
 
+/**
+ * @brief Gets allocated size of memory
+ * @param ptr Pointer to memory
+ * @return Size of allocation or 0 if invalid
+ */
 size_t slab_get_allocated_size(void *ptr) {
     if (!ptr) return 0;
     slab_t *slab = get_containing_slab(ptr);
@@ -259,6 +444,12 @@ size_t slab_get_allocated_size(void *ptr) {
     return cache ? cache->object_size : 0;
 }
 
+/**
+ * @brief Resizes allocated memory
+ * @param ptr Pointer to resize
+ * @param new_size New size
+ * @return Pointer to resized memory or NULL if failed
+ */
 void *slab_resize(void *ptr, size_t new_size) {
     if (!ptr) return slab_alloc(new_size);
     if (!new_size) {
@@ -274,3 +465,4 @@ void *slab_resize(void *ptr, size_t new_size) {
     slab_free(ptr);
     return new_ptr;     
 }
+

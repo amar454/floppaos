@@ -79,65 +79,33 @@ void cpuhalt() {
  * @note This function is used to panic the kernel when an error occurs.
  * @
  */
-void panic(uint32_t address, const char* msg, const char* err) {  
-    // Top border
-    echo("+", RED);
-    for(int i = 0; i < 30; i++) echo("-", RED);
-    echo("+\n", RED);
+void panic(uint32_t address, const char* msg, const char* err) {
+    // Clear the screen first
+    vga_clear_screen();
 
-    // Header
-    echo("|", RED);
-    echo("    KERNEL PANIC ERROR     ", RED);
-    echo("|\n", RED);
+    // Calculate dimensions for centered box
+    uint16_t width = 80;
+    uint16_t height = 8;
+    uint16_t x_start = 0;
+    uint16_t y_start = 10;
 
-    // Separator
-    echo("|", RED);
-    for(int i = 0; i < 30; i++) echo("-", RED);
-    echo("|\n", RED);
+    // Draw the main box
+    draw_box(x_start, y_start, width, height, "KERNEL PANIC ERROR", RED, RED);
 
-    // Info lines with padding
-    char line[32];
+    // Format address string
+    char addr_str[32];
+    flopsnprintf(addr_str, sizeof(addr_str), "Address: 0x%08x", address);
     
-    flopsnprintf(line, 31, "| Address: %x", address);
-    echo(line, RED);
-    for(int i = flopstrnlen(line, 32); i < 31; i++) echo(" ", RED);
-    echo("|\n", RED);
+    // Place content inside box
+    vga_place_string(x_start + 2, y_start + 3, addr_str, RED);
+    vga_place_string(x_start + 2, y_start + 4, "Message: ", RED);
+    vga_place_string(x_start + 10, y_start + 4, msg, LIGHT_RED);
+    vga_place_string(x_start + 2, y_start + 5, "Type: ", RED);
+    vga_place_string(x_start + 8, y_start + 5, err, LIGHT_RED);
+    vga_place_string(x_start + 2, y_start + 6, "Contact: aaamargml@gmail.com", YELLOW);
 
-    echo("| Message: ", RED);
-    echo(msg, LIGHT_RED);
-    for(int i = flopstrnlen(msg, 256) + 10; i < 31; i++) echo(" ", RED);
-    echo("|\n", RED);
-
-    echo("| Type: ", RED);
-    echo(err, LIGHT_RED);
-    for(int i = flopstrnlen(err, 256) + 7; i < 31; i++) echo(" ", RED);
-    echo("|\n", RED);
-
-    // Separator
-    echo("|", RED);
-    for(int i = 0; i < 30; i++) echo("-", RED);
-    echo("|\n", RED);
-
-    // Contact info
-    echo("| Contact: ", YELLOW);
-    echo("aaamargml@gmail.com", YELLOW);
-    for(int i = 27; i < 31; i++) echo(" ", YELLOW);
-    echo("|\n", YELLOW);
-
-    // Bottom border
-    echo("+", RED);
-    for(int i = 0; i < 30; i++) echo("-", RED);
-    echo("+\n", RED);
-}/**
- * @brief Memory dump function.
- *
- * @param address The address to start dumping memory from.
- * @param length The number of bytes to dump.
-
- * @note This function assumes that the memory is 32-bit aligned.
-
- * @warning This function can easily fill up the screen with a lot of data, so make sure the range is small.
- */
+    halt();
+}
 void mem_dump(uint32_t address, uint32_t length) {
     uint32_t *ptr = (uint32_t *)address;
     for (uint32_t i = 0; i < length; i++) {
@@ -216,38 +184,43 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     init_gdt();
     pmm_init(mb_info);
     slab_init();
-
-    
-    sleep_seconds(1); // debugging
     paging_init();
-    sleep_seconds(1);
     vmm_init();
-    sleep_seconds(1);
-
+    PANIC_OUT_OF_MEMORY((uintptr_t)mb_info);
+    // init interrupts
     init_interrupts();
     __asm__ volatile("sti");
+
+    // init scheduler
+    sched_init();
+
     // init file system
     struct TmpFileSystem tmp_fs;
     init_tmpflopfs(&tmp_fs);  
-    // init task system
-    initialize_task_system();
-    // init tasks (fshell and keyboard)
+    
+    // add tasks (fshell and keyboard)
     add_task(fshell_task, &tmp_fs, 0, "fshell", "floppaos://fshell/fshell.c");  
     add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c"); // mainly here for fun
+    
     // make time struct and add task
     struct Time system_time; 
     add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c"); // cool little time display
-    draw_floppaos_logo(); // print cool stuff
+    
+    // print cool stuff
+    draw_floppaos_logo(); 
 
     // copyright notice
     echo("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
     echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n", CYAN); // license notice
     echo("Type help for a list of commands\n", CYAN); // help notice
     
-    
     // start scheduler
+    sched_start();
+    
+    // oh no the os has stopped scheduling
+
     while (1) {
-        scheduler(); 
+        halt();
     }
 }
 

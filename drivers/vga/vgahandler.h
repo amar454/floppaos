@@ -369,6 +369,7 @@ void textmode_draw_diagonal_line(int x0, int y0, int x1, int y1, uint32_t color)
 void draw_spinning_cube(void);
 void set_vga_mode();
 void test_graphics_mode();
+void vga_place_string(uint16_t x, uint16_t y, const char *str, uint8_t color);
 void vga_place_bold_char(uint16_t x, uint16_t y, char c, uint8_t color);
 void clear_screen(uint8_t color);
 void vga_test();
@@ -379,4 +380,6 @@ void console_print(const char *str, unsigned short color);
 void console_clear_screen();
 void vga_plot_pixel(int x, int y, unsigned short color);
 void vga_draw_string(int x, int y, const char *str, uint32_t color);
+void draw_box(uint16_t x_start, uint16_t y_start, uint16_t width, uint16_t height, 
+              const char* content, uint8_t border_color, uint8_t text_color);
 #endif // VGAHANDLER_H

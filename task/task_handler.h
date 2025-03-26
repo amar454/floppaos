@@ -42,6 +42,9 @@ void add_task(task_fn task, void *arg, uint8_t priority, const char *name, const
 void remove_task(int task_index);
 void scheduler(void);
 void print_tasks(void);
-void initialize_task_system(void);
+void sched_init();
 
+void sched_start();
+void sched_stop();
+void task_sleep(int ticks, Task *task) ;
 #endif // TASK_HANDLER_H

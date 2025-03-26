@@ -33,7 +33,7 @@ Good luck reading half of this. Most of the memory addresses I found on osdev, s
 #include "framebuffer.h" 
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
-
+#include "../../lib/str.h"
 framebuffer_t fb;
 // VGA text buffer
 unsigned short *terminal_buffer = (unsigned short *)VGA_TEXT_ADDRESS;
@@ -101,6 +101,11 @@ void vga_place_char(uint16_t x, uint16_t y, char c, uint8_t color) {
             }
             y = VGA_HEIGHT - 1; // Reset to the last line
         }
+    }
+}
+void vga_place_string(uint16_t x, uint16_t y, const char *str, uint8_t color) { 
+    for (int i = 0; i < flopstrlen(str); i++) {
+        vga_place_char(x + i, y, str[i], color);
     }
 }
 // Function to place a bold character at a specific (x, y) position in the terminal
@@ -1196,7 +1201,7 @@ void vga_desktop() {
     return;
     
 }
-#include "../../lib/str.h"
+
 void draw_box(uint16_t x_start, uint16_t y_start, uint16_t width, uint16_t height, 
               const char* content, uint8_t border_color, uint8_t text_color) {
     // ASCII box-drawing characters

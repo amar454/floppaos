@@ -169,45 +169,71 @@ void remove_task(int task_index) {
     task_count--;
 }
 
+// Add these variables for scheduler state
+volatile int scheduler_ticks = 0;
+volatile bool scheduler_enabled = false;
+
 void scheduler() {
-    if (task_count == 0) return;
+    if (task_count == 0 || !scheduler_enabled) return;
 
-    const int ticks_per_task = 5; // Time slice
-    while (1) {
-        Task *current = &task_queue[current_task];
-
-        // Skip sleeping tasks
-        if (current->sleep_ticks > 0) {
-            current->sleep_ticks--;
-            current_task = (current_task + 1) % task_count;
-            continue;
+    // Increment scheduler ticks
+    scheduler_ticks++;
+    
+    // Only switch tasks every few ticks (time slice)
+    const int ticks_per_task = 1;
+    if (scheduler_ticks % ticks_per_task != 0) return;
+    
+    // Update sleep timers for all tasks
+    for (int i = 0; i < task_count; i++) {
+        if (task_queue[i].sleep_ticks > 0) {
+            task_queue[i].sleep_ticks--;
+            continue; // Skip running sleeping tasks
         }
-
-        // Run the task for the time slice
-        for (int ticks = 0; ticks < ticks_per_task; ticks++) {
-            current->function(current->arg);
-
-            // Decrease sleep timers for all tasks
-            for (int i = 0; i < task_count; i++) {
-                if (task_queue[i].sleep_ticks > 0) {
-                    task_queue[i].sleep_ticks--;
-                }
-            }
-
-            if (current->sleep_ticks > 0) break; // Task slept
-        }
-
-        // Move to the next task
-        current_task = (current_task + 1) % task_count;
     }
+    
+    // Find next runnable task using round-robin
+    int original_task = current_task;
+    do {
+        current_task = (current_task + 1) % task_count;
+        // If we've checked all tasks, just stay on the current one
+        if (current_task == original_task) break;
+    } while (task_queue[current_task].sleep_ticks > 0);
+    
+    // Run the selected task
+    Task *current = &task_queue[current_task];
+    if (current->sleep_ticks == 0) {
+        current->runtime++;
+        if (current->function) {
+            current->function(current->arg);
+        }
+    }
+}// function to start the scheduler
+void sched_start() {
+    scheduler_enabled = true;
+    log_step("Scheduler started.\n", GREEN);
 }
 
-void print_tasks() {
-    echo("Task Queue:\n", YELLOW);
-    echo("+-----+----+-----+--------+------------+--------+\n", WHITE);
-    echo("| PID | Pr | Tks | Run    | Next Virt  | Name   \n", WHITE);
-    echo("+-----+----+-----+--------+------------+--------+\n", WHITE);
+// function to stop the scheduler
+void sched_stop() {
+    scheduler_enabled = false;
+    log_step("Scheduler stopped.\n", YELLOW);
+}
 
+ void print_tasks() {
+    echo("Task Queue:\n", YELLOW);
+    
+    // Print header line
+    for (int i = 0; i < 47; i++) echo("-", WHITE);
+    echo("\n", WHITE);
+    
+    // Print column headers
+    echo("| PID | Pr | Tks | Run    | Next Virt  | Name   \n", WHITE);
+    
+    // Print separator line
+    for (int i = 0; i < 47; i++) echo("-", WHITE);
+    echo("\n", WHITE);
+
+    // Print each task
     for (int i = 0; i < task_count; i++) {
         char buffer[80];
         flopsnprintf(buffer, sizeof(buffer),
@@ -221,10 +247,20 @@ void print_tasks() {
         echo(buffer, WHITE);
     }
 
-    echo("+-----+----+-----+--------+------------+--------+\n", WHITE);
+    // Print bottom line
+    for (int i = 0; i < 47; i++) echo("-", WHITE);
+    echo("\n", WHITE);
 }
 
-void initialize_task_system() {
+void task_sleep(int ticks, Task *task) {
+    task->sleep_ticks = ticks;
+    log_f("Task %s (PID: %d) is now sleeping for %d ticks.\n", task->name, task->pid, ticks);
+}
+
+void sched_init() {
     task_count = 0;
     current_task = 0;
+    scheduler_ticks = 0;
+    scheduler_enabled = false;
+    log_step("Task system initialized.\n", GREEN);
 }
