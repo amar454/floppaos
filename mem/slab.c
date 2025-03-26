@@ -45,7 +45,7 @@ static slab_cache_t *slab_caches[SLAB_ORDER_COUNT];
 
 /**
  * @name get_order
- * @author Amar Djulovic <aaamargml@gmail.com> 
+  
  *
  * @brief Calculates the order for a given size
  * @param size Size to calculate order for
