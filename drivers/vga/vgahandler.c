@@ -1196,7 +1196,7 @@ void vga_desktop() {
     return;
     
 }
-
+#include "../../lib/str.h"
 void draw_box(uint16_t x_start, uint16_t y_start, uint16_t width, uint16_t height, 
               const char* content, uint8_t border_color, uint8_t text_color) {
     // ASCII box-drawing characters
