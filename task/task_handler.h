@@ -30,6 +30,16 @@ typedef struct Task {
     char source_path[MAX_SOURCE_PATH_LENGTH]; // Source path of the task
 } Task;
 
+
+extern uintptr_t global_next_virtual_address;
+extern int next_pid;
+extern Task task_queue[MAX_TASKS];
+extern int task_count;
+extern int current_task;
+extern volatile int scheduler_ticks;
+extern volatile bool scheduler_enabled;
+extern volatile bool scheduler_paused;
+extern volatile int pause_ticks_remaining;
 // Global task queue
 extern Task task_queue[MAX_TASKS];
 extern int task_count;
@@ -43,7 +53,8 @@ void remove_task(int task_index);
 void scheduler(void);
 void print_tasks(void);
 void sched_init();
-
+void sched_pause(int ticks);
+void sched_resume();
 void sched_start();
 void sched_stop();
 void task_sleep(int ticks, Task *task) ;

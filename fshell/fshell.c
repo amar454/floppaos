@@ -92,57 +92,15 @@ void handle_license_command(int arg_count, char *arguments[]) {
     }
 }
 
-// Helper function to handle 'flopmath' command
-void handle_flopmath_command(char *arguments[], int arg_count) {
-    if (arg_count < 2) {
-        echo("Usage: flopmath <function> [parameters...]\n", YELLOW);
-        return;
-    }
-
-    char *operation = arguments[1];
-    double result = 0.0;
-    
-    // Dispatch based on the operation
-    if (flopstrcmp(operation, "sin") == 0 && arg_count > 2) {
-        result = sin(flopatof(arguments[2]));
-    } else if (flopstrcmp(operation, "cos") == 0 && arg_count > 2) {
-        result = cos(flopatof(arguments[2]));
-    } else if (flopstrcmp(operation, "tan") == 0 && arg_count > 2) {
-        result = tan(flopatof(arguments[2]));
-    } else if (flopstrcmp(operation, "sqrt") == 0 && arg_count > 2) {
-        result = sqrt(flopatof(arguments[2]));
-    } else if (flopstrcmp(operation, "exp") == 0 && arg_count > 2) {
-        result = exp(flopatof(arguments[2]));
-    } else if (flopstrcmp(operation, "log") == 0 && arg_count > 2) {
-        result = ln(flopatof(arguments[2]));
-    } else if (flopstrcmp(operation, "pow") == 0 && arg_count > 3) {
-        result = pow(flopatof(arguments[2]), flopatof(arguments[3]));
-    } else if (flopstrcmp(operation, "deg_to_rad") == 0 && arg_count > 2) {
-        result = deg_to_rad(flopatof(arguments[2]));
-    } else if (flopstrcmp(operation, "rad_to_deg") == 0 && arg_count > 2) {
-        result = rad_to_deg(flopatof(arguments[2]));
-    } else if (flopstrcmp(operation, "abs") == 0 && arg_count > 2) {
-        result = fabs(flopatof(arguments[2]));
-    } else {
-        echo("Unknown or invalid 'flopmath' operation. Available operations:\n", RED);
-        echo("sin, cos, tan, sqrt, exp, log, pow, deg_to_rad, rad_to_deg, abs\n", WHITE);
-        return;
-    }
-
-    // Display the result
-    char result_buffer[64];
-    flopdtoa(result, result_buffer, sizeof(result_buffer));
-    echo("Result: ", GREEN);
-    echo(result_buffer, WHITE);
-    echo("\n", WHITE);
-}
 
 void handle_test_alloc_command(int arg_count, char *arguments[]) {
     test_alloc();
     return;
 }
+int restarted = 0; // Track if fshell has been restarted
 void fshell_task(void *arg) {
     static int initialized = 0; // Track initialization
+    
     char *arguments[MAX_ARGUMENTS];
     char buffer[SECTOR_SIZE]; // Buffer for file reading
     struct FileSystem *fs = NULL;
@@ -163,14 +121,20 @@ void fshell_task(void *arg) {
         echo("Error: Invalid file system type.\n", RED);
         return;
     }
-
+    if (restarted) {
+        echo("\n", YELLOW);
+        display_prompt();
+        restarted = 0;
+        return;
+    }
     // Initialize fshell
     if (!initialized) {
+        echo("\nfshell version v0.0.3-alpha\n", MAGENTA);
         display_prompt();
         initialized = 1;
         return;
     }
-
+    
     if (!command_ready) {
         return; // Yield if no command is ready
     }
@@ -200,7 +164,8 @@ void fshell_task(void *arg) {
         flopstrcmp(cmd, "flopmath") == 0 ? 12 :
         flopstrcmp(cmd, "shutdown") == 0 ? 13 :
         flopstrcmp(cmd, "vgatest") ==  0 ? 14 :
-        flopstrcmp(cmd, "test_alloc") ==  0 ? 15 : 0
+        flopstrcmp(cmd, "test_alloc") ==  0 ? 15 :
+        flopstrcmp (cmd, "pause") == 0 ? 16 : 0
     )
     {
 
@@ -271,6 +236,7 @@ void fshell_task(void *arg) {
             echo(" - help                     Display this help message\n", WHITE);
             echo(" - vgatest                  Test VGA graphics.\n", WHITE);
             echo(" - test_alloc               Test memory allocation\n", WHITE);
+            echo(" - pause <ticks>            Pause execution for specified number of ticks\n", WHITE);
             echo(" - exit                     Exit the shell\n", WHITE);
             break;
 
@@ -283,7 +249,7 @@ void fshell_task(void *arg) {
                 sleep_seconds(flopatoi(arguments[1]));
                 break;
             } else {
-                echo("Usage: sleep <seconds> \n", YELLOW);
+                echo("Usage: sleep <seconds>\n", YELLOW);
             }
             break;
         case 11: // "tdsp"
@@ -293,7 +259,7 @@ void fshell_task(void *arg) {
             //handle_flopmath_command(arguments, arg_count);
             break;
         case 13: // "shutdown"
-            acpi_power_off();
+            qemu_power_off();
             break;
         case 14: // "vgatest"
             vga_init();
@@ -308,10 +274,17 @@ void fshell_task(void *arg) {
         case 15: // "test_alloc"
             test_alloc();
             break;
+        case 16: // "pause"
+            if (arg_count > 1) {
+                sched_pause(flopatoi(arguments[1]));
+            } else {
+                echo("Usage: pause <ticks>\n", YELLOW);
+            }
+            restarted = 1;
+            break;
         default: // Unknown command
             echo("Unknown command. Type 'help' for assistance.\n", RED);
             break;
     }
-
     display_prompt(); // Show prompt for next input
 }

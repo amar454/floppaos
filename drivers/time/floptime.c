@@ -62,14 +62,6 @@ static bool time_box_exists = false; // Track if the time box has been drawn
 static uint16_t last_x_start = VGA_WIDTH; // Last x_start position of the box
 static uint16_t last_time_length = 0;    // Last time string length
 
-// Function to check if the time has changed or the box is not drawn
-bool should_redraw(const char* current_time_string, uint16_t x_start, uint16_t time_length) {
-    return flopstrcmp(current_time_string, last_time_string) != 0 || 
-           !time_box_exists || 
-           x_start != last_x_start || 
-           time_length != last_time_length;
-}
-
 // Function to display the time box in the top-right corner
 void display_time_top_right(const char* current_time_string) {
     uint16_t time_length = flopstrlen(current_time_string); // Length of the time string
@@ -87,44 +79,40 @@ void display_time_top_right(const char* current_time_string) {
     char horizontal = '\xC4'; // ═
     char vertical = '\xB3'; // ║
 
-    // Check if the box should be redrawn based on time changes or incorrect position
-    if (should_redraw(current_time_string, x_start, time_length)) {
-        // Clear the area where the box will be drawn
-        for (uint16_t y = 0; y < 3; y++) { // The box height is 3 rows
-            for (uint16_t x = x_start; x < VGA_WIDTH; x++) {
-                vga_place_char(x, y_position + y, ' ', border_color); // Clear with spaces
-            }
+    for (uint16_t y = 0; y < 3; y++) { // The box height is 3 rows
+        for (uint16_t x = x_start; x < VGA_WIDTH; x++) {
+            vga_place_char(x, y_position + y, ' ', border_color); // Clear with spaces
         }
-
-        // Draw top border
-        vga_place_char(x_start, y_position, top_left, border_color); // Top-left corner
-        for (uint16_t i = 0; i < time_length + 2; i++) {
-            vga_place_char(x_start + 1 + i, y_position, horizontal, border_color);
-        }
-        vga_place_char(x_start + time_length + 3, y_position, top_right, border_color); // Top-right corner
-
-        // Draw middle row with the time string
-        vga_place_char(x_start, y_position + 1, vertical, border_color); // Left border
-        for (size_t i = 0; i < time_length; i++) {
-            vga_place_char(x_start + 2 + i, y_position + 1, current_time_string[i], time_color);
-        }
-        vga_place_char(x_start + time_length + 3, y_position + 1, vertical, border_color); // Right border
-
-        // Draw bottom border
-        vga_place_char(x_start, y_position + 2, bottom_left, border_color); // Bottom-left corner
-        for (uint16_t i = 0; i < time_length + 2; i++) {
-            vga_place_char(x_start + 1 + i, y_position + 2, horizontal, border_color);
-        }
-        vga_place_char(x_start + time_length + 3, y_position + 2, bottom_right, border_color); // Bottom-right corner
-
-        // Update last_time_string and position details
-        flopstrcopy(last_time_string, current_time_string, sizeof(last_time_string));
-        last_x_start = x_start;
-        last_time_length = time_length;
-
-        // Set the flag to indicate the box is drawn
-        time_box_exists = true;
     }
+
+    // Draw top border
+    vga_place_char(x_start, y_position, top_left, border_color); // Top-left corner
+    for (uint16_t i = 0; i < time_length + 2; i++) {
+        vga_place_char(x_start + 1 + i, y_position, horizontal, border_color);
+    }
+    vga_place_char(x_start + time_length + 3, y_position, top_right, border_color); // Top-right corner
+
+    // Draw middle row with the time string
+    vga_place_char(x_start, y_position + 1, vertical, border_color); // Left border
+    for (size_t i = 0; i < time_length; i++) {
+        vga_place_char(x_start + 2 + i, y_position + 1, current_time_string[i], time_color);
+    }
+    vga_place_char(x_start + time_length + 3, y_position + 1, vertical, border_color); // Right border
+
+    // Draw bottom border
+    vga_place_char(x_start, y_position + 2, bottom_left, border_color); // Bottom-left corner
+    for (uint16_t i = 0; i < time_length + 2; i++) {
+        vga_place_char(x_start + 1 + i, y_position + 2, horizontal, border_color);
+    }
+    vga_place_char(x_start + time_length + 3, y_position + 2, bottom_right, border_color); // Bottom-right corner
+
+    // Update last_time_string and position details
+    flopstrcopy(last_time_string, current_time_string, sizeof(last_time_string));
+    last_x_start = x_start;
+    last_time_length = time_length;
+
+
+
 }
 // Sleep function
 void sleep_seconds(int seconds) {

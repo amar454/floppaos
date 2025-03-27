@@ -52,8 +52,7 @@ static void set_page(PTE *pte, PageAttributes attrs) {
 
 /**
  * @name vmm_map_page
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
+
  * @brief Maps a virtual address to a physical page.
  * 
  * @param page_directory - The page directory to map the page to.
@@ -105,14 +104,6 @@ static void set_page(PTE *pte, PageAttributes attrs) {
     });
 }
 
-/**
- * @name vmm_init
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Initializes the virtual memory manager.
- *
- * @note This function doesn't really do anything besides initializing the page directory.
- */
 void vmm_init() {
     log_step("Initializing vmm...\n ", LIGHT_GRAY);
     flop_memset(page_directory, 0, sizeof(PDE) * PAGE_DIRECTORY_SIZE);  // Initialize the page directory
@@ -125,16 +116,19 @@ void *vmm_malloc(uint32_t size) {
     
     if (size == 0) return NULL;
 
-    // Ensure alignment to PAGE_SIZE
+    // align to page size
     size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 
     uint32_t pages_needed = size / PAGE_SIZE;
     uintptr_t start_virt = 0;
     uint32_t found_pages = 0;
-
+    // Iterate through page tables to find contiguous pages
     for (uint32_t i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
+        // Check if the page table is present
         for (uint32_t j = 0; j < PAGE_TABLE_SIZE; j++) {
+            // Check if the page is present
             if (!page_tables[i][j].present) {
+                // Allocate a new page table if not present
                 if (found_pages == 0) {
                     start_virt = (i << 22) | (j << 12);
                 }
@@ -184,7 +178,7 @@ void vmm_free(void *start_virt, uint32_t size) {
         uint32_t table_idx = (virt_addr >> 12) & 0x3FF;
 
         if (page_tables[dir_idx][table_idx].present) {
-            void *phys_addr = (void *)(page_tables[dir_idx][table_idx].frame_addr << 12);
+            void *phys_addr = (void *)(uintptr_t)(page_tables[dir_idx][table_idx].frame_addr << 12);
             pmm_free_page(phys_addr);
             flop_memset(&page_tables[dir_idx][table_idx], 0, sizeof(PTE));
         }

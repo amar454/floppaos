@@ -24,6 +24,7 @@ void set_page_flags(PTE *entry, PageAttributes attributes) {
     entry->available = attributes.available;
     entry->frame_addr = attributes.frame_addr;
 }
+
 void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
     uint32_t cr0, cr4;
 

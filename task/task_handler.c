@@ -172,13 +172,25 @@ void remove_task(int task_index) {
 // Add these variables for scheduler state
 volatile int scheduler_ticks = 0;
 volatile bool scheduler_enabled = false;
+volatile bool scheduler_paused = false;
+volatile int pause_ticks_remaining = 0;
 
 void scheduler() {
     if (task_count == 0 || !scheduler_enabled) return;
 
     // Increment scheduler ticks
     scheduler_ticks++;
-    
+
+    if (scheduler_paused) {
+        if (pause_ticks_remaining > 0) {
+            pause_ticks_remaining--;
+            if (pause_ticks_remaining == 0) {
+                sched_resume();
+            }
+        }
+        return;
+    }
+
     // Only switch tasks every few ticks (time slice)
     const int ticks_per_task = 1;
     if (scheduler_ticks % ticks_per_task != 0) return;
@@ -187,6 +199,9 @@ void scheduler() {
     for (int i = 0; i < task_count; i++) {
         if (task_queue[i].sleep_ticks > 0) {
             task_queue[i].sleep_ticks--;
+            if (task_queue[i].sleep_ticks == 0) {
+                log_f("Task %s (PID: %d) woke up.\n", task_queue[i].name, task_queue[i].pid);
+            }
             continue; // Skip running sleeping tasks
         }
     }
@@ -207,28 +222,45 @@ void scheduler() {
             current->function(current->arg);
         }
     }
-}// function to start the scheduler
-void sched_start() {
-    scheduler_enabled = true;
-    log_step("Scheduler started.\n", GREEN);
 }
 
-// function to stop the scheduler
+
+
+void sched_start() { 
+    scheduler_enabled = true;
+    echo("Scheduler started.\n", GREEN);
+}
+
+
 void sched_stop() {
     scheduler_enabled = false;
-    log_step("Scheduler stopped.\n", YELLOW);
+    echo("\nScheduler stopped.\n", YELLOW);
 }
 
- void print_tasks() {
+void sched_pause(int ticks) {
+    scheduler_paused = true;
+
+    pause_ticks_remaining = ticks;
+    echo_f("Scheduler pausing for %d ticks.\n", GREEN, ticks);
+}
+
+void sched_pause_seconds(int seconds) {
+    sched_pause(seconds * 100);
+}
+
+void sched_resume() {
+    scheduler_paused = false;
+    pause_ticks_remaining = 0;
+    echo("Scheduler resumed.\n", GREEN);
+    scheduler();
+
+}void print_tasks() {
     echo("Task Queue:\n", YELLOW);
-    
-    // Print header line
-    for (int i = 0; i < 47; i++) echo("-", WHITE);
-    echo("\n", WHITE);
-    
+
+
     // Print column headers
     echo("| PID | Pr | Tks | Run    | Next Virt  | Name   \n", WHITE);
-    
+
     // Print separator line
     for (int i = 0; i < 47; i++) echo("-", WHITE);
     echo("\n", WHITE);
@@ -237,30 +269,32 @@ void sched_stop() {
     for (int i = 0; i < task_count; i++) {
         char buffer[80];
         flopsnprintf(buffer, sizeof(buffer),
-                     "| %3d | %2u | %3u | %6u | 0x%08X | %-6s \n",
-                     task_queue[i].pid,
-                     task_queue[i].priority,
-                     task_queue[i].sleep_ticks,
-                     task_queue[i].runtime,
-                     task_queue[i].next_virtual_address,
-                     task_queue[i].name);
+                        "| %3d | %2u | %3u | %6u | 0x%08X | %-6s \n",
+                        task_queue[i].pid,
+                        task_queue[i].priority,
+                        task_queue[i].sleep_ticks,
+                        task_queue[i].runtime,
+                        task_queue[i].next_virtual_address,
+                        task_queue[i].name);
         echo(buffer, WHITE);
     }
 
     // Print bottom line
     for (int i = 0; i < 47; i++) echo("-", WHITE);
     echo("\n", WHITE);
-}
+    }
 
 void task_sleep(int ticks, Task *task) {
     task->sleep_ticks = ticks;
-    log_f("Task %s (PID: %d) is now sleeping for %d ticks.\n", task->name, task->pid, ticks);
-}
+    echo_f("Task %s (PID: %d) is now sleeping for %d ticks.\n", GREEN, task->name, task->pid, ticks);}
+
+
 
 void sched_init() {
     task_count = 0;
     current_task = 0;
     scheduler_ticks = 0;
     scheduler_enabled = false;
-    log_step("Task system initialized.\n", GREEN);
+    scheduler_paused = false;
+    log_step("sched_init: Task system initialized.\n", GREEN);
 }

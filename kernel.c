@@ -48,15 +48,8 @@ kernel.c:
 #include "lib/logging.h"
 #include "multiboot/multiboot.h"
 #include "drivers/vga/framebuffer.h"
+#include <stdint.h>
 
-/**
- * @brief Software halt function.
- *
- * @note This function halts the kernel by entering an infinite while loop in C.
- *
- * @warning This function does not halt the CPU, but rather enters an infinite loop in C.
- * @warning This function will leave the system in an unusable state.
- */
 void halt() { 
     while (1) {
         continue;
@@ -68,26 +61,15 @@ void cpuhalt() {
     __asm__ volatile("hlt");
 }
 
-
-/**
- * @brief Kernel panic function.
-
- * @param address The address that caused the panic.
- * @param msg The error message.
- * @param err The error name.
- * 
- * @note This function is used to panic the kernel when an error occurs.
- * @
- */
 void panic(uint32_t address, const char* msg, const char* err) {
     // Clear the screen first
     vga_clear_screen();
 
     // Calculate dimensions for centered box
-    uint16_t width = 80;
+    uint16_t width = 40;
     uint16_t height = 8;
-    uint16_t x_start = 0;
-    uint16_t y_start = 10;
+    uint16_t x_start = (80 - width) / 2;  // Center horizontally
+    uint16_t y_start = (25 - height) / 2;  // Center vertically
 
     // Draw the main box
     draw_box(x_start, y_start, width, height, "KERNEL PANIC ERROR", RED, RED);
@@ -105,7 +87,9 @@ void panic(uint32_t address, const char* msg, const char* err) {
     vga_place_string(x_start + 2, y_start + 6, "Contact: aaamargml@gmail.com", YELLOW);
 
     halt();
+
 }
+
 void mem_dump(uint32_t address, uint32_t length) {
     uint32_t *ptr = (uint32_t *)address;
     for (uint32_t i = 0; i < length; i++) {
@@ -116,13 +100,7 @@ void mem_dump(uint32_t address, uint32_t length) {
     }
     echo("\n", WHITE);
 }
-/**
- * @name draw_floppaos_logo
- * @author Amar Djulovic
- * @date 2-23-2025
- *
- * @brief Draws the floppaOS logo in ASCII art.
- */
+
 void draw_floppaos_logo() {
     const char *ascii_art = 
     "  __ _                          ___  ____   \n"
@@ -151,24 +129,11 @@ static void check_multiboot_info(multiboot_info_t *mb_info) {
     }
 
 }
-
-
 /**
- * @name kmain
- * @author Amar Djulovic
- * @date 10-24-2024
- *
+ * @name kmain 
  * @brief Main kernel entry point
- *
  * @param magic Multiboot magic number
  * @param mb_info Multiboot information structure
- *
- * @return void
- 
- * @note This function is responsible for initializing the kernel and setting up the environment for the rest of the kernel to run.
- * @note magic and mb_info should be in eax and ebx respectively.
- *
- * @warning This function should not be called anywhere else in the kernel.
  */
 int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
@@ -180,16 +145,19 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     // Print Multiboot information
     print_multiboot_info(mb_info);
     sleep_seconds(1);
+
+    init_gdt(); // troll
+
+
     // initialize memory
-    init_gdt();
     pmm_init(mb_info);
     slab_init();
     paging_init();
     vmm_init();
-    //PANIC_OUT_OF_MEMORY((uintptr_t)mb_info);
+    
     // init interrupts
-    init_interrupts();
-    __asm__ volatile("sti");
+    init_interrupts(); 
+    __asm__ volatile("sti"); // yay we have interrupts now
 
     // init scheduler
     sched_init();
@@ -213,7 +181,6 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     echo("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
     echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n", CYAN); // license notice
     echo("Type help for a list of commands\n", CYAN); // help notice
-    
     // start scheduler
     sched_start();
     

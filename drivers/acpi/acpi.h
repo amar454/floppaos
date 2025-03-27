@@ -47,5 +47,5 @@ int init_acpi(void);
 // Powers off the system using ACPI. 
 // Requires `init_acpi()` to be called first.
 void acpi_power_off(void);
-
+void qemu_power_off();
 #endif // ACPI_H

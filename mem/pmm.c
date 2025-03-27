@@ -51,45 +51,26 @@ void* pmm_alloc_pages(uint32_t order);
 void pmm_free_pages(void* addr, uint32_t order);
 
 uint32_t page_index(uintptr_t addr);
-/**
- * @name buddy_split
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Split a page into two pages of the same order
- * 
- * @param addr 
- * @param order 
- *
- * @note the orders are the same as above.
- */
+
+// Split a page into two pages of the same order
  void buddy_split(uintptr_t addr, uint32_t order) {
     uintptr_t buddy_addr = addr + (1 << (order - 1)) * PAGE_SIZE;
-    struct Page* page = page_from_address(addr);
-    struct Page* buddy_page = page_from_address(buddy_addr);
-
+    struct Page* page = page_from_physical_address(addr);
+    struct Page* buddy_page = page_from_physical_address(buddy_addr);
+    //  Update the order and link the pages
     if (page && buddy_page) {
-        page->order = order - 1;
+        page->order = order - 1; 
         buddy_page->order = order - 1;
-        page->next = pmm_buddy.free_list[order - 1];
+        page->next = pmm_buddy.free_list[order - 1]; 
         pmm_buddy.free_list[order - 1] = page;
     }
 }
-/**
- * @name buddy_merge
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Merge two pages of the same order into one page of the next higher order
- * 
- * @param addr 
- * @param order 
- *
- * @note the orders are the same as above.
- * @note this function is called recursively until the order is 0
- */
+
+ // Merge two pages of the same order into one page of the next higher order.
 void buddy_merge(uintptr_t addr, uint32_t order) {
     uintptr_t buddy_addr = addr ^ (1 << order) * PAGE_SIZE;
-    struct Page* page = page_from_address(addr);
-    struct Page* buddy_page = page_from_address(buddy_addr);
+    struct Page* page = page_from_physical_address(addr);
+    struct Page* buddy_page = page_from_physical_address(buddy_addr);
 
     if (buddy_page && buddy_page->is_free && buddy_page->order == order) {
         // Remove buddy from free list
@@ -111,21 +92,7 @@ void buddy_merge(uintptr_t addr, uint32_t order) {
 }
 
 
-/**
- * @name pmm_init
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Initialize the physical memory manager
- *  
- * @param mb_info Multiboot information structure
- * @return void
- *
- * @note This function sets up the buddy allocator and initializes the physical memory manager.
- * @note It uses the multiboot memory map to determine the available memory.
- * @note It uses the buddy allocator to manage physical pages.
- * @note The buddy allocator is a binary tree-based allocator that efficiently allocates and deallocates memory blocks of various sizes.
- * @note It reduces memory fragmentation by merging free blocks when possible.
- */
+// get memory size from multiboot info and initialize buddy allocator
 void pmm_init(multiboot_info_t* mb_info) {
     if (!mb_info || !(mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
         log_step("pmm: Invalid Multiboot info!\n", RED);
@@ -177,38 +144,18 @@ void pmm_init(multiboot_info_t* mb_info) {
 int pmm_get_memory_size() {
     return pmm_buddy.total_pages * PAGE_SIZE;
 }
-/**
- * @name page_index
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Return the index of the page that contains the given address
- * 
- * @param addr 
- * @return uint32_t 
- */ 
+// return the index of the page that contains the given address
 uint32_t page_index(uintptr_t addr) {
     return (addr - pmm_buddy.memory_start) / PAGE_SIZE;
 }
-/* 
- * @name page_from_address
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Returns the page struct for a given address
- * 
- * @param addr 
- * @return struct Page*
- * @returns A pointer to the page struct for the given address
- *
- * @note This function returns a pointer to the page struct for the given address.
- * @note It takes the address as input and calculates the index of the page using the page_index function.
- * @note It then checks if the index is within the bounds of the page_info array.
- * @note If the index is within bounds, it returns a pointer to the page struct at the specified index.
- */
-struct Page* page_from_address(uintptr_t addr) {
+// return the page that contains the given address
+struct Page* page_from_physical_address(uintptr_t addr) {
     uint32_t index = page_index(addr);
     if (index >= pmm_buddy.total_pages) return NULL;
     return &pmm_buddy.page_info[index];
 }
+
+
 
 void log_page_info(struct Page* page) {
     log_address("pmm: Page address: ", page->address);
@@ -216,21 +163,7 @@ void log_page_info(struct Page* page) {
     log_uint("pmm: Page is_free: ", page->is_free);
     log_address("pmm: Page next: ", (uintptr_t)page->next);
 }
-/** 
- * @name pmm_alloc_pages    
- * @author Amar Djulovic <aaamargml@gmail.com>
- *
- * @brief Allocate a block of physical memory of the specified order
- * 
- * @param order 
- * @return void* 
- * @returns A pointer to the allocated block of physical memory
- *
- * @note This function allocates a block of physical memory of the specified order.
- * @note It uses the buddy allocator to manage physical pages.
- * @note The buddy allocator is a binary tree-based allocator that allocates and deallocates memory blocks of various sizes.
- * @note It reduces memory fragmentation by merging free blocks when possible.     
- */
+// allocate a block of physical memory of the specified order
 void* pmm_alloc_pages(uint32_t order) {
     if (order > MAX_ORDER) return NULL;
 
@@ -255,17 +188,12 @@ void* pmm_alloc_pages(uint32_t order) {
 }
 /**
  * @name pmm_free_pages
- * @author Amar Djulovic <aaamargml@gmail.com>
- *     
  * @brief Free a block of physical memory of the specified order
- * 
- * @param addr 
- * @param order 
  */
 void pmm_free_pages(void* addr, uint32_t order) {
     if (!addr || order > MAX_ORDER) return;
 
-    struct Page* page = page_from_address((uintptr_t)addr);
+    struct Page* page = page_from_physical_address((uintptr_t)addr);
     if (!page) return;
 
     page->is_free = 1;

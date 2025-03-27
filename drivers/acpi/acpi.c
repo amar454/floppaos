@@ -204,3 +204,20 @@ void acpi_power_off(void) {
 
     log_step("ACPI power-off failed.", RED);
 }
+
+
+void qemu_legacy_power_off() {
+    outw(0xB004, 0x2000);
+}
+
+void qemu_power_off() {
+    outw(0x604, 0x2000);
+}
+
+void vbox_power_off() {
+    outw(0x4004, 0x3400);
+}
+
+void cloud_hypervisor_power_off() {
+    outw(0x600, 0x34);
+}

@@ -10,6 +10,7 @@ CFG = grub.cfg
 ISO_PATH := iso
 BOOT_PATH := $(ISO_PATH)/boot
 GRUB_PATH := $(BOOT_PATH)/grub
+BUILD_PATH := build
 
 # Compiler flags and linker settings
 CC = gcc
@@ -51,34 +52,40 @@ C_FILES = \
     mem/alloc.c \
     mem/slab.c 
 
-OBJ_FILES = boot.o $(C_FILES:.c=.o) interrupts.o
+OBJ_FILES = $(addprefix $(BUILD_PATH)/, boot.o $(C_FILES:.c=.o) interrupts.o)
 
 # Clean build artifacts
 .PHONY: clean cleanobj
 clean:
-	$(RM) $(BIN) *.iso $(ISO_PATH)
-	$(FIND) . -name "*.o" -exec $(RM) {} \;
+	$(RM) $(BIN) $(ISO_PATH) $(BUILD_PATH)
 
 cleanobj:
-	$(FIND) . -name "*.o" -exec $(RM) {} \;
+	$(RM) $(BUILD_PATH)
 
 # Main build target
 .PHONY: all bootloader kernel interrupts linker iso
 
-all: bootloader kernel interrupts linker iso
+all: $(BUILD_PATH) bootloader kernel interrupts linker iso
 	@echo "Build completed successfully."
 
+$(BUILD_PATH):
+	$(MKDIR) $(BUILD_PATH)
+
 # Bootloader compilation
-bootloader: $(ASM_FILES)
-	$(NASM) -f elf32 boot.asm -o boot.o 
+bootloader: $(ASM_FILES) | $(BUILD_PATH)
+	$(NASM) -f elf32 boot.asm -o $(BUILD_PATH)/boot.o 
 
-# Kernel compilation (excluding interrupts.c)
-kernel: $(C_FILES)
-	$(CC) $(CFLAGS) -c $(C_FILES)
+# Kernel compilation (excluding interrupts.c) 
+kernel: $(C_FILES) | $(BUILD_PATH)
+	@for file in $(C_FILES); do \
+		mkdir -p $(BUILD_PATH)/$$(dirname $$file); \
+		$(CC) $(CFLAGS) -c $$file -o $(BUILD_PATH)/$${file%.c}.o; \
+	done
 
-# Compile interrupts.c separately with special flags
-interrupts: interrupts/interrupts.c
-	$(CC) $(INTERRUPT_FLAGS) -c interrupts/interrupts.c -o interrupts.o
+# Compile interrupts.c separately with mgeneral-regs-only flag
+interrupts: interrupts/interrupts.c | $(BUILD_PATH)
+	@mkdir -p $(BUILD_PATH)/interrupts
+	$(CC) $(INTERRUPT_FLAGS) -c interrupts/interrupts.c -o $(BUILD_PATH)/interrupts.o
 
 # Linker step
 linker: $(OBJ_FILES)
@@ -90,14 +97,14 @@ iso: $(BIN)
 	$(CP) $(BIN) $(BOOT_PATH)
 	$(CP) $(CFG) $(GRUB_PATH)
 	grub-file --is-x86-multiboot $(BOOT_PATH)/$(BIN)
-	grub-mkrescue -o floppaOS-alpha.iso $(ISO_PATH)
+	grub-mkrescue -o $(ISO_PATH)/floppaOS-alpha.iso $(ISO_PATH)
 
 .PHONY: qemu, qemu-debug, qemu-log
 
-# Run the OS in QEMU
-qemu: all
-	qemu-system-i386 -cdrom floppaOS-alpha.iso --no-shutdown
+# clean, compile, and run the OS in QEMU
+qemu: clean all
+	qemu-system-i386 -cdrom $(ISO_PATH)/floppaOS-alpha.iso --no-shutdown
 
 # Run the OS in QEMU with logging
-qemu-log: all
-	qemu-system-i386 -d int,cpu_reset,exec -cdrom floppaOS-alpha.iso
+qemu-log: clean all
+	qemu-system-i386 -d int,cpu_reset,exec -cdrom $(ISO_PATH)/floppaOS-alpha.iso

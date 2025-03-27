@@ -1,11 +1,18 @@
+// IDT and IDT pointer
 #include "interrupts.h"
 #include "../task/task_handler.h"
 #include "../drivers/io/io.h"
 #include "../drivers/vga/vgahandler.h"
-#include "../drivers/keyboard/keyboard.h"
-#include "../apps/echo.h"
 #include "../lib/logging.h"
-// IDT and IDT pointer
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include "../mem/vmm.h"
+#include "../mem/pmm.h"
+#include "../mem/paging.h"
+#include "../mem/utils.h"
+#include "../kernel.h"
+
 idt_entry_t idt[IDT_SIZE];
 idt_ptr_t idtp;
 
@@ -13,11 +20,15 @@ void init_stack() {
     uint32_t stack_top = (uint32_t)(interrupt_stack + ISR_STACK_SIZE);
     __asm__ volatile("mov %0, %%esp" :: "r"(stack_top));  // Set ESP to the top of the stack
 }
+
+// PIT ISR (IRQ0)
 void __attribute__((interrupt, no_caller_saved_registers)) pit_isr(void *frame) {
     (void)frame; // Unused
     
-    // Call the scheduler on each timer tick
-    scheduler();
+    // Call the scheduler on each timer tick if enabled
+    if (scheduler_enabled) {
+        scheduler();
+    }
     
     outb(PIC1_COMMAND, 0x20); // Send EOI to PIC
 }
@@ -26,6 +37,7 @@ void __attribute__((interrupt, no_caller_saved_registers)) pit_isr(void *frame) 
 void __attribute__((interrupt, no_caller_saved_registers)) keyboard_isr(void *frame) {
     (void)frame;  // Unused
 }
+
 // Set an IDT entry
 void set_idt_entry(int n, uint32_t base, uint16_t sel, uint8_t flags) {
     idt[n].base_low = base & 0xFFFF;
@@ -65,23 +77,22 @@ void init_pit() {
 // Initialize the IDT
 void init_idt() {
     idtp.limit = (sizeof(idt_entry_t) * IDT_SIZE) - 1;
-    idtp.base = (uint32_t)&idt;
+    idtp.base = (uint32_t)(uintptr_t)&idt;
 
     for (int i = 0; i < IDT_SIZE; i++) {
         set_idt_entry(i, 0, 0, 0);
     }
 
-    // Set up ISRs for PIT (IRQ0) and keyboard (IRQ1)
-
     log_step("Setting up IDT entries...\n", LIGHT_GRAY);
 
     // Set up ISR for PIT (IRQ0) and keyboard (IRQ1)
-    set_idt_entry(32, (uint32_t)(uintptr_t)&pit_isr, KERNEL_CODE_SEGMENT, 0x8E);    
+    set_idt_entry(32, (uint32_t)(uintptr_t)&pit_isr, KERNEL_CODE_SEGMENT, 0x8E);
     set_idt_entry(33, (uint32_t)(uintptr_t)&keyboard_isr, KERNEL_CODE_SEGMENT, 0x8E);
 
     // Load the IDT
     __asm__ volatile ("lidt (%0)" :: "r"(&idtp) : "memory");
 }
+
 // Initialize interrupts
 void init_interrupts() {
     log_step("Initializing interrupts...\n", LIGHT_GRAY);
@@ -93,7 +104,6 @@ void init_interrupts() {
     log_step("Initializing PIT...\n", LIGHT_GRAY);
     init_pit();
     log_step("Initializing IDT...\n", LIGHT_GRAY);
-    init_idt();
-    
+    init_idt(); 
     log_step("Interrupts initialized.\n", GREEN);
 }
