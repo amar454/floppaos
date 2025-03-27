@@ -186,7 +186,7 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     slab_init();
     paging_init();
     vmm_init();
-    PANIC_OUT_OF_MEMORY((uintptr_t)mb_info);
+    //PANIC_OUT_OF_MEMORY((uintptr_t)mb_info);
     // init interrupts
     init_interrupts();
     __asm__ volatile("sti");
