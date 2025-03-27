@@ -241,7 +241,7 @@ void sched_pause(int ticks) {
     scheduler_paused = true;
 
     pause_ticks_remaining = ticks;
-    echo_f("Scheduler pausing for %d ticks.\n", GREEN, ticks);
+    log_f("Scheduler paused\n", ticks);
 }
 
 void sched_pause_seconds(int seconds) {

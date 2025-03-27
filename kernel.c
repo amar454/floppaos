@@ -176,19 +176,18 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     
     // print cool stuff
     draw_floppaos_logo(); 
+    echo ("Welcome to floppaOS!\n", WHITE);
+    echo ("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
 
-    // copyright notice
-    echo("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
-    echo("This program is licensed under the GNU General Public License 3.0\nType license for more information\n", CYAN); // license notice
-    echo("Type help for a list of commands\n", CYAN); // help notice
     // start scheduler
     sched_start();
     
     // oh no the os has stopped scheduling
 
-    while (1) {
-        halt();
-    }
+
+    do {
+        halt(); // we're done here, halt the cpu
+    } while (1);
 }
 
 // bullshit placeholder bc C requires a main method but doesn't take the correct types of the magic number and info pointer in eax and ebx
