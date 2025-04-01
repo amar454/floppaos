@@ -35,15 +35,15 @@ extern struct BuddyAllocator pmm_buddy;
 
 // Function prototypes
 void pmm_init(multiboot_info_t* mb_info);
-void* pmm_alloc_pages(uint32_t order);
+void* pmm_alloc_pages(uint32_t order, uint32_t count);
 void* pmm_alloc_page(void);
-void pmm_free_pages(void* addr, uint32_t order);
+void pmm_free_pages(void* addr, uint32_t order, uint32_t count) ;
 void pmm_free_page(void* addr);
 void buddy_init(uintptr_t start, uint32_t total_pages);
 void buddy_split(uintptr_t addr, uint32_t order);
 void buddy_merge(uintptr_t addr, uint32_t order);
-
-struct Page* page_from_physical_address(uintptr_t addr);
+int pmm_get_memory_size();
+struct Page* phys_to_page_index(uintptr_t addr);
 uint32_t page_index(uintptr_t addr);
 
 #endif // PMM_H

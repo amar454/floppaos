@@ -378,6 +378,7 @@ void vga_init();
 void console_render();
 void console_print(const char *str, unsigned short color);
 void console_clear_screen();
+void vga_set_foreground_color(int x ,int y, uint8_t color);
 void vga_plot_pixel(int x, int y, unsigned short color);
 void vga_draw_string(int x, int y, const char *str, uint32_t color);
 void draw_box(uint16_t x_start, uint16_t y_start, uint16_t width, uint16_t height, 

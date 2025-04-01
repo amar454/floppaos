@@ -86,7 +86,7 @@ static void set_page(PTE *pte, PageAttributes attrs) {
     }
 
     // Map the physical page in the page table
-    PTE *page_table = (PTE *)(page_directory[dir_idx].table_addr << 12);
+    PTE *page_table = (PTE *)((uintptr_t)page_directory[dir_idx].table_addr << 12);
 
     if (page_table[table_idx].present) {
         // Avoid double mapping
@@ -102,6 +102,38 @@ static void set_page(PTE *pte, PageAttributes attrs) {
         .user = attrs.user,
         .frame_addr = phys_addr >> 12
     });
+}
+
+void vmm_unmap_page(PDE *page_directory, uintptr_t virt_addr) {
+    if (!page_directory) {
+        log_step("Invalid page directory!\n", RED);
+        return;
+    }
+
+    uint32_t dir_idx = virt_addr >> 22;
+    uint32_t table_idx = (virt_addr >> 12) & 0x3FF;
+
+    if (!page_directory[dir_idx].present) {
+        // Allocate a new page table if not present
+        PTE *new_table = (PTE *)pmm_alloc_page();
+        if (!new_table) {
+            log_step("Failed to allocate page table!\n", RED);
+            return;
+        }
+        flop_memset(new_table, 0, PAGE_SIZE); // Clear the new table
+
+        // Set the new page table in the page directory
+        page_directory[dir_idx].present = 1;
+        page_directory[dir_idx].rw = 1;
+        page_directory[dir_idx].user = 1;
+        page_directory[dir_idx].table_addr = (uintptr_t)new_table >> 12;
+    }
+
+    // Unmap the physical page in the page table
+    PTE *page_table = (PTE *)((uintptr_t)(page_directory[dir_idx].table_addr << 12));
+    if (page_table[table_idx].present) {
+        page_table[table_idx].present = 0;
+    }
 }
 
 void vmm_init() {
@@ -187,12 +219,8 @@ void vmm_free(void *start_virt, uint32_t size) {
     log_step("Virtual memory freed.\n", GREEN);
 }
 
-/**
- * @name vmm_get_physical_address
- *
- * @brief Resolves physical address for a given virtual address.
- */
- uintptr_t vmm_get_physical_address(PDE *page_directory, uintptr_t virt_addr) {
+// Get physical address of a virtual address
+ uintptr_t vmm_virt_to_phys(PDE *page_directory, uintptr_t virt_addr) {
     uint32_t dir_idx = virt_addr >> 22;
     uint32_t table_idx = (virt_addr >> 12) & 0x3FF;
 
@@ -208,40 +236,42 @@ void vmm_free(void *start_virt, uint32_t size) {
     return (page_table[table_idx].frame_addr << 12) | (virt_addr & 0xFFF);
 }
 
-void* vmm_map_kernel_region(uintptr_t virt_addr, uintptr_t phys_addr, uint32_t size) {
-    uint32_t pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-    uint32_t found_pages = 0;
-    uintptr_t start_virt = 0;
-
-    for (uint32_t i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        for (uint32_t j = 0; j < PAGE_TABLE_SIZE; j++) {
-            if (!page_tables[i][j].present) {
-                if (found_pages == 0) {
-                    start_virt = (i << 22) | (j << 12);
-                }
-
-                found_pages++;
-
-                if (found_pages == pages_needed) {
-                    // Map the kernel region
-                    for (uint32_t k = 0; k < pages_needed; k++) {
-                        uintptr_t virt_addr = start_virt + (k * PAGE_SIZE);
-                        void *phys_addr = (void *)(phys_addr + (k * PAGE_SIZE));
-                        vmm_map_page(page_directory, virt_addr, (uintptr_t)phys_addr, (PageAttributes){
-                            .present = 1,
-                            .rw = 1,
-                            .user = 1
-                        });
-                    }
-
-                    log_step("vmm: Mapped kernel region successfully.\n", GREEN);
-                    return (void *)start_virt;
-                }
-            } else {
-                found_pages = 0;
-            }
-        }
+// map a region of memory in page directory for a struct of size struct_size
+void* vmm_map_struct_region(PDE *page_directory, size_t struct_size) {
+    if (!page_directory || struct_size == 0) {
+        log_step("Invalid parameters for struct region mapping!\n", RED);
+        return NULL;
     }
-    return NULL;
+
+    // Calculate number of pages needed for the struct
+    uint32_t pages_needed = (struct_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    
+    // Allocate virtual memory for the struct
+    void *struct_region = vmm_malloc(pages_needed * PAGE_SIZE);
+    if (!struct_region) {
+        log_step("Failed to allocate struct region!\n", RED);
+        return NULL;
+    }
+
+    // Initialize the memory region to zero
+    flop_memset(struct_region, 0, pages_needed * PAGE_SIZE);
+    
+    log_step("Struct region mapped successfully.\n", GREEN);
+    return struct_region;
+}
+
+void vmm_unmap_struct_region(PDE *page_directory, void *struct_region, size_t struct_size) {
+    if (!page_directory || !struct_region) {
+        log_step("Invalid parameters for struct region unmapping!\n", RED);
+        return;
+    }
+
+    // Calculate number of pages needed for the struct
+    uint32_t pages_needed = (struct_size + PAGE_SIZE - 1) / PAGE_SIZE;
+    
+    // Free the virtual memory for the struct
+    vmm_free(struct_region, pages_needed * PAGE_SIZE);
+
+    log_step("Struct region unmapped successfully.\n", GREEN);
 }
 

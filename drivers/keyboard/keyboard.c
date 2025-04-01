@@ -170,13 +170,28 @@ void keyboard_task(void *arg) {
         vga_index--;                          // Move cursor back
         put_char(' ', BLACK);        // Clear character
         vga_index--; 
+        uint16_t x = vga_index % VGA_WIDTH;
+        uint16_t y = vga_index / VGA_WIDTH;
+        vga_set_foreground_color(WHITE, vga_index / VGA_WIDTH, WHITE);
+        vga_set_cursor_position(x, y);
+        
     } else if (c == '\n') {                   // Enter key
         command[pos] = '\0';                  // Null-terminate command
         echo("\n", WHITE);
         command_ready = 1;    // Signal that command is ready to be parsed (hook for fshell in ../../fshell/command.h)
         pos = 0;              // Reset buffer position
+        vga_set_foreground_color(WHITE, vga_index / VGA_WIDTH, WHITE);
+        vga_set_cursor_position(0, (vga_index / VGA_WIDTH));
+     
     } else if (c >= 32 && c <= 126 && pos < MAX_COMMAND_LENGTH - 1) { 
         command[pos++] = c;
         put_char(c, WHITE);
+        uint16_t x = vga_index % VGA_WIDTH;
+        uint16_t y = vga_index / VGA_WIDTH;
+        vga_set_foreground_color(WHITE, vga_index / VGA_WIDTH, WHITE);
+        vga_set_cursor_position(x, y);
+
+
     }
+
 }

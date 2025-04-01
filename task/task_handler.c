@@ -88,7 +88,7 @@ void remove_current_task() {
     // Free the task's virtual memory
     if (task->page_directory) {
         for (uintptr_t addr = MIN_VIRTUAL_ADDRESS; addr < task->next_virtual_address; addr += PAGE_SIZE) {
-            uintptr_t phys_addr = vmm_get_physical_address(task->page_directory, addr);
+            uintptr_t phys_addr = vmm_virt_to_phys(task->page_directory, addr);
             if (phys_addr) {
                 pmm_free_page((void *)phys_addr);
             }
@@ -153,7 +153,7 @@ void remove_task(int task_index) {
     // Free the task's virtual memory
     if (task->page_directory) {
         for (uintptr_t addr = MIN_VIRTUAL_ADDRESS; addr < task->next_virtual_address; addr += PAGE_SIZE) {
-            uintptr_t phys_addr = vmm_get_physical_address(task->page_directory, addr);
+            uintptr_t phys_addr = vmm_virt_to_phys(task->page_directory, addr);
             if (phys_addr) {
                 pmm_free_page((void *)phys_addr);
             }

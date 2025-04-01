@@ -38,12 +38,22 @@ void set_gdt_entry(int num, uint32_t base, uint32_t limit, uint8_t access, uint8
     gdt[num].granularity = (uint8_t)(((limit >> 16) & 0x0F) | (granularity & 0xF0));
     gdt[num].access = access;
 }
+void create_user_code_segment(uint32_t base, uint32_t limit, uint8_t access, uint8_t granularity) {
+    set_gdt_entry(1, base, limit, access, granularity);
+}
+void create_user_data_segment(uint32_t base, uint32_t limit, uint8_t access, uint8_t granularity) {
+    set_gdt_entry(2, base, limit, access, granularity);
+}
 
-void init_gdt() {
-    gdt_ptr.limit = (sizeof(GDTEntry) * GDT_ENTRIES) - 1;
-    gdt_ptr.base = (uintptr_t)&gdt; // Explicit cast
+void switch_to_user_mode() {
+    gdt_flush((uint32_t)(uintptr_t)&gdt_ptr);
+    set_gdt_entry(0, 0, 0, 0, 0);               // Null Descriptor
+    set_gdt_entry(1, 0, 0xFFFFF, 0x9A, 0xCF);   // Code Segment
+    set_gdt_entry(2, 0, 0xFFFFF, 0x92, 0xCF);   // Data Segment
+    gdt_flush((uint32_t)(uintptr_t)&gdt_ptr);
+}
 
-    log_step("Initializing gdt... \n", LIGHT_GRAY);
+void switch_to_kernel_mode() {
     log_step("Setting null descriptor entry...\n", LIGHT_GRAY);
     set_gdt_entry(0, 0, 0, 0, 0);               // Null Descriptor
     
@@ -54,6 +64,14 @@ void init_gdt() {
 
     log_step("Flushing gdt...\n", LIGHT_GRAY);
     gdt_flush((uint32_t)(uintptr_t)&gdt_ptr); 
+}
+void init_gdt() {
+    gdt_ptr.limit = (sizeof(GDTEntry) * GDT_ENTRIES) - 1;
+    gdt_ptr.base = (uintptr_t)&gdt; // Explicit cast
+
+    log_step("Initializing gdt... \n", LIGHT_GRAY);
+    
+    switch_to_kernel_mode() ;
 
     log_step("Gdt initialized. \n ", GREEN);
 }

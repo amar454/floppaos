@@ -64,11 +64,11 @@ static slab_cache_t *create_slab_cache(size_t size) {
     if (size == 0) return NULL;
     
     size_t order = get_order(size);
-    slab_cache_t *cache = (slab_cache_t *)pmm_alloc_pages(0);
+    slab_cache_t *cache = (slab_cache_t *)pmm_alloc_pages(0 , 1);
     if (!cache) return NULL;
 
     if (!initialize_slab_cache(cache, size, order)) {
-        pmm_free_pages(cache, 0);
+        pmm_free_pages(cache, 0, 1);
         return NULL;
     }
 
@@ -81,11 +81,11 @@ static slab_cache_t *create_slab_cache(size_t size) {
 static slab_t *create_slab(slab_cache_t *cache, size_t order) {
     if (!cache) return NULL;
 
-    slab_t *slab = (slab_t *)pmm_alloc_pages(order);
+    slab_t *slab = (slab_t *)pmm_alloc_pages(order ,  1);;
     if (!slab) return NULL;
 
     if (!initialize_slab(slab, cache, order)) {
-        pmm_free_pages(slab, order);
+        pmm_free_pages(slab, order , 1);
         PANIC_FAILED_TO_CREATE_SLAB(*((uint32_t *)slab));
         return NULL;
     }
@@ -166,7 +166,7 @@ static void add_to_free_list(slab_cache_t *cache, void *ptr) {
 
 // Memory management helper functions
 static void destroy_slab(slab_t *slab, size_t order) {
-    pmm_free_pages(slab, order);
+    pmm_free_pages(slab, order, 1);
 }
 
 static bool is_slab_empty(slab_t *slab) {

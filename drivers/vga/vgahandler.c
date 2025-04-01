@@ -172,6 +172,23 @@ void vga_set_cursor_position(uint16_t x, uint16_t y) {
         outb(VGA_CRTC_DATA, position & 0xFF);
     }
 }
+#define VGA_CURSOR_COLOR_REGISTER 0x3D5
+void vga_set_foreground_color(int x ,int y, uint8_t color) {
+    if (x < VGA_WIDTH && y < VGA_HEIGHT) {
+        uint16_t position = y * VGA_WIDTH + x;  // calc linear cursor pos.
+
+        // Set high byte 
+        outb(VGA_CRTC_INDEX, VGA_CURSOR_HIGH_REGISTER);
+        outb(VGA_CRTC_DATA, (position >> 8) & 0xFF);
+
+        // Set low byte
+        outb(VGA_CRTC_INDEX, VGA_CURSOR_LOW_REGISTER);
+        outb(VGA_CRTC_DATA, position & 0xFF);
+
+        // Set color
+        outb(VGA_CURSOR_COLOR_REGISTER, color);
+    }
+}
 void vga_save_terminal_state() {
     // Save current terminal state
     terminal_buffer_saved = terminal_buffer;

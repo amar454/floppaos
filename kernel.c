@@ -91,8 +91,7 @@ void panic(uint32_t address, const char* msg, const char* err) {
 }
 
 void mem_dump(uint32_t address, uint32_t length) {
-    uint32_t *ptr = (uint32_t *)address;
-    for (uint32_t i = 0; i < length; i++) {
+    uint32_t *ptr = (uint32_t *)(uintptr_t)address;    for (uint32_t i = 0; i < length; i++) {
         if (i % 16 == 0) {
             echo("\n", WHITE);
         }
@@ -152,9 +151,12 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     // initialize memory
     pmm_init(mb_info);
     slab_init();
+    
     paging_init();
     vmm_init();
-    
+    init_kernel_heap();
+
+
     // init interrupts
     init_interrupts(); 
     __asm__ volatile("sti"); // yay we have interrupts now
