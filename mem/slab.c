@@ -51,9 +51,14 @@ static void initialize_slab_free_list(slab_t *slab, slab_cache_t *cache) {
 }
 
 static bool initialize_slab_cache(slab_cache_t *cache, size_t size, size_t order) {
+    
     cache->object_size = size;
-    cache->num_objects = ((SLAB_PAGE_SIZE * (1 << order)) / size);
-    if (cache->num_objects == 0) return false;
+    // multiply the minimum slab page size by 2^order and divide it by the requested obj size
+    cache->num_objects = ((SLAB_PAGE_SIZE * (1 << order)) / size);     if (cache->num_objects == 0) {
+        log_error("slab: initialize_slab_cache(): failed to intialize slab cache.")
+        
+        return false;
+    }
 
     cache->free_count = 0;
     cache->free_list = NULL;
@@ -95,6 +100,31 @@ static slab_t *create_slab(slab_cache_t *cache, size_t order) {
 
     return slab;
 }
+void *slab_map_to_virt(PDE *page_directory, slab_t *slab, uintptr_t virt_addr) {
+    if (!page_directory || !slab) return NULL;
+
+    uintptr_t phys_addr = (uintptr_t)slab;  // Slab is allocated in physical memory
+    size_t size = slab->order * PAGE_SIZE;  // Calculate slab size
+
+    for (size_t offset = 0; offset < size; offset += PAGE_SIZE) {
+        vmm_map_page(page_directory, virt_addr + offset, phys_addr + offset, (PageAttributes){
+            .present = 1,
+            .rw = 1,
+            .user = 0 // Kernel-only access
+        });
+    }
+
+    return (void *)virt_addr;  // Return the virtual address where the slab is mapped
+}
+
+
+
+void get_slab_page_info(slab_t *slab, uintptr_t *phys_addr, size_t *size) {
+    if (!slab || !phys_addr || !size) return;
+
+    *phys_addr = (uintptr_t)slab;  // The slab itself is allocated from PMM, so its address is physical
+    *size = slab->order * PAGE_SIZE;
+}
 
 
 // Memory allocation functions
@@ -105,6 +135,7 @@ static void* allocate_from_free_list(slab_cache_t *cache) {
         cache->free_count--;
         return ptr;
     }
+    log_error
     return NULL;
 }
 
@@ -334,4 +365,5 @@ void slab_debug(void) {
         print_slab_cache_info(slab_caches[i]);
     }
 }
+
 

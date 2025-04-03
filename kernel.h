@@ -50,5 +50,6 @@ void panic(uint32_t address, const char* msg, const char* err);
 #define PANIC_FAILED_SLAB_FREE(addr) PANIC(addr,"Failed to free slab", "INVALID_SLAB_FREE")
 #define PANIC_FAILED_TO_CREATE_SLAB(addr) PANIC(addr,"Failed to create slab", "FAILED_TO_CREATE_SLAB")
 #define PANIC_PMM_NOT_INITIALIZED(addr) PANIC(addr,"PMM not initialized", "PMM_NOT_INITIALIZED")
+#define PANIC_HEAP_CORRUPTION(addr) PANIC(addr, "Heap corrupted", "PMM_HEAP_CORRUPTION")
 #define PANIC_FAILED_TO_FIND_CACHE_CONTAINING_SLAB(addr) PANIC(addr,"Failed to find cache containing slab", "FAILED_TO_FIND_CACHE_CONTAINING_SLAB")
 #endif // KERNEL_H
