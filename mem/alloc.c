@@ -223,61 +223,34 @@ void *krealloc(void *ptr, size_t old_size, size_t new_size) {
     return new_ptr;
 }
 
+#define NUM_ALLOCS 8
+
 void test_alloc() {
-    void *ptr1 = kmalloc(32);
-    void *ptr2 = kmalloc(1564);
-    void *ptr3 = kmalloc(568);
-    void *ptr4 = kmalloc(2578);
-    void *ptr5 = kmalloc(4095);
-    void *ptr6 = kmalloc(8700);
-    void *ptr7 = kmalloc(11464);
-    void *ptr8 = kmalloc(16324);
-    
-    if (ptr1) {
-        log_step("kmalloc test passed for size 32\n", GREEN);
-    }
-    if (ptr2) {
-        log_step("kmalloc test passed for size 1564\n", GREEN);
-    }
-    if (ptr3) {
-        log_step("kmalloc test passed for size 568\n", GREEN);
-    }
-    if (ptr4) {
-        log_step("kmalloc test passed for size 2578\n", GREEN);
-    }
-    if (ptr5) {
-        log_step("kmalloc test passed for size 4095\n", GREEN);
-    }
-    if (ptr6) {
-        log_step("kmalloc test passed for size 8700\n", GREEN);
+    static const int ALLOC_SIZES[NUM_ALLOCS] = {32, 1564, 568, 2578, 4095, 8700, 11464, 16384};
+    void *ptrs[NUM_ALLOCS];
+
+    // Allocate memory and log success
+    for (size_t i = 0; i < NUM_ALLOCS; i++) {
+        ptrs[i] = kmalloc(ALLOC_SIZES[i]);
+        if (ptrs[i]) {
+            char buffer[64];
+            flopsnprintf(buffer, sizeof(buffer), "kmalloc test passed for size %d\n", ALLOC_SIZES[i]);
+            log_step(buffer, GREEN);
+        }
     }
 
-    if (ptr7) {
-        log_step("kmalloc test passed for size 11464\n", GREEN);
-    }
-    if (ptr8) {
-        log_step("kmalloc test passed for size 16384\n", GREEN);
+    // Free memory using the exact allocated sizes
+    for (size_t i = 0; i < NUM_ALLOCS; i++) {
+        kfree(ptrs[i], ALLOC_SIZES[i]);
     }
 
-
-    kfree(ptr1, 32);
-
-    kfree(ptr2, 1564);
-    kfree(ptr3, 512);
-    kfree(ptr4, 2048);
-    kfree(ptr5, 4096);
-    kfree(ptr6, 8192);
-    kfree(ptr7, 11464);
-
-
-
-    void *ptr9 = kmalloc(123454);
-    
+    // Additional allocation test
+    static const int EXTRA_ALLOC_SIZE = 123454;
+    void *ptr9 = kmalloc(EXTRA_ALLOC_SIZE);
     if (ptr9) {
         log_step("kmalloc test passed for size 123454\n", GREEN);
+        kfree(ptr9, EXTRA_ALLOC_SIZE);
     }
-    kfree(ptr9, 123454);
-
 
     log_step("kfree test passed\n", GREEN);
 }
