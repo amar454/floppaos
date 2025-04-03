@@ -223,34 +223,43 @@ void *krealloc(void *ptr, size_t old_size, size_t new_size) {
     return new_ptr;
 }
 
-#define NUM_ALLOCS 8
 
+#define NUM_ALLOCS 8
+#define BUFFER_SIZE 64
 void test_alloc() {
     static const int ALLOC_SIZES[NUM_ALLOCS] = {32, 1564, 568, 2578, 4095, 8700, 11464, 16384};
     void *ptrs[NUM_ALLOCS];
 
-    // Allocate memory and log success
+    char *buffer = (char *)kmalloc(BUFFER_SIZE);
+    if (!buffer) {
+        log_step("Failed to allocate buffer for logging\n", RED);
+        return;
+    }
+
     for (size_t i = 0; i < NUM_ALLOCS; i++) {
         ptrs[i] = kmalloc(ALLOC_SIZES[i]);
         if (ptrs[i]) {
-            char buffer[64];
-            flopsnprintf(buffer, sizeof(buffer), "kmalloc test passed for size %d\n", ALLOC_SIZES[i]);
+            flopsnprintf(buffer, BUFFER_SIZE, "kmalloc test passed for size %d\n", ALLOC_SIZES[i]);
             log_step(buffer, GREEN);
         }
     }
 
-    // Free memory using the exact allocated sizes
+
     for (size_t i = 0; i < NUM_ALLOCS; i++) {
         kfree(ptrs[i], ALLOC_SIZES[i]);
     }
 
-    // Additional allocation test
+    // big allocation
     static const int EXTRA_ALLOC_SIZE = 123454;
     void *ptr9 = kmalloc(EXTRA_ALLOC_SIZE);
     if (ptr9) {
-        log_step("kmalloc test passed for size 123454\n", GREEN);
+        flopsnprintf(buffer, BUFFER_SIZE, "kmalloc test passed for size %d\n", EXTRA_ALLOC_SIZE);
+        log_step(buffer, GREEN);
         kfree(ptr9, EXTRA_ALLOC_SIZE);
     }
 
     log_step("kfree test passed\n", GREEN);
+
+    // Free print buffer after use
+    kfree(buffer, BUFFER_SIZE);
 }
