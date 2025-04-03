@@ -145,24 +145,26 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     print_multiboot_info(mb_info);
     sleep_seconds(1);
 
-    init_gdt(); // troll
+    init_gdt(); // well well well
 
 
     // initialize memory
-    pmm_init(mb_info);
-    slab_init();
-    
-    paging_init();
-    vmm_init();
-    init_kernel_heap();
+    pmm_init(mb_info); // now we can alloc pages
+    slab_init(); // now we can use slabs to allocate smaller sizes
+    paging_init(); // yay now paging works (has to be enabled)
+    vmm_init(); // we can now make virtual address spaces and reserve regions
+    init_kernel_heap(); // now we can use pmm and slab for allocating in the kernel
+
 
 
     // init interrupts
+    // pic, pit, isr, and idt routines initialized here.
     init_interrupts(); 
+    
     __asm__ volatile("sti"); // yay we have interrupts now
 
     // init scheduler
-    sched_init();
+    sched_init(); 
 
     // init file system
     struct TmpFileSystem tmp_fs;
@@ -188,8 +190,11 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
 
 
     do {
-        halt(); // we're done here, halt the cpu
+        halt(); // we're done here, halt the cpu.
+        
+        // see you in the next life 
     } while (1);
+    
 }
 
 // bullshit placeholder bc C requires a main method but doesn't take the correct types of the magic number and info pointer in eax and ebx
