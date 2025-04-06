@@ -12,12 +12,13 @@ BOOT_PATH := $(ISO_PATH)/boot
 GRUB_PATH := $(BOOT_PATH)/grub
 BUILD_PATH := build
 
-# Compiler flags and linker settings
+# Compiler flags and linker settings 
+
 CC = gcc
 LD = ld
 NASM = nasm
 CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 -Wall -Wextra 
-INTERRUPT_FLAGS = -m32 -ffreestanding -fno-stack-protector -std=c23 -Wall -Wextra -mgeneral-regs-only 
+INTERRUPT_FLAGS = -m32 -ffreestanding -fno-stack-protector -std=c2x -Wall -Wextra -mgeneral-regs-only 
 LD_FLAGS = -m elf_i386 -T linker.ld
 
 # Source files and directories
