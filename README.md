@@ -51,9 +51,9 @@ To compile and immediately launch the OS in **QEMU**, use:
 ```bash
 make qemu
 ```  
-Since **QEMU** is the targeted emulator, this is the best option for testing.  
+**QEMU** is the only vm floppaos is compatible with, due to issues with multiboot mmap on anything else... sorry
 
-### **3. Clean Up**  
+**3. Clean Up**  
 To remove compiled binaries:  
 ```bash
 make clean
