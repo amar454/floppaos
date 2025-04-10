@@ -1,6 +1,6 @@
 /* 
 
-Copyright 2024-25 Amar Djulovic <aaamargml@gmail.com>
+Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
 
 This file is part of FloppaOS.
 
@@ -275,3 +275,75 @@ void vmm_unmap_struct_region(PDE *page_directory, void *struct_region, size_t st
     log_step("Struct region unmapped successfully.\n", GREEN);
 }
 
+void *vmm_reserve_region(PDE *page_directory, size_t size) {
+    if (!page_directory || size == 0) {
+        log_step("Invalid parameters for reserving region!\n", RED);
+        return NULL;
+    }
+
+    // Align size to page size
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    uint32_t pages_needed = size / PAGE_SIZE;
+    
+    uintptr_t start_virt = 0;
+    uint32_t found_pages = 0;
+
+    // Iterate through page tables to find contiguous pages
+    for (uint32_t i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
+        for (uint32_t j = 0; j < PAGE_TABLE_SIZE; j++) {
+            if (!page_tables[i][j].present) { 
+                if (found_pages == 0) {
+                    start_virt = (i << 22) | (j << 12);
+                }
+                found_pages++;
+                
+                if (found_pages == pages_needed) {
+                    log_step("Virtual region reserved successfully.\n", GREEN);
+                    return (void *)start_virt;
+                }
+            } else {
+                found_pages = 0;
+            }
+        }
+    }
+
+    log_step("Failed to reserve virtual region.\n", RED);
+    return NULL;
+}
+
+
+void vmm_free_region(PDE *page_directory, void *virt_addr, size_t size) {
+    if (!page_directory || !virt_addr || size == 0) {
+        log_step("Invalid parameters for freeing region!\n", RED);
+        return;
+    }
+
+    // Align size to page size
+    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    uint32_t pages_to_free = size / PAGE_SIZE;
+
+    // Calculate the start of the page range to free
+    uintptr_t start_virt = (uintptr_t)virt_addr;
+    uint32_t start_index = (start_virt >> 22) & 0x3FF;  
+    uint32_t start_table = (start_virt >> 12) & 0x3FF;  
+
+    for (uint32_t i = start_index; i < PAGE_DIRECTORY_SIZE; i++) {
+        for (uint32_t j = (i == start_index ? start_table : 0); j < PAGE_TABLE_SIZE; j++) {
+            // Calculate the physical address
+            uintptr_t page_addr = (i << 22) | (j << 12);
+            if (page_tables[i][j].present) {
+                // Mark the page as free
+                page_tables[i][j].present = 0;
+                page_tables[i][j].frame_addr = 0;  
+                pmm_free_pages((void *)page_addr, 1, 1); // Free the physical page
+            }
+            
+            if (--pages_to_free == 0) {
+                log_step("Virtual region freed successfully.\n", GREEN);
+                return;
+            }
+        }
+    }
+
+    log_step("Failed to free virtual region.\n", RED);
+}

@@ -1,6 +1,6 @@
 /* 
 
-Copyright 2024-25 Amar Djulovic <aaamargml@gmail.com>
+Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
 
 This file is part of FloppaOS.
 
@@ -76,7 +76,7 @@ void panic(uint32_t address, const char* msg, const char* err) {
 
     // Format address string
     char addr_str[32];
-    flopsnprintf(addr_str, sizeof(addr_str), "Address: 0x%08x", address);
+    flopsnprintf(addr_str, sizeof(addr_str), "Address: %p", (uintptr_t)address);
     
     // Place content inside box
     vga_place_string(x_start + 2, y_start + 3, addr_str, RED);
@@ -146,22 +146,31 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     sleep_seconds(1);
 
     init_gdt(); // well well well
-
-
-    // initialize memory
-    pmm_init(mb_info); // now we can alloc pages
-    slab_init(); // now we can use slabs to allocate smaller sizes
-    paging_init(); // yay now paging works (has to be enabled)
-    vmm_init(); // we can now make virtual address spaces and reserve regions
-    init_kernel_heap(); // now we can use pmm and slab for allocating in the kernel
-
-
-
     // init interrupts
     // pic, pit, isr, and idt routines initialized here.
     init_interrupts(); 
     
     __asm__ volatile("sti"); // yay we have interrupts now
+
+    // initialize memory
+    pmm_init(mb_info); // now we can alloc pages
+
+    void* x = pmm_alloc_page();
+
+    if (!x) {
+        log_step("Page frame allocator failed", RED);
+    }
+
+    
+    
+    slab_init(); // now we can use slabs to allocate smaller sizes
+    paging_init(); // yay now paging works (has to be enabled in x86 IA32)
+    vmm_init(); // we can now make virtual address spaces and reserve regions
+    init_kernel_heap(); // now we can use pmm and slab for allocating in the kernel
+
+    test_alloc(); // test the kernel heap allocator
+
+    
 
     // init scheduler
     sched_init(); 
@@ -181,7 +190,7 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     // print cool stuff
     draw_floppaos_logo(); 
     echo ("Welcome to floppaOS!\n", WHITE);
-    echo ("floppaOS - Copyright (C) 2024-25 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
+    echo ("floppaOS - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
 
     // start scheduler
     sched_start();
@@ -191,7 +200,6 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
 
     do {
         halt(); // we're done here, halt the cpu.
-        
         // see you in the next life 
     } while (1);
     

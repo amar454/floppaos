@@ -1,4 +1,35 @@
+/* 
 
+Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
+
+This file is part of FloppaOS.
+
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+
+------------------------------------------------------------------------------
+
+slab.c
+
+    This is the slab allocator for floppaOS. 
+    It prevents memory fragmentation for small allocations.
+    It creates fixed caches of memory sizes (called objects), and in my implementation, those are powers of two.
+    
+    For example, lets say we call slab_alloc(50).
+    The allocator will first
+        1. look for an available obj of the closest size, and in this instance, the closest size to 50 is 64, so we will return a 64 byte object.
+        2. If we cannot find a cache of the appropriate size, we will create a new cache, or a new slab.
+
+    - slab_alloc() returns a ptr to an obj of the closest size of the amount requested `size`
+
+    - slab_free() will find the slab at the addr specified `ptr`, and add it to the free list.
+
+    I'll document the other stuff here later but thats all you need to know for the outward facing interface.
+
+*/
 #include "slab.h"
 #include "pmm.h"
 #include "../lib/logging.h"
@@ -7,12 +38,11 @@
 #include "utils.h"
 #include <stdbool.h>
 
+// macros for alignment.
 #define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static slab_cache_t *slab_caches[SLAB_ORDER_COUNT];
-
-
 
 // get order of given size
 static size_t get_order(size_t size) {
@@ -26,11 +56,12 @@ static size_t get_order(size_t size) {
     return order;
 }
 
-// 
+
 static bool initialize_slab(slab_t *slab, slab_cache_t *cache, size_t order) {
+    log_step("slab: initializing new slab...\n", RED);
+    log_uint("slab: requested order: ", order);
     slab->num_objects = cache->num_objects;
     slab->free_count = slab->num_objects;
-
     size_t available_space = (SLAB_PAGE_SIZE * (1 << order)) - sizeof(slab_t);
     return available_space >= cache->object_size * slab->num_objects;
 }
@@ -96,6 +127,28 @@ static slab_t *create_slab(slab_cache_t *cache, size_t order) {
     return slab;
 }
 
+static int get_slab_size(slab_cache_t *cache) {
+    return cache->object_size * cache->num_objects;
+}
+
+static int get_slab_order(slab_cache_t *cache) {
+    return get_order(get_slab_size(cache));
+}
+
+static void log_slab_info(slab_cache_t *cache) {
+    log_step("Slab cache info:\n", LIGHT_GRAY);
+    log_step("Object size: ", LIGHT_GRAY);
+    log_uint("", cache->object_size);
+    log_step("\nNumber of objects: ", LIGHT_GRAY);
+    log_uint("", cache->num_objects);
+    log_step("\nFree count: ", LIGHT_GRAY);
+    log_uint("", cache->free_count);
+    log_step("\nSlab list: ", LIGHT_GRAY);
+    log_uint("", (uintptr_t)cache->slab_list);
+    log_step("\nFree list: ", LIGHT_GRAY);
+    log_uint("", (uintptr_t)cache->free_list);
+    log_step("\n", LIGHT_GRAY);
+}
 
 // Memory allocation functions
 static void* allocate_from_free_list(slab_cache_t *cache) {
@@ -123,7 +176,6 @@ static void* create_and_allocate(slab_cache_t *cache, size_t order) {
     return allocate_from_free_list(cache);
 }
 
-// Memory deallocation functions
 static void remove_slab_from_cache(slab_cache_t *cache, slab_t *slab) {
     if (slab == cache->slab_list) {
         cache->slab_list = slab->next;
@@ -178,7 +230,7 @@ static bool is_ptr_valid(void *ptr, uintptr_t page_addr) {
     return ptr && ptr_addr >= page_addr + sizeof(slab_t);
 }
 
-static slab_t* get_containing_slab(void *ptr) {
+ slab_t* get_containing_slab(void *ptr) {
     uintptr_t ptr_addr = (uintptr_t)ptr;
     return (slab_t *)(ptr_addr & ~(SLAB_PAGE_SIZE - 1));
 }
@@ -193,12 +245,14 @@ static void initialize_slab_cache_for_order(size_t order) {
     }
 }
 
+
 void slab_init(void) {
-    log_step("Initializing slab allocator", LIGHT_GRAY);
+    log_step("Initializing slab allocator...\n", LIGHT_GRAY);
 
     for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
         initialize_slab_cache_for_order(i);
     }
+    log_step("Slab allocator initialized. \n", GREEN);
 }
 
 
@@ -275,7 +329,9 @@ static bool is_valid_alignment(size_t alignment) {
     return alignment && !(alignment & (alignment - 1));
 }
 void* slab_aligned_alloc(size_t alignment, size_t size) {
-    if (!is_valid_alignment(alignment)) return NULL;
+    if (!is_valid_alignment(alignment)) {
+        log_step("slab: invalid alignment\n", RED);
+    }
     
     size_t padded_size = size + alignment - 1;
     void *ptr = slab_alloc(padded_size);
@@ -334,4 +390,37 @@ void slab_debug(void) {
         print_slab_cache_info(slab_caches[i]);
     }
 }
+
+void map_slab_to_page_directory(PDE *page_directory, slab_t *slab) {
+    if (!page_directory || !slab) return;
+
+    size_t order;
+    slab_cache_t *cache = find_containing_cache(slab, &order);
+    if (!cache) return;
+
+    size_t pages_needed = (get_slab_size(cache) + PAGE_SIZE - 1) / PAGE_SIZE;
+    
+    for (size_t i = 0; i < pages_needed; i++) {
+        vmm_map_page(page_directory, (uintptr_t)slab + (i * PAGE_SIZE), (uintptr_t)pmm_alloc_page(), (PageAttributes){
+            .present = 1,
+            .rw = 1,
+            .user = 1
+        });
+    }
+}
+void unmap_slab_from_page_directory(PDE *page_directory, slab_t *slab) {
+    if (!page_directory || !slab) return;
+
+    size_t order;
+    slab_cache_t *cache = find_containing_cache(slab, &order);
+    if (!cache) return;
+    
+    order = get_order(get_slab_size(cache));
+    size_t pages_needed = (get_slab_size(slab) + PAGE_SIZE - 1) / PAGE_SIZE;
+    
+    for (size_t i = 0; i < pages_needed; i++) {
+        vmm_unmap_page(page_directory, (uintptr_t)slab + (i * PAGE_SIZE));
+    }
+}
+
 

@@ -13,7 +13,7 @@
             |_|   |_|                             
 ```  
 
-### **Copyright © Amar Djulovic 2024-25**  
+### **Copyright © Amar Djulovic 2024, 2025**  
 
 **floppaOS** is a free and open-source 32-bit operating system written in C, built entirely from scratch—except for the GNU GRUB bootloader.  
 

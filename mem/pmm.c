@@ -1,6 +1,6 @@
 /* 
 
-Copyright 2024-25 Amar Djulovic <aaamargml@gmail.com>
+Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
 
 This file is part of FloppaOS.
 
@@ -20,17 +20,17 @@ pmm.c
     
     The buddy system splits memory into power-of-two sized blocks. When a block is freed, it's merged with its buddy if possible.
 
-    pmm_init(...) sets up the buddy allocator using the multiboot info.
+    - pmm_init(...) sets up the buddy allocator using the multiboot info.
 
-    pmm_alloc_pages(...) allocates a specified number of physical pages of the given order.
+    - pmm_alloc_pages(...) allocates a specified number of physical pages of the given order and count
 
-    pmm_free_pages(...) frees a specified number of physical pages of the given order.
+    - pmm_free_pages(...) frees a specified number of physical pages of the given order.
     
-    pmm_alloc_page() allocates a single physical page.
+    - pmm_alloc_page() allocates a single 4kb physical page.
     
-    pmm_free_page(...) frees a single physical page.
+    - pmm_free_page(...) frees a single 4kb physical page.
 
-    print_mem_info() prints memory usage information.
+    - print_mem_info() prints memory usage information.
 
 ------------------------------------------------------------------------------
 */
@@ -100,11 +100,20 @@ void pmm_init(multiboot_info_t* mb_info) {
     multiboot_memory_map_t* mmap = (multiboot_memory_map_t*)mmap_addr;
 
     uint64_t total_memory = 0;
+
+    log_step("pmm: Looking through memory regions...\n", YELLOW);
     while ((uintptr_t)mmap < mmap_end) {
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE) {
             total_memory += mmap->len;
+            log_step("pmm: Available memory region found\n", LIGHT_GREEN);
         }
-        mmap = (multiboot_memory_map_t*)((uintptr_t)mmap + mmap->size + sizeof(uint32_t));
+        else if (mmap->type == MULTIBOOT_MEMORY_RESERVED) {
+            log_step("pmm: Reserved memory region found\n", LIGHT_GRAY);
+        }
+        log_address("pmm: Memory region start: ", mmap->addr);
+        log_uint("pmm: Memory region length: ", mmap->len / 1024);
+
+        mmap = (multiboot_memory_map_t*)((uintptr_t)mmap + mmap->size + sizeof(mmap->size));
     }
 
     pmm_buddy.total_pages = total_memory / PAGE_SIZE;
@@ -113,6 +122,8 @@ void pmm_init(multiboot_info_t* mb_info) {
 
     pmm_buddy.page_info = (struct Page*)pmm_buddy.memory_start;
     pmm_buddy.memory_start += pmm_buddy.total_pages * sizeof(struct Page);
+
+
 
     for (uint32_t i = 0; i < pmm_buddy.total_pages; i++) {
         struct Page* page = &pmm_buddy.page_info[i];
@@ -209,10 +220,28 @@ void pmm_free_pages(void* addr, uint32_t order, uint32_t count) {
     }
 }
 
+
+// allocate a single 4kb page 
 void* pmm_alloc_page(void) {
     return pmm_alloc_pages(0, 1);
 }
 
+// free a single 4kb at *addr
 void pmm_free_page(void* addr) {
     pmm_free_pages(addr, 0, 1);
 }
+
+
+void print_mem_info() {
+    log_step("Memory Info:\n", LIGHT_GRAY);
+    log_step("Total pages: ", LIGHT_GRAY);
+    log_uint("", pmm_buddy.total_pages);
+    log_step("\nFree pages: ", LIGHT_GRAY);
+    for (int i = 0; i <= MAX_ORDER; i++) {
+        log_uint("", pmm_buddy.free_list[i]);
+        log_step(" ", LIGHT_GRAY);
+    }
+    log_step("\n", LIGHT_GRAY);
+}
+
+

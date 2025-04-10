@@ -45,6 +45,8 @@ void panic(uint32_t address, const char* msg, const char* err);
 #define PANIC_FAILED_TO_ALLOCATE_MEMORY(addr) PANIC(addr,"Failed to allocate memory at ", "FAILED_TO_ALLOCATE_MEMORY")
 #define PANIC_FAILED_TO_FREE_MEMORY(addr) PANIC(addr,"Failed to free memory", "FAILED_TO_FREE_MEMORY")
 #define PANIC_INVALID_SLAB_CACHE(addr) PANIC(addr,"Invalid slab cache", "INVALID_SLAB_CACHE")
+#define PANIC_FAILED_TO_CREATE_SLAB_CACHE(addr) PANIC(addr,"Failed to create slab cache", "FAILED_TO_CREATE_SLAB_CACHE")
+#define PANIC_FAILED_TO_INITIALIZE_SLAB_CACHE(addr) PANIC(addr,"Failed to initialize slab cache", "FAILED_TO_INITIALIZE_SLAB_CACHE")
 #define PANIC_SLAB_CACHE_NOT_FOUND(addr) PANIC(addr,"Slab cache not found", "SLAB_CACHE_NOT_FOUND")
 #define PANIC_FAILED_SLAB_ALLOCATION(addr) PANIC(addr,"Failed to allocate slab", "INVALID_SLAB_ALLOCATION")
 #define PANIC_FAILED_SLAB_FREE(addr) PANIC(addr,"Failed to free slab", "INVALID_SLAB_FREE")

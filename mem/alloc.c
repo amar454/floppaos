@@ -1,15 +1,55 @@
+/* 
+
+Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
+
+This file is part of FloppaOS.
+
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+
+------------------------------------------------------------------------------
+
+alloc.c
+
+    This is the heap allocator for FloppaOS. 
+    It uses the slab and physical page allocators to allocate specific sizes of memory and free them.
+
+    - init_kernel_heap() finds the total memory size, and allocates a kernel heap virtual region according to the memory size
+
+    - expand_kernel_heap() expands the size of the kernel heap virtual region 
+
+    - shrink_kernel_heap() shrinks the size of the kernel heap virtual region by reallocating it to a smaller size
+
+*/
+
+
+// TODO: actually implement kernel page directory destroying functions as they basically do nothing. 
+
+// TODO pt2: fix clunky bits of the allocator such as alignment, guarding, and setting the heap vmm region 
+// so uhhh basically everything but it works so I don't care for now. 
 #include "slab.h"
 #include "alloc.h"
 #include "pmm.h"
 #include "utils.h"
+#include "paging.h"
+#include "../lib/str.h"
+#include "vmm.h"
 #include "../lib/logging.h"
 #include "../kernel.h"
 #include "../drivers/vga/vgahandler.h"
 
+
 #define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
 #define PMM_RETURN_THRESHOLD (8 * PAGE_SIZE) // Return to PMM if free block is this big
 
-int kernel_heap_size = 0;
+int kernel_heap_size = 0; // yay no kernel heap yet :)
+
+///////////////////////////
+// structs for free list //
+///////////////////////////
 
 struct alloc_mem_block {
     struct alloc_mem_block *next;
@@ -21,6 +61,7 @@ struct free_list {
     size_t size;
 };
 
+// struct for easy access of kernel regions, start and end addresses, and the heap free list.
 struct kernel_region {
     struct kernel_region *next;
     uintptr_t start;
@@ -28,7 +69,7 @@ struct kernel_region {
     struct free_list *free_list;
 } kernel_regions;
 
-static struct free_list *free_blocks = NULL;
+static struct free_list *free_blocks = NULL; 
 static int heap_initialized = 0;
 static struct alloc_mem_block *first_block = NULL;
 
@@ -105,7 +146,7 @@ void return_large_free_blocks() {
             else
                 free_blocks = current->next;
 
-            pmm_free_pages((void *)current, current->size / PAGE_SIZE);
+            pmm_free_pages((void *)current, current->size / PAGE_SIZE, 1);
         } else {
             prev = current;
         }
@@ -113,6 +154,7 @@ void return_large_free_blocks() {
     }
 }
 
+// add a memory block to the memory block linked list.
 void add_memory_block(uintptr_t start, size_t size, int is_free) {
     struct alloc_mem_block *block = (struct alloc_mem_block *)start;
     block->size = size;
@@ -126,9 +168,49 @@ void add_memory_block(uintptr_t start, size_t size, int is_free) {
     }
 }
 
+// return a pointer to the memory block at a given address
+void *get_memory_block(uintptr_t addr) {
+    struct alloc_mem_block *block = (struct alloc_mem_block *)addr;
+    if (block->size & 1) {
+        return NULL; // Block is free
+    }
+    return (void *)(block + 1);
+}
+
+// return a pointer to the memory block after the block at addr
+void *get_next_memory_block(uintptr_t addr) {
+    struct alloc_mem_block *block = (struct alloc_mem_block *)addr;
+    if (block->next) {
+        return (void *)(block->next + 1);
+    }
+    return NULL;
+}
+
+// return a pointer to the memory block before the block at addr
+void *get_prev_memory_block(uintptr_t addr) {
+    struct alloc_mem_block *block = (struct alloc_mem_block *)addr;
+    if (block->next) {
+        return (void *)(block->next - 1);
+    }
+    return NULL;
+}
+
+
+void *get_memory_block_size(uintptr_t addr) {
+    struct alloc_mem_block *block = (struct alloc_mem_block *)addr;
+    if (block->size & 1) {
+        return NULL; // Block is free
+    }
+    return (void *)(block->size & ~1);
+}
+
+PDE *kernel_page_directory = NULL;
+
+// get memory size, calculate appropriate heap size, allocate virtual address space for heap, and create the first memory block
 void init_kernel_heap(void) {
     log_step("Initializing kernel heap...\n", YELLOW);
-    
+
+    // check mem size and do sanity check if pmm is initialized.
     size_t total_memory = pmm_get_memory_size();
     if (total_memory == 0) {
         log_step("init_kernel_heap: PMM not initialized or no memory available!\n", RED);
@@ -146,42 +228,19 @@ void init_kernel_heap(void) {
 
     first_block = (struct alloc_mem_block *)KERNEL_HEAP_START;
     add_memory_block(KERNEL_HEAP_START, kernel_heap_size, 1);
-    
     kernel_regions.start = (uintptr_t)KERNEL_HEAP_START;
     kernel_regions.end = (uintptr_t)(KERNEL_HEAP_START + kernel_heap_size);
     kernel_regions.next = NULL;
 
     log_step("Kernel heap initialized successfully\n", GREEN);
+
+    // now that we can alloc stuff, mark the heap as initialized.
     heap_initialized = 1;
 }
 
-void *kmalloc(size_t size) {
-    if (size == 0) return NULL;
 
-    if (size <= SLAB_MAX_SIZE) {
-        void *ptr = slab_alloc(size);
-        if (ptr) return ptr;
-    }
-
-    void *ptr = get_from_free_list(size);
-    if (ptr) {
-        struct alloc_mem_block *block = (struct alloc_mem_block *)ptr;
-        block->size &= ~1; // Mark as used
-        return (void *)(block + 1);
-    }
-
-    size_t pages = (ALIGN_UP(size + sizeof(struct alloc_mem_block), SLAB_PAGE_SIZE) / SLAB_PAGE_SIZE);
-    ptr = pmm_alloc_pages(0, pages);
-    if (!ptr) {
-        log_step("kmalloc: failed to allocate large block", size);
-        return NULL;
-    }
-
-    add_memory_block((uintptr_t)ptr, pages * SLAB_PAGE_SIZE, 0);
-    return (void *)((struct alloc_mem_block *)ptr + 1);
-}
-
-void kfree(void *ptr, size_t size) {
+// free a memory block by checking if it is in the slab, and it not, add it to the free list, coalesce and return to pmm if necessary.
+void free_memory_block(void *ptr, size_t size) {
     if (!ptr || size == 0) return;
 
     if (size <= SLAB_MAX_SIZE) {
@@ -197,6 +256,69 @@ void kfree(void *ptr, size_t size) {
     return_large_free_blocks();
 }
 
+
+// return a pointer to a memory block of requested size via slab allocator or physical pages
+// note: it is strongly discouraged to use kmalloc for any sizes above 4kb, as it can be prevented by using virtual addresses.
+void *kmalloc(size_t size) {
+    if (size == 0) return NULL;
+
+    if (!heap_initialized) {
+        log_step("kmalloc: Kernel heap not initialized!\n", RED);
+        return NULL;
+    }
+
+    void *ptr = NULL;
+
+    // allocate to slab if under 4kb
+    if (size <= SLAB_MAX_SIZE) {
+        void *ptr = slab_alloc(size);
+        if (ptr) return ptr;
+    }
+
+    // if over 4kb, try to alloc from the free list
+    ptr = get_from_free_list(size);
+    if (ptr) {
+        // if we can find one and do that, take block from free list 
+        struct alloc_mem_block *block = (struct alloc_mem_block *)ptr;
+
+        // Mark block as allocated
+        block->size &= ~1; 
+
+        // return void pointer to the block.
+        return (void *)(block + 1);
+    }
+
+    // now, if there is no suitable block in the free list, align to page size, and allocate physical pages
+    size_t pages = ALIGN_UP(size + sizeof(struct alloc_mem_block), SLAB_PAGE_SIZE) / SLAB_PAGE_SIZE;
+    ptr = pmm_alloc_pages(0, pages);
+    if (!ptr) { // check if alloc worked (should)
+        log_step("kmalloc: Failed to allocate memory for size: ", RED);
+        log_uint("", size);
+        return NULL;
+    }
+
+    // add that memory block
+    add_memory_block((uintptr_t)ptr, pages * SLAB_PAGE_SIZE, 0);
+
+    // return void pointer to the newly allocated memory block.
+    return (void *)((struct alloc_mem_block *)ptr + 1);
+}
+
+// free an allocated block at *ptr given its size as well.
+void kfree(void *ptr, size_t size) {
+    if (!ptr || size == 0) return;
+
+    
+    if (size <= SLAB_MAX_SIZE) {
+        // woohoo slab dealloc is easy, just free from slab allocator
+        slab_free(ptr);
+        return;
+    }
+    // otherwise, free mem block and add to free list.
+    free_memory_block(ptr, size);
+}
+
+// allocate a mem block of requested size and set its value to requested num.
 void *kcalloc(uint32_t num, size_t size) {
     size_t total_size = num * size;
     void *ptr = kmalloc(total_size);
@@ -206,41 +328,45 @@ void *kcalloc(uint32_t num, size_t size) {
     return ptr;
 }
 
+// reallocate a block of memory at *ptr, given its old size and the new requested size
 void *krealloc(void *ptr, size_t old_size, size_t new_size) {
     if (!ptr) return kmalloc(new_size);
     if (new_size == 0) {
+        // check for edge cases of new size being 0 (shouldn't happen, i hope)
         kfree(ptr, old_size);
         return NULL;
     }
 
+    // allocate the new memory block
     void *new_ptr = kmalloc(new_size);
     if (!new_ptr) return NULL;
 
+    // copy the data of the old memory block to the new memory block
     size_t copy_size = (old_size < new_size) ? old_size : new_size;
     flop_memcpy(new_ptr, ptr, copy_size);
 
+    // now we can free the old memory block and return the pointer to the newly allocated block.
     kfree(ptr, old_size);
     return new_ptr;
 }
 
 
+
 #define NUM_ALLOCS 8
-#define BUFFER_SIZE 64
 void test_alloc() {
+
+    // some example allocation sizes pulled out of my ass
     static const int ALLOC_SIZES[NUM_ALLOCS] = {32, 1564, 568, 2578, 4095, 8700, 11464, 16384};
     void *ptrs[NUM_ALLOCS];
 
-    char *buffer = (char *)kmalloc(BUFFER_SIZE);
-    if (!buffer) {
-        log_step("Failed to allocate buffer for logging\n", RED);
-        return;
-    }
 
+
+
+    // allocate the test blocks
     for (size_t i = 0; i < NUM_ALLOCS; i++) {
         ptrs[i] = kmalloc(ALLOC_SIZES[i]);
         if (ptrs[i]) {
-            flopsnprintf(buffer, BUFFER_SIZE, "kmalloc test passed for size %d\n", ALLOC_SIZES[i]);
-            log_step(buffer, GREEN);
+            log_uint("test_alloc: allocated memory of size :", ALLOC_SIZES[i]);
         }
     }
 
@@ -249,17 +375,252 @@ void test_alloc() {
         kfree(ptrs[i], ALLOC_SIZES[i]);
     }
 
-    // big allocation
+    // big allocation (to test out free list page allocator.)
     static const int EXTRA_ALLOC_SIZE = 123454;
     void *ptr9 = kmalloc(EXTRA_ALLOC_SIZE);
     if (ptr9) {
-        flopsnprintf(buffer, BUFFER_SIZE, "kmalloc test passed for size %d\n", EXTRA_ALLOC_SIZE);
-        log_step(buffer, GREEN);
+        log_uint("test_alloc: allocated memory of size: ", EXTRA_ALLOC_SIZE);
         kfree(ptr9, EXTRA_ALLOC_SIZE);
     }
 
-    log_step("kfree test passed\n", GREEN);
+    log_step("test_alloc: kfree test passed\n", GREEN);
 
-    // Free print buffer after use
-    kfree(buffer, BUFFER_SIZE);
+
 }
+void dump_heap() {
+    log_step("Heap Dump:\n", CYAN);
+    
+    struct free_list *current = free_blocks;
+    while (current) {
+        log_step("Free block at: ", CYAN);
+        log_address("", (uintptr_t)current);
+        log_step(" Size: ", CYAN);
+        log_uint("",current->size);
+        log_step("\n", CYAN);
+        current = current->next;
+    }
+}
+
+void check_heap_integrity() {
+    struct free_list *current = free_blocks;
+    while (current && current->next) {
+        if ((uintptr_t)current + current->size > (uintptr_t)current->next) {
+            log_step("Heap corruption detected!\n", RED);
+            PANIC_PMM_NOT_INITIALIZED((uintptr_t)current);
+        }
+        current = current->next;
+    }
+}
+
+// allocate a memory block with a two page buffer... for memory sensitive needs.
+// NOTE: PLEASE ONLY USE THIS FUNCTION WITH THE INTENTION OF FREEING IT WITH THE NEXT KFREE_GUARDED FUNCTION.
+void *kmalloc_guarded(size_t size) {
+    size_t pages = (ALIGN_UP(size, PAGE_SIZE) / PAGE_SIZE) + 2; // Add 2 guard pages
+    void *ptr = pmm_alloc_pages(0, pages);
+    if (!ptr) return NULL;
+
+    uintptr_t user_ptr = (uintptr_t)ptr + PAGE_SIZE;
+    add_memory_block(user_ptr, (pages - 2) * PAGE_SIZE, 0);
+    return (void *)user_ptr;
+}
+
+
+// free a guarded allocation of size plus two pages
+// NOTE: DO NOT BE STUPID, PLEASE FREE ALL GUARDED MEMORY BLOCKS WITH THIS FUNCTION
+void kfree_guarded(void *ptr, size_t size) {
+    if (!ptr || size == 0) return;
+
+    uintptr_t user_ptr = (uintptr_t)ptr - PAGE_SIZE;
+    size_t pages = (ALIGN_UP(size, PAGE_SIZE) / PAGE_SIZE) + 2; // Subtract 2 guard pages
+
+    pmm_free_pages((void *)user_ptr, pages, 1);
+    free_memory_block((void *)user_ptr, (pages - 2) * PAGE_SIZE);
+}
+void* krealloc_guarded(void *ptr, size_t old_size, size_t new_size) {
+    if (!ptr) return kmalloc_guarded(new_size);
+    if (new_size == 0) {
+        kfree_guarded(ptr, old_size);
+        return NULL;
+    }
+
+    void *new_ptr = kmalloc_guarded(new_size);
+    if (!new_ptr) return NULL;
+
+    size_t copy_size = (old_size < new_size) ? old_size : new_size;
+    flop_memcpy(new_ptr, (void *)((uintptr_t)ptr - PAGE_SIZE), copy_size);
+
+    kfree_guarded((void *)((uintptr_t)ptr - PAGE_SIZE), old_size);
+    return new_ptr;
+}
+void* kcalloc_guarded(size_t num, size_t size) {
+    size_t total_size = num * size;
+    void *ptr = kmalloc_guarded(total_size);
+    if (ptr) {
+        flop_memset(ptr, 0, total_size);
+    }
+    return ptr;
+}
+
+void expand_kernel_heap(size_t additional_size) {
+    if (additional_size == 0) return;
+    
+    uintptr_t new_start = kernel_regions.end;
+    uintptr_t new_end = new_start + ALIGN_UP(additional_size, PAGE_SIZE);
+
+    if (!pmm_alloc_pages((void *)new_start, (new_end - new_start) / PAGE_SIZE)) {
+        log_step("Heap expansion failed!\n", RED);
+        return;
+    }
+
+    kernel_regions.end = new_end;
+    add_memory_block(new_start, new_end - new_start, 1);
+    log_step("Kernel heap expanded.\n", GREEN);
+}
+void shrink_kernel_heap(size_t reduce_size) {
+    if (reduce_size == 0 || reduce_size > (kernel_regions.end - kernel_regions.start)) {
+        log_step("Invalid size for shrinking kernel heap!\n", RED);
+        return;
+    }
+
+    uintptr_t new_end = kernel_regions.end - ALIGN_UP(reduce_size, PAGE_SIZE);
+    
+    // Free the pages being removed
+    pmm_free_pages((void *)new_end, (kernel_regions.end - new_end) / PAGE_SIZE, 1);
+
+    kernel_regions.end = new_end;
+
+    free_memory_block(new_end, (kernel_regions.end - new_end));
+
+    log_step("Kernel heap shrunk.\n", YELLOW);
+}
+
+void *kmalloc_aligned(size_t size, size_t alignment) {
+    size_t total_size = size + alignment - 1;
+    void *ptr = kmalloc(total_size);
+    if (!ptr) return NULL;
+
+    uintptr_t aligned_addr = ALIGN_UP((uintptr_t)ptr, alignment);
+    return (void *)aligned_addr;
+}
+
+void kfree_aligned(void *ptr) {
+    if (!ptr) return;
+
+    struct alloc_mem_block *block = (struct alloc_mem_block *)ptr - 1;
+    kfree(block, block->size);
+}
+void *kcalloc_aligned(size_t num, size_t size, size_t alignment) {
+    size_t total_size = num * size;
+    void *ptr = kmalloc_aligned(total_size, alignment);
+    if (ptr) {
+        flop_memset(ptr, 0, total_size);
+    }
+    return ptr;
+}
+void *krealloc_aligned(void *ptr, size_t old_size, size_t new_size, size_t alignment) {
+    if (!ptr) return kmalloc_aligned(new_size, alignment);
+    if (new_size == 0) {
+        kfree_aligned(ptr);
+        return NULL;
+    }
+
+    void *new_ptr = kmalloc_aligned(new_size, alignment);
+    if (!new_ptr) return NULL;
+
+    size_t copy_size = (old_size < new_size) ? old_size : new_size;
+    flop_memcpy(new_ptr, ptr, copy_size);
+
+    kfree_aligned(ptr);
+    return new_ptr;
+}  
+
+void *kmalloc_aligned_guarded(size_t size, size_t alignment) {
+    size_t total_size = size + alignment - 1;
+    void *ptr = kmalloc_guarded(total_size);
+    if (!ptr) return NULL;
+
+    uintptr_t aligned_addr = ALIGN_UP((uintptr_t)ptr, alignment);
+    return (void *)aligned_addr;
+}
+void kfree_aligned_guarded(void *ptr) {
+    if (!ptr) return;
+
+    struct alloc_mem_block *block = (struct alloc_mem_block *)ptr - 1;
+    kfree(block, block->size);
+}
+void *kcalloc_aligned_guarded(size_t num, size_t size, size_t alignment) {
+    size_t total_size = num * size;
+    void *ptr = kmalloc_guarded(total_size);
+    if (ptr) {
+        flop_memset(ptr, 0, total_size);
+    }
+    return ptr;
+}
+void *krealloc_aligned_guarded(void *ptr, size_t old_size, size_t new_size, size_t alignment) {
+    if (!ptr) return kmalloc_guarded(new_size);
+    if (new_size == 0) {
+        kfree(ptr, old_size);
+        return NULL;
+    }
+
+    void *new_ptr = kmalloc_guarded(new_size);
+    if (!new_ptr) return NULL;
+
+    size_t copy_size = (old_size < new_size) ? old_size : new_size;
+    flop_memcpy(new_ptr, ptr, copy_size);
+
+    kfree(ptr, old_size);
+    return new_ptr;
+}
+// free all memory blocks by iterating through the list and freeing pages.
+void free_all_mem_blocks() {
+    struct alloc_mem_block *current = first_block;
+    while (current) {
+        struct alloc_mem_block *next = current->next;
+        pmm_free_pages(current, current->size / PAGE_SIZE, 1);
+        current = next;
+    }
+    first_block = NULL;
+    free_blocks = NULL;
+}
+
+
+// probably should not be used, but this is basically calloc for the entire heap
+void zero_all_mem_blocks() {
+    log_step("Zeroing out all heap memory blocks...\n", YELLOW);
+    struct alloc_mem_block *current = first_block;
+    while (current) {
+        flop_memset(current, 0, current->size);
+        current = current->next;
+    }
+}
+
+// helper function to check if the heap is initialized and log if it isnt.
+// using this is preferred to just checking if the heap intialized variable is 1.
+bool is_heap_initialized() {
+    if (!heap_initialized) {
+        log_step("Heap not initialized!\n", RED);
+        return false;
+    }
+    return true;
+}
+
+// zero, free, and mark the heap as uninitialized
+void destroy_kernel_heap(PDE *kernel_page_directory) {
+    log_step("alloc: Destroying kernel heap...\n", YELLOW);
+    bool heap = is_heap_initialized();
+    if (!heap) {
+        zero_all_mem_blocks();
+        free_all_mem_blocks();
+    }
+
+    heap_initialized = 0;
+    log_step("alloc: Kernel heap destroyed\/", LIGHT_RED);
+}
+
+void re_init_kernel_heap() {
+    destroy_kernel_heap(kernel_page_directory);
+    init_kernel_heap();
+}
+
+

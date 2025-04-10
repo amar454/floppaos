@@ -27,7 +27,7 @@ void vmm_init_task(Task *task) {
     if (!task) return;
 
     // Allocate a new page directory for the task
-    PDE *page_directory = (PDE *)pmm_alloc_page();
+    PDE *page_directory = create_page_directory();
     if (!page_directory) {
         log_step("Failed to allocate page directory!\n", RED);
         return;
@@ -254,7 +254,8 @@ void sched_resume() {
     echo("Scheduler resumed.\n", GREEN);
     scheduler();
 
-}void print_tasks() {
+}
+void print_tasks() {
     echo("Task Queue:\n", YELLOW);
 
 

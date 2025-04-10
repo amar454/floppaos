@@ -17,7 +17,8 @@ BUILD_PATH := build
 CC = gcc
 LD = ld
 NASM = nasm
-CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 -Wall -Wextra 
+CFLAGS = -m32 -ffreestanding -fno-stack-protector -std=c11 
+CWARNINGS = -Wno-unused-variable -Wno-unused-function -Wno-unused-label -Wno-unused-parameter -Wno-unused-value -Wno-format
 INTERRUPT_FLAGS = -m32 -ffreestanding -fno-stack-protector -std=c2x -Wall -Wextra -mgeneral-regs-only 
 LD_FLAGS = -m elf_i386 -T linker.ld
 
@@ -69,6 +70,11 @@ cleanobj:
 all: $(BUILD_PATH) bootloader kernel interrupts linker iso
 	@echo "Build completed successfully."
 
+
+all-no-warn : $(BUILD_PATH) bootloader kernel-no-warn interrupts linker iso
+	@echo "Build completed successfully."
+
+
 $(BUILD_PATH):
 	$(MKDIR) $(BUILD_PATH)
 
@@ -80,8 +86,15 @@ bootloader: $(ASM_FILES) | $(BUILD_PATH)
 kernel: $(C_FILES) | $(BUILD_PATH)
 	@for file in $(C_FILES); do \
 		mkdir -p $(BUILD_PATH)/$$(dirname $$file); \
-		$(CC) $(CFLAGS) -c $$file -o $(BUILD_PATH)/$${file%.c}.o; \
+		$(CC) $(CFLAGS)$(CWARNINGS) -c $$file -o $(BUILD_PATH)/$${file%.c}.o; \
 	done
+# Kernel warning free compilation (excluding interrupts.c) 
+kernel-no-warn: $(C_FILES) | $(BUILD_PATH)
+	@for file in $(C_FILES); do \
+		mkdir -p $(BUILD_PATH)/$$(dirname $$file); \
+		$(CC) $(CFLAGS)  -c $$file -o $(BUILD_PATH)/$${file%.c}.o; \
+	done
+
 
 # Compile interrupts.c separately with mgeneral-regs-only flag
 interrupts: interrupts/interrupts.c | $(BUILD_PATH)

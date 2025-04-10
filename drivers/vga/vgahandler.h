@@ -383,4 +383,5 @@ void vga_plot_pixel(int x, int y, unsigned short color);
 void vga_draw_string(int x, int y, const char *str, uint32_t color);
 void draw_box(uint16_t x_start, uint16_t y_start, uint16_t width, uint16_t height, 
               const char* content, uint8_t border_color, uint8_t text_color);
+
 #endif // VGAHANDLER_H
