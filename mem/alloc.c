@@ -23,6 +23,14 @@ alloc.c
 
     - shrink_kernel_heap() shrinks the size of the kernel heap virtual region by reallocating it to a smaller size
 
+    - kmalloc() allocates a block of memory of the given size
+
+    - kfree() frees a block of memory of the given pointer and size
+
+    - kcalloc() allocates a block of memory of the given size and initializes it to zero
+
+    - krealloc() reallocates a block of memory to a new size
+
 */
 
 
