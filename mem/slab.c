@@ -58,8 +58,7 @@ static size_t get_order(size_t size) {
 
 
 static bool initialize_slab(slab_t *slab, slab_cache_t *cache, size_t order) {
-    log_step("slab: initializing new slab...\n", RED);
-    log_uint("slab: requested order: ", order);
+    log_f("Initializing slab at slab=%p, cache=%p, order=%zu", slab, cache, order);
     slab->num_objects = cache->num_objects;
     slab->free_count = slab->num_objects;
     size_t available_space = (SLAB_PAGE_SIZE * (1 << order)) - sizeof(slab_t);
@@ -136,18 +135,18 @@ static int get_slab_order(slab_cache_t *cache) {
 }
 
 static void log_slab_info(slab_cache_t *cache) {
-    log_step("Slab cache info:\n", LIGHT_GRAY);
-    log_step("Object size: ", LIGHT_GRAY);
+    log("Slab cache info:\n", LIGHT_GRAY);
+    log("Object size: ", LIGHT_GRAY);
     log_uint("", cache->object_size);
-    log_step("\nNumber of objects: ", LIGHT_GRAY);
+    log("\nNumber of objects: ", LIGHT_GRAY);
     log_uint("", cache->num_objects);
-    log_step("\nFree count: ", LIGHT_GRAY);
+    log("\nFree count: ", LIGHT_GRAY);
     log_uint("", cache->free_count);
-    log_step("\nSlab list: ", LIGHT_GRAY);
+    log("\nSlab list: ", LIGHT_GRAY);
     log_uint("", (uintptr_t)cache->slab_list);
-    log_step("\nFree list: ", LIGHT_GRAY);
+    log("\nFree list: ", LIGHT_GRAY);
     log_uint("", (uintptr_t)cache->free_list);
-    log_step("\n", LIGHT_GRAY);
+    log("\n", LIGHT_GRAY);
 }
 
 // Memory allocation functions
@@ -240,19 +239,19 @@ static void initialize_slab_cache_for_order(size_t order) {
 
     slab_caches[order] = create_slab_cache(size);
     if (slab_caches[order]) {
-        log_step("Initialized slab cache for size: ", GREEN);
+        log("Initialized slab cache for size: ", GREEN);
         log_uint("", size);
     }
 }
 
 
 void slab_init(void) {
-    log_step("Initializing slab allocator...\n", LIGHT_GRAY);
+    log("Initializing slab allocator...\n", LIGHT_GRAY);
 
     for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
         initialize_slab_cache_for_order(i);
     }
-    log_step("Slab allocator initialized. \n", GREEN);
+    log("Slab allocator initialized. \n", GREEN);
 }
 
 
@@ -330,7 +329,7 @@ static bool is_valid_alignment(size_t alignment) {
 }
 void* slab_aligned_alloc(size_t alignment, size_t size) {
     if (!is_valid_alignment(alignment)) {
-        log_step("slab: invalid alignment\n", RED);
+        log("slab: invalid alignment\n", RED);
     }
     
     size_t padded_size = size + alignment - 1;
@@ -414,9 +413,9 @@ void unmap_slab_from_page_directory(PDE *page_directory, slab_t *slab) {
     size_t order;
     slab_cache_t *cache = find_containing_cache(slab, &order);
     if (!cache) return;
-    
-    order = get_order(get_slab_size(cache));
-    size_t pages_needed = (get_slab_size(slab) + PAGE_SIZE - 1) / PAGE_SIZE;
+    int slab_size = get_slab_size(cache);
+    order = get_order(slab_size);
+    size_t pages_needed = (slab_size + PAGE_SIZE - 1) / PAGE_SIZE;
     
     for (size_t i = 0; i < pages_needed; i++) {
         vmm_unmap_page(page_directory, (uintptr_t)slab + (i * PAGE_SIZE));

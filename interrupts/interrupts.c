@@ -83,7 +83,7 @@ void init_idt() {
         set_idt_entry(i, 0, 0, 0);
     }
 
-    log_step("Setting up IDT entries...\n", LIGHT_GRAY);
+    log("Setting up IDT entries...\n", LIGHT_GRAY);
 
     // Set up ISR for PIT (IRQ0) and keyboard (IRQ1)
     set_idt_entry(32, (uint32_t)(uintptr_t)&pit_isr, KERNEL_CODE_SEGMENT, 0x8E);
@@ -95,15 +95,15 @@ void init_idt() {
 
 // Initialize interrupts
 void init_interrupts() {
-    log_step("Initializing interrupts...\n", LIGHT_GRAY);
+    log("Initializing interrupts...\n", LIGHT_GRAY);
 
-    log_step("Setting up interrupt stack...\n", LIGHT_GRAY);
+    log("Setting up interrupt stack...\n", LIGHT_GRAY);
     init_stack();  // Set up the interrupt stack
-    log_step("Initializing PIC...\n", LIGHT_GRAY);
+    log("Initializing PIC...\n", LIGHT_GRAY);
     init_pic();
-    log_step("Initializing PIT...\n", LIGHT_GRAY);
+    log("Initializing PIT...\n", LIGHT_GRAY);
     init_pit();
-    log_step("Initializing IDT...\n", LIGHT_GRAY);
+    log("Initializing IDT...\n", LIGHT_GRAY);
     init_idt(); 
-    log_step("Interrupts initialized.\n", GREEN);
+    log("Interrupts initialized.\n", GREEN);
 }

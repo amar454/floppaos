@@ -216,12 +216,12 @@ PDE *kernel_page_directory = NULL;
 
 // get memory size, calculate appropriate heap size, allocate virtual address space for heap, and create the first memory block
 void init_kernel_heap(void) {
-    log_step("Initializing kernel heap...\n", YELLOW);
+    log("Initializing kernel heap...\n", YELLOW);
 
     // check mem size and do sanity check if pmm is initialized.
     size_t total_memory = pmm_get_memory_size();
     if (total_memory == 0) {
-        log_step("init_kernel_heap: PMM not initialized or no memory available!\n", RED);
+        log("init_kernel_heap: PMM not initialized or no memory available!\n", RED);
         PANIC_PMM_NOT_INITIALIZED((uintptr_t)first_block);
         return;
     }
@@ -240,7 +240,7 @@ void init_kernel_heap(void) {
     kernel_regions.end = (uintptr_t)(KERNEL_HEAP_START + kernel_heap_size);
     kernel_regions.next = NULL;
 
-    log_step("Kernel heap initialized successfully\n", GREEN);
+    log("Kernel heap initialized successfully\n", GREEN);
 
     // now that we can alloc stuff, mark the heap as initialized.
     heap_initialized = 1;
@@ -271,7 +271,7 @@ void *kmalloc(size_t size) {
     if (size == 0) return NULL;
 
     if (!heap_initialized) {
-        log_step("kmalloc: Kernel heap not initialized!\n", RED);
+        log("kmalloc: Kernel heap not initialized!\n", RED);
         return NULL;
     }
 
@@ -300,7 +300,7 @@ void *kmalloc(size_t size) {
     size_t pages = ALIGN_UP(size + sizeof(struct alloc_mem_block), SLAB_PAGE_SIZE) / SLAB_PAGE_SIZE;
     ptr = pmm_alloc_pages(0, pages);
     if (!ptr) { // check if alloc worked (should)
-        log_step("kmalloc: Failed to allocate memory for size: ", RED);
+        log("kmalloc: Failed to allocate memory for size: ", RED);
         log_uint("", size);
         return NULL;
     }
@@ -391,20 +391,20 @@ void test_alloc() {
         kfree(ptr9, EXTRA_ALLOC_SIZE);
     }
 
-    log_step("test_alloc: kfree test passed\n", GREEN);
+    log("test_alloc: kfree test passed\n", GREEN);
 
 
 }
 void dump_heap() {
-    log_step("Heap Dump:\n", CYAN);
+    log("Heap Dump:\n", CYAN);
     
     struct free_list *current = free_blocks;
     while (current) {
-        log_step("Free block at: ", CYAN);
+        log("Free block at: ", CYAN);
         log_address("", (uintptr_t)current);
-        log_step(" Size: ", CYAN);
+        log(" Size: ", CYAN);
         log_uint("",current->size);
-        log_step("\n", CYAN);
+        log("\n", CYAN);
         current = current->next;
     }
 }
@@ -413,7 +413,7 @@ void check_heap_integrity() {
     struct free_list *current = free_blocks;
     while (current && current->next) {
         if ((uintptr_t)current + current->size > (uintptr_t)current->next) {
-            log_step("Heap corruption detected!\n", RED);
+            log("Heap corruption detected!\n", RED);
             PANIC_PMM_NOT_INITIALIZED((uintptr_t)current);
         }
         current = current->next;
@@ -476,17 +476,17 @@ void expand_kernel_heap(size_t additional_size) {
     uintptr_t new_end = new_start + ALIGN_UP(additional_size, PAGE_SIZE);
 
     if (!pmm_alloc_pages((void *)new_start, (new_end - new_start) / PAGE_SIZE)) {
-        log_step("Heap expansion failed!\n", RED);
+        log("Heap expansion failed!\n", RED);
         return;
     }
 
     kernel_regions.end = new_end;
     add_memory_block(new_start, new_end - new_start, 1);
-    log_step("Kernel heap expanded.\n", GREEN);
+    log("Kernel heap expanded.\n", GREEN);
 }
 void shrink_kernel_heap(size_t reduce_size) {
     if (reduce_size == 0 || reduce_size > (kernel_regions.end - kernel_regions.start)) {
-        log_step("Invalid size for shrinking kernel heap!\n", RED);
+        log("Invalid size for shrinking kernel heap!\n", RED);
         return;
     }
 
@@ -499,7 +499,7 @@ void shrink_kernel_heap(size_t reduce_size) {
 
     free_memory_block(new_end, (kernel_regions.end - new_end));
 
-    log_step("Kernel heap shrunk.\n", YELLOW);
+    log("Kernel heap shrunk.\n", YELLOW);
 }
 
 void *kmalloc_aligned(size_t size, size_t alignment) {
@@ -595,7 +595,7 @@ void free_all_mem_blocks() {
 
 // probably should not be used, but this is basically calloc for the entire heap
 void zero_all_mem_blocks() {
-    log_step("Zeroing out all heap memory blocks...\n", YELLOW);
+    log("Zeroing out all heap memory blocks...\n", YELLOW);
     struct alloc_mem_block *current = first_block;
     while (current) {
         flop_memset(current, 0, current->size);
@@ -607,7 +607,7 @@ void zero_all_mem_blocks() {
 // using this is preferred to just checking if the heap intialized variable is 1.
 bool is_heap_initialized() {
     if (!heap_initialized) {
-        log_step("Heap not initialized!\n", RED);
+        log("Heap not initialized!\n", RED);
         return false;
     }
     return true;
@@ -615,7 +615,7 @@ bool is_heap_initialized() {
 
 // zero, free, and mark the heap as uninitialized
 void destroy_kernel_heap(PDE *kernel_page_directory) {
-    log_step("alloc: Destroying kernel heap...\n", YELLOW);
+    log("alloc: Destroying kernel heap...\n", YELLOW);
     bool heap = is_heap_initialized();
     if (!heap) {
         zero_all_mem_blocks();
@@ -623,7 +623,7 @@ void destroy_kernel_heap(PDE *kernel_page_directory) {
     }
 
     heap_initialized = 0;
-    log_step("alloc: Kernel heap destroyed\/", LIGHT_RED);
+    log("alloc: Kernel heap destroyed\n", LIGHT_RED);
 }
 
 void re_init_kernel_heap() {

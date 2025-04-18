@@ -91,7 +91,7 @@ void buddy_merge(uintptr_t addr, uint32_t order) {
 
 void pmm_init(multiboot_info_t* mb_info) {
     if (!mb_info || !(mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
-        log_step("pmm: Invalid Multiboot info!\n", RED);
+        log("pmm: Invalid Multiboot info!\n", RED);
         return;
     }
 
@@ -101,14 +101,14 @@ void pmm_init(multiboot_info_t* mb_info) {
 
     uint64_t total_memory = 0;
 
-    log_step("pmm: Looking through memory regions...\n", YELLOW);
+    log("pmm: Looking through memory regions...\n", YELLOW);
     while ((uintptr_t)mmap < mmap_end) {
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE) {
             total_memory += mmap->len;
-            log_step("pmm: Available memory region found\n", LIGHT_GREEN);
+            log("pmm: Available memory region found\n", LIGHT_GREEN);
         }
         else if (mmap->type == MULTIBOOT_MEMORY_RESERVED) {
-            log_step("pmm: Reserved memory region found\n", LIGHT_GRAY);
+            log("pmm: Reserved memory region found\n", LIGHT_GRAY);
         }
         log_address("pmm: Memory region start: ", mmap->addr);
         log_uint("pmm: Memory region length: ", mmap->len / 1024);
@@ -141,7 +141,7 @@ void pmm_init(multiboot_info_t* mb_info) {
     log_uint("pmm: Total memory (GB): ", total_memory / (1024 * 1024 * 1024));
     log_uint("pmm: Total pages: ", pmm_buddy.total_pages);
 
-    log_step("pmm: Buddy allocator initialized\n", GREEN);
+    log("pmm: Buddy allocator initialized\n", GREEN);
 }
 
 int pmm_get_memory_size(void) {
@@ -194,7 +194,7 @@ void* pmm_alloc_pages(uint32_t order, uint32_t count) {
             if (first_page) {
                 pmm_free_pages(first_page, order, i);
             }
-            log_step("pmm: Out of memory!\n", RED);
+            log("pmm: Out of memory!\n", RED);
             return NULL;
         }
 
@@ -233,15 +233,15 @@ void pmm_free_page(void* addr) {
 
 
 void print_mem_info() {
-    log_step("Memory Info:\n", LIGHT_GRAY);
-    log_step("Total pages: ", LIGHT_GRAY);
+    log("Memory Info:\n", LIGHT_GRAY);
+    log("Total pages: ", LIGHT_GRAY);
     log_uint("", pmm_buddy.total_pages);
-    log_step("\nFree pages: ", LIGHT_GRAY);
+    log("\nFree pages: ", LIGHT_GRAY);
     for (int i = 0; i <= MAX_ORDER; i++) {
         log_uint("", pmm_buddy.free_list[i]);
-        log_step(" ", LIGHT_GRAY);
+        log(" ", LIGHT_GRAY);
     }
-    log_step("\n", LIGHT_GRAY);
+    log("\n", LIGHT_GRAY);
 }
 
 

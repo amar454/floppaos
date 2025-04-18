@@ -118,10 +118,10 @@ static int acpi_enable(void) {
                         break;
                 }
             }
-            log_step("ACPI enabled.", GREEN);
+            log("ACPI enabled.", GREEN);
             return 0;
         } else {
-            log_step("No known way to enable ACPI.", RED);
+            log("No known way to enable ACPI.", RED);
             return -1;
         }
     }
@@ -171,23 +171,23 @@ int init_acpi(void) {
                             SLP_EN = 1 << 13;
                             SCI_EN = 1;
 
-                            log_step("ACPI initialized.", GREEN);
+                            log("ACPI initialized.", GREEN);
                             return 0;
                         } else {
-                            log_step("Error parsing \\_S5.", RED);
+                            log("Error parsing \\_S5.", RED);
                         }
                     } else {
-                        log_step("\\_S5 not present.", RED);
+                        log("\\_S5 not present.", RED);
                     }
                 } else {
-                    log_step("Invalid DSDT.", RED);
+                    log("Invalid DSDT.", RED);
                 }
             }
             ptr++;
         }
-        log_step("No valid FACP found.", RED);
+        log("No valid FACP found.", RED);
     } else {
-        log_step("No ACPI detected.", RED);
+        log("No ACPI detected.", RED);
     }
     return -1;
 }
@@ -202,7 +202,7 @@ void acpi_power_off(void) {
     if (PM1b_CNT)
         outw((unsigned int)PM1b_CNT, SLP_TYPb | SLP_EN);
 
-    log_step("ACPI power-off failed.", RED);
+    log("ACPI power-off failed.", RED);
 }
 
 

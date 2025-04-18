@@ -15,13 +15,6 @@ void warn(uint32_t address, const char* msg, const char* warning);
 
 
 
-void warn(uint32_t address, const char* msg, const char* warning);
-
-// kernel warning macros
-#define WARN(addr, msg, err) warn(addr, msg, warning)
-#define WARN_LOW_MEMORY_AVAILABLE(addr, used_mem) WARN(used_mem_addr_end), "low amount of memory remaining: less than 32mb. Try clean_mem in the terminal or consider cancelling processes that are taking up large amounts of ram, or background processes.", "LOW_MEMORY_AVAILABLE")
-
-
 
 
 void panic(uint32_t address, const char* msg, const char* err);

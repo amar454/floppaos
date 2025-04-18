@@ -58,7 +58,7 @@ void log_uint(const char* prefix, uint32_t value) {
 }
 
 // kernel logging function, with a custom message 
-void log_step(const char *message, uint8_t color) {
+void log(const char *message, uint8_t color) {
     echo("-> ", LIGHT_GRAY); // Arrow prefix
     echo(message, color);   // Custom message and color
 }
@@ -77,5 +77,5 @@ void log_f(const char* fmt, ...) {
     va_start(args, fmt);
     flopsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    log_step(buf, LIGHT_GRAY);
+    log(buf, LIGHT_GRAY);
 }

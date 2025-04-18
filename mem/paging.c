@@ -29,21 +29,21 @@ void set_page_flags(PTE *entry, PageAttributes attributes) {
 void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
     uint32_t cr0, cr4;
 
-    log_step("paging: Enabling paging...\n", LIGHT_GRAY);
+    log("paging: Enabling paging...\n", LIGHT_GRAY);
 
     // Log the base address of the page directory being loaded into CR3
-    log_step("paging: Loading page directory base address into CR3...\n", LIGHT_BLUE);
-    log_step("paging: Page Directory Base Address: ", LIGHT_GRAY);
+    log("paging: Loading page directory base address into CR3...\n", LIGHT_BLUE);
+    log("paging: Page Directory Base Address: ", LIGHT_GRAY);
     log_address("", (uintptr_t)page_directory);
 
     // Load the page directory base address into CR3
     __asm__ volatile("mov %0, %%cr3" : : "r"(page_directory));
 
     // Enable paging by setting the PG bit (bit 31) and optionally WP (bit 16) in CR0
-    log_step("paging: Modifying CR0 to enable paging...\n", LIGHT_BLUE);
-    log_step("paging: Setting PG (Paging Enable) (bit 31)  bit...\n", LIGHT_BLUE);
+    log("paging: Modifying CR0 to enable paging...\n", LIGHT_BLUE);
+    log("paging: Setting PG (Paging Enable) (bit 31)  bit...\n", LIGHT_BLUE);
     if (enable_wp) {
-        log_step("paging: Enabling WP (Write Protect) (bit 31) in CR0...\n", LIGHT_BLUE);
+        log("paging: Enabling WP (Write Protect) (bit 31) in CR0...\n", LIGHT_BLUE);
     }
     __asm__ volatile(
         "mov %%cr0, %0\n"
@@ -52,10 +52,10 @@ void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
         : "=r"(cr0) 
         : "r"(enable_wp ? 0x80010000 : 0x80000000) // 0x80010000 -> PG + WP
     );
-    log_step("paging: CR0 modified successfully.\n", LIGHT_GREEN);
+    log("paging: CR0 modified successfully.\n", LIGHT_GREEN);
     // Enable PSE (Page Size Extension) if requested by setting the PSE bit (bit 4) in CR4
     if (enable_pse) {
-        log_step("paging: Enabling PSE (Page Size Extension) (bit 4) in CR4...\n", LIGHT_BLUE);
+        log("paging: Enabling PSE (Page Size Extension) (bit 4) in CR4...\n", LIGHT_BLUE);
         __asm__ volatile(
             "mov %%cr0, %0\n"
             "or %1, %0\n"
@@ -67,18 +67,18 @@ void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
         
 
         // Log the updated CR4 value
-        log_step("paging: PSE enabled successfully in CR4.\n", LIGHT_GREEN);
+        log("paging: PSE enabled successfully in CR4.\n", LIGHT_GREEN);
     } else {
-        log_step("paging: Skipping PSE (Page Size Extension) setup as requested.\n", LIGHT_BLUE);
+        log("paging: Skipping PSE (Page Size Extension) setup as requested.\n", LIGHT_BLUE);
     }
 
     // Final confirmation
-    log_step("paging: Paging successfully enabled.\n", GREEN);
+    log("paging: Paging successfully enabled.\n", GREEN);
 }
 
 
 static void create_first_page_table() {
-    log_step("paging: Creating first page table (identity-mapped 4 MiB)...\n", LIGHT_GRAY);
+    log("paging: Creating first page table (identity-mapped 4 MiB)...\n", LIGHT_GRAY);
 
     for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
         uint32_t frame = i * PAGE_SIZE; // Physical address
@@ -99,19 +99,19 @@ static void create_first_page_table() {
         set_page_flags(&page_tables[0][i], attributes);
 
         if (i % 64 == 0) { // Reduce log spam
-            log_step("paging: Mapped frame: ", LIGHT_GRAY);
+            log("paging: Mapped frame: ", LIGHT_GRAY);
             log_address("", frame);
         }
     }
-    log_step("paging: First page table created.\n", GREEN);
+    log("paging: First page table created.\n", GREEN);
 }
 
 
 // Create the page directory and link the first page table
 static void create_first_page_directory() {
-    log_step("paging: Creating page directory...\n", LIGHT_GRAY);
+    log("paging: Creating page directory...\n", LIGHT_GRAY);
 
-    log_step("paging: Initializing page directory entries...\n", LIGHT_GRAY);
+    log("paging: Initializing page directory entries...\n", LIGHT_GRAY);
     for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
         PageAttributes attributes = {
             .present = 0,
@@ -130,26 +130,26 @@ static void create_first_page_directory() {
     }
 
     // Link the first page table
-    log_step("paging: Linking the first page table...\n", LIGHT_GRAY);
+    log("paging: Linking the first page table...\n", LIGHT_GRAY);
     page_directory[0].present = 1; // Mark the first entry as present
     page_directory[0].rw = 1;      // Read/Write
     page_directory[0].user = 0;   // Supervisor (kernel mode)
     page_directory[0].table_addr = ((uintptr_t)&page_tables[0] >> 12);
 
-    log_step("paging: Page directory created and first table linked.\n", GREEN);
+    log("paging: Page directory created and first table linked.\n", GREEN);
 }
 
 // Create a new page directory
 PDE *create_new_page_directory() {
-    log_step("paging: Creating a new page directory...\n", LIGHT_GRAY);
+    log("paging: Creating a new page directory...\n", LIGHT_GRAY);
 
     PDE *new_page_directory = (PDE *)pmm_alloc_page();
     if (!new_page_directory) {
-        log_step("paging: Failed to allocate memory for new page directory!\n", RED);
+        log("paging: Failed to allocate memory for new page directory!\n", RED);
         return NULL;
     }
 
-    log_step("paging: Initializing new page directory entries...\n", LIGHT_GRAY);
+    log("paging: Initializing new page directory entries...\n", LIGHT_GRAY);
     for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
         PageAttributes attributes = {
             .present = 0,
@@ -167,14 +167,14 @@ PDE *create_new_page_directory() {
         set_page_flags((PTE *)&new_page_directory[i], attributes);
     }
 
-    log_step("paging: New page directory created successfully.\n", GREEN);
+    log("paging: New page directory created successfully.\n", GREEN);
     return new_page_directory;
 }
 
 PDE *create_page_directory() {
     PDE *page_directory = (PDE *)pmm_alloc_page();
     if (!page_directory) {
-        log_step("paging: Failed to allocate page directory!\n", RED);
+        log("paging: Failed to allocate page directory!\n", RED);
         return NULL;
     }
 
@@ -203,7 +203,7 @@ PDE *create_page_directory() {
 PDE *create_user_page_directory() { 
     PDE *user_page_directory = (PDE *)pmm_alloc_page();
     if (!user_page_directory) {
-        log_step("paging: Failed to allocate user page directory!\n", RED);
+        log("paging: Failed to allocate user page directory!\n", RED);
         return NULL;
     }
 
@@ -244,7 +244,7 @@ PDE *destroy_user_page_directory(PDE *user_page_directory) {
 
 PTE *get_page_table(PDE *page_directory, uint32_t index) {
     if (index >= PAGE_DIRECTORY_SIZE) {
-        log_step("paging: Invalid page directory index!\n", RED);
+        log("paging: Invalid page directory index!\n", RED);
         return NULL;
     }
 
@@ -261,13 +261,13 @@ PTE *get_page_table_entry(PDE *page_directory, uintptr_t virt_addr) {
     uint32_t table_index = (virt_addr >> 12) & 0x3FF;
 
     if (!page_directory[dir_index].present) {
-        log_step("paging: Page directory entry not present!\n", RED);
+        log("paging: Page directory entry not present!\n", RED);
         return NULL;
     }
 
     PTE *page_table = get_page_table(page_directory, dir_index);
     if (!page_table) {
-        log_step("paging: Failed to get page table!\n", RED);
+        log("paging: Failed to get page table!\n", RED);
         return NULL;
     }
 
@@ -276,7 +276,7 @@ PTE *get_page_table_entry(PDE *page_directory, uintptr_t virt_addr) {
 
 PTE *get_page_table_entry_by_index(PDE *page_directory, uint32_t index) {
     if (index >= PAGE_DIRECTORY_SIZE) {
-        log_step("paging: Invalid page directory index!\n", RED);
+        log("paging: Invalid page directory index!\n", RED);
         return NULL;
     }
 
@@ -290,7 +290,7 @@ PTE *get_page_table_entry_by_index(PDE *page_directory, uint32_t index) {
 
 PTE *destroy_page_table(PDE *page_directory, uint32_t index) {
     if (index >= PAGE_DIRECTORY_SIZE) {
-        log_step("paging: Invalid page directory index!\n", RED);
+        log("paging: Invalid page directory index!\n", RED);
         return NULL;
     }
 
@@ -301,7 +301,7 @@ PTE *destroy_page_table(PDE *page_directory, uint32_t index) {
 
     PTE *page_table = get_page_table(page_directory, index);
     if (!page_table) {
-        log_step("paging: Failed to get page table!\n", RED);
+        log("paging: Failed to get page table!\n", RED);
         return NULL;
     }
 
@@ -329,10 +329,10 @@ void destroy_page_directory(PDE *page_directory) {
 // Initialize paging
 void paging_init() {
 
-    log_step("paging: Initializing paging... \n ", LIGHT_GRAY);
+    log("paging: Initializing paging... \n ", LIGHT_GRAY);
     create_first_page_directory();  // Create and initialize the page directory
     create_first_page_table(); // Identity map the first 4 MiB
     enable_paging(1, 1);      // Enable paging with WP and PSE
-    log_step("paging: Paging initialized. \n ", GREEN);
+    log("paging: Paging initialized. \n ", GREEN);
 
 }

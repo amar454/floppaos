@@ -50,14 +50,14 @@ kernel.c:
 #include "drivers/vga/framebuffer.h"
 #include <stdint.h>
 
-void halt() { 
+ void halt() { 
     while (1) {
         continue;
     }
 }
 
 
-void cpuhalt() {
+ void cpuhalt() {
     __asm__ volatile("hlt");
 }
 
@@ -128,12 +128,9 @@ static void check_multiboot_info(multiboot_info_t *mb_info) {
     }
 
 }
-/**
- * @name kmain 
- * @brief Main kernel entry point
- * @param magic Multiboot magic number
- * @param mb_info Multiboot information structure
- */
+
+
+// kernel main function, called by boot.asm, which is the entry point of the kernel.
 int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
 
@@ -145,52 +142,48 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     print_multiboot_info(mb_info);
     sleep_seconds(1);
 
-    init_gdt(); // well well well
-    // init interrupts
-    // pic, pit, isr, and idt routines initialized here.
+    init_gdt(); // :meme:
+
+    /**
+     * Initialize Interrupts
+     */
     init_interrupts(); 
-    
     __asm__ volatile("sti"); // yay we have interrupts now
 
-    // initialize memory
-    pmm_init(mb_info); // now we can alloc pages
-
-    void* x = pmm_alloc_page();
-
-    if (!x) {
-        log_step("Page frame allocator failed", RED);
-    }
 
     
     
+
+    
+    pmm_init(mb_info);
     slab_init(); // now we can use slabs to allocate smaller sizes
     paging_init(); // yay now paging works (has to be enabled in x86 IA32)
     vmm_init(); // we can now make virtual address spaces and reserve regions
+    test_vmm();
     init_kernel_heap(); // now we can use pmm and slab for allocating in the kernel
 
-    test_alloc(); // test the kernel heap allocator
+    //test_alloc(); 
 
-    
-
-    // init scheduler
-    sched_init(); 
-
-    // init file system
+    /**
+     * Initialize Filesystem
+     */
     struct TmpFileSystem tmp_fs;
     init_tmpflopfs(&tmp_fs);  
-    
-    // add tasks (fshell and keyboard)
+
+    /**
+     * Initialize Scheduler
+     */
+    sched_init(); 
     add_task(fshell_task, &tmp_fs, 0, "fshell", "floppaos://fshell/fshell.c");  
     add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c"); // mainly here for fun
-    
-    // make time struct and add task
     struct Time system_time; 
     add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c"); // cool little time display
     
-    // print cool stuff
+
     draw_floppaos_logo(); 
     echo ("Welcome to floppaOS!\n", WHITE);
     echo ("floppaOS - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
+
 
     // start scheduler
     sched_start();
@@ -201,6 +194,7 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     do {
         halt(); // we're done here, halt the cpu.
         // see you in the next life 
+        // thank you for using floppaOS.
     } while (1);
     
 }

@@ -27,9 +27,9 @@ void vmm_init_task(Task *task) {
     if (!task) return;
 
     // Allocate a new page directory for the task
-    PDE *page_directory = create_page_directory();
+    PDE *page_directory = (PDE *)pmm_alloc_page();
     if (!page_directory) {
-        log_step("Failed to allocate page directory!\n", RED);
+        log("Failed to allocate page directory!\n", RED);
         return;
     }
 
@@ -42,7 +42,7 @@ void vmm_init_task(Task *task) {
     // Update the global tracker for the next virtual address
     global_next_virtual_address += PAGE_SIZE;
 
-    log_step("Task virtual memory initialized.\n", GREEN);
+    log("Task virtual memory initialized.\n", GREEN);
 }
 
 
@@ -56,14 +56,14 @@ void *task_alloc_memory(Task *task, uint32_t size) {
         uintptr_t virt_addr = start_virt_addr + i * PAGE_SIZE;
 
         if (virt_addr >= MAX_VIRTUAL_ADDRESS) {
-            log_step("Virtual address space exhausted for task!\n", RED);
+            log("Virtual address space exhausted for task!\n", RED);
             return NULL;
         }
 
         void *phys_page = pmm_alloc_page();
 
         if (!phys_page) {
-            log_step("Out of physical memory.\n", RED);
+            log("Out of physical memory.\n", RED);
 
             return NULL;
         }
@@ -79,7 +79,7 @@ void *task_alloc_memory(Task *task, uint32_t size) {
 
 void remove_current_task() {
     if (task_count == 0) {
-        log_step("No tasks to remove!\n", RED);
+        log("No tasks to remove!\n", RED);
         return;
     }
 
@@ -115,10 +115,10 @@ void remove_current_task() {
 
 void add_task(task_fn task, void *arg, uint8_t priority, const char *name, const char *source_path) {
     if (task_count >= MAX_TASKS) {
-        log_step("Task queue is full!\n", RED);
+        log("Task queue is full!\n", RED);
         return;
     }
-    log_step("Adding task...\n", LIGHT_GRAY);
+    log("Adding task...\n", LIGHT_GRAY);
     Task *new_task = &task_queue[task_count];
     new_task->function = task;
     new_task->arg = arg;
@@ -136,7 +136,7 @@ void add_task(task_fn task, void *arg, uint8_t priority, const char *name, const
     new_task->name[MAX_TASK_NAME_LENGTH - 1] = '\0';
     flopstrncpy(new_task->source_path, source_path, MAX_SOURCE_PATH_LENGTH - 1);
     new_task->source_path[MAX_SOURCE_PATH_LENGTH - 1] = '\0';
-    log_step("Task added successfully. Name: ", GREEN);
+    log("Task added successfully. Name: ", GREEN);
     echo(new_task->name, GREEN);
     echo("\n", GREEN);
     task_count++;
@@ -144,7 +144,7 @@ void add_task(task_fn task, void *arg, uint8_t priority, const char *name, const
 
 void remove_task(int task_index) {
     if (task_index < 0 || task_index >= task_count) {
-        log_step("Invalid task index!\n", RED);
+        log("Invalid task index!\n", RED);
         return;
     }
 
@@ -297,5 +297,5 @@ void sched_init() {
     scheduler_ticks = 0;
     scheduler_enabled = false;
     scheduler_paused = false;
-    log_step("sched_init: Task system initialized.\n", GREEN);
+    log("sched_init: Task system initialized.\n", GREEN);
 }
