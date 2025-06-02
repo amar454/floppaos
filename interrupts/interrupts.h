@@ -2,6 +2,7 @@
 #define INTERRUPTS_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 // IDT entry structure
 typedef struct {
@@ -35,8 +36,7 @@ static uint8_t interrupt_stack[ISR_STACK_SIZE] __attribute__((aligned(16)));  //
 #define PIC2_COMMAND 0xA0
 #define PIC2_DATA    0xA1
 
-// PIT Frequency (in Hz)
-#define PIT_FREQUENCY 1000  // 1ms interval
+
 
 // Function declarations
 void init_interrupts();
@@ -48,5 +48,30 @@ void set_idt_entry(int n, uint32_t base, uint16_t sel, uint8_t flags);
 // ISR Handlers
 void __attribute__((interrupt, no_caller_saved_registers)) pit_isr(void *frame);
 void __attribute__((interrupt, no_caller_saved_registers)) keyboard_isr(void *frame);
+
+
+// enable interrupts
+#define IA32_INT_MASK() __asm__ volatile("cli" ::: "memory")
+
+// disable interrupts
+#define IA32_INT_UNMASK() __asm__ volatile("sti" ::: "memory")
+
+// relax cpu via pause instruction
+#define IA32_CPU_RELAX() \
+    __asm__ volatile (   \
+        "pause"          \
+        :                \
+        :                \
+        : "memory"       \
+    )
+// check eflags to see if interrupts are enabled
+#define IA32_INT_ENABLED() ({ \
+    uint32_t eflags;          \
+    __asm__ volatile(         \
+        "pushf\n\t"           \
+        "pop %0"              \
+        : "=r"(eflags));      \
+    (eflags & (1 << 9)) != 0; \
+})
 
 #endif // INTERRUPTS_H

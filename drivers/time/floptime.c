@@ -1,12 +1,15 @@
+
+
 #include "floptime.h"
 #include "../../lib/str.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include "../../apps/echo.h"
 #include "../vga/vgahandler.h"
-#include "../../task/task_handler.h"
+#include "../../task/sched.h"
 #include "../../fshell/command.h"
-
+#include "../../fshell/fshell.h"
+char current_time_string[32];
 // Helper to read a byte from a CMOS register
 static unsigned char read_cmos(unsigned char reg) {
     unsigned char val;
@@ -110,10 +113,8 @@ void display_time_top_right(const char* current_time_string) {
     flopstrcopy(last_time_string, current_time_string, sizeof(last_time_string));
     last_x_start = x_start;
     last_time_length = time_length;
-
-
-
 }
+
 // Sleep function
 void sleep_seconds(int seconds) {
     struct Time start_time, current_time;

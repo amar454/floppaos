@@ -2,7 +2,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "../apps/echo.h"
-#include "../drivers/vga/vgahandler.h"
+#include "../drivers/vga/framebuffer.h"
+
 #include "str.h"
 
 // local function for flopitoa for printing unsigned integers and memory addresses.
@@ -59,7 +60,7 @@ void log_uint(const char* prefix, uint32_t value) {
 
 // kernel logging function, with a custom message 
 void log(const char *message, uint8_t color) {
-    echo("-> ", LIGHT_GRAY); // Arrow prefix
+    echo("[ LOG ] ", color); // Arrow prefix
     echo(message, color);   // Custom message and color
 }
 

@@ -5,7 +5,7 @@
 #include "../../fs/tmpflopfs/fileutils.h"
 #include "../../apps/echo.h"
 #include "../../drivers/time/floptime.h"
-#include "../../task/task_handler.h"
+#include "../../task/sched.h"
 #include "../../lib/str.h"
 extern int extended;
 static unsigned int scroll_offset = 0; // Number of lines scrolled from the top

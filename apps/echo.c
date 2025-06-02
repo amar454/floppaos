@@ -1,5 +1,8 @@
 #include "echo.h"
 #include "../drivers/vga/vgahandler.h"
+#include "../drivers/vga/framebuffer.h"
+#include "../flanterm/flanterm.h"
+#include "../flanterm/backends/fb.h"
 #include "../lib/str.h"
 #include <stdint.h>
 #include <stddef.h>
@@ -54,9 +57,7 @@ void put_char(char c, unsigned char color) {
 
 // Function to echo a string to the terminal with vga color
 void echo(const char *str, unsigned char color) {
-    while (*str) {
-        put_char(*str++, color);
-    }
+    console_write(str); // Use console_write to output the string
 }
 
 void echo_bold(const char *str, unsigned char color) {

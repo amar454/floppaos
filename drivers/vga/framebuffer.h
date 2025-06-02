@@ -3,35 +3,49 @@
 
 #include <stdint.h>
 #include "../../multiboot/multiboot.h"
+#include "vgahandler.h"
+typedef struct colors {
+    uint32_t black;
+    uint32_t white;
+    uint32_t red;
+    uint32_t green;
+    uint32_t blue;
+    uint32_t yellow;
+    uint32_t cyan;
+    uint32_t magenta;
+    uint32_t gray;
+    uint32_t light_gray;
+    uint32_t dark_gray;
+    uint32_t brown;
+    uint32_t orange;
+    uint32_t purple;
+    uint32_t teal;
+    uint32_t navy;
+    uint32_t maroon;
+    uint32_t olive;
+    uint32_t pink;
+    uint32_t lime;
+    uint32_t aqua;
+    uint32_t fuchsia;
 
-// Framebuffer configuration
-typedef struct {
-    uint32_t *framebuffer;       // Framebuffer address
-    uint32_t width;              // Width in pixels
-    uint32_t height;             // Height in pixels
-    uint32_t pitch;              // Bytes per scanline
-    uint32_t bpp;                // Bits per pixel
-} framebuffer_t;
-// Basic Color Definitions (32-bit RGB)
-#define COLOR_BLACK       0x000000
-#define COLOR_WHITE       0xFFFFFF
-#define COLOR_RED         0xFF0000
-#define COLOR_GREEN       0x00FF00
-#define COLOR_BLUE        0x0000FF
-#define COLOR_CYAN        0x00FFFF
-#define COLOR_MAGENTA     0xFF00FF
-#define COLOR_YELLOW      0xFFFF00
-#define COLOR_GRAY        0x808080
-#define COLOR_ORANGE      0xFFA500
-#define COLOR_BROWN       0xA52A2A
+} colors_t;
 
-// Function Prototypes
-void framebuffer_initialize(multiboot_info_t *mbi, framebuffer_t *fb);
-void framebuffer_clear_screen(framebuffer_t *fb, uint32_t color);
-void framebuffer_draw_pixel(framebuffer_t *fb, uint16_t x, uint16_t y, uint32_t color);
-void framebuffer_draw_line(framebuffer_t *fb, int x0, int y0, int x1, int y1, uint32_t color);
-void framebuffer_draw_rect(framebuffer_t *fb, int x, int y, int width, int height, uint32_t color);
-void framebuffer_print_char(framebuffer_t *fb, uint16_t x, uint16_t y, char c, uint32_t color);
-void framebuffer_print_string(framebuffer_t *fb, uint16_t x, uint16_t y, const char *str, uint32_t color);
-void test_framebuffer(framebuffer_t *fb);
+extern colors_t c;
+void init_colors(void);
+// Function declarations
+void framebuffer_init(multiboot_info_t *mbi);
+void framebuffer_put_pixel(int x, int y, uint32_t color);
+void framebuffer_draw_line(int x1, int y1, int x2, int y2, uint32_t color);
+void framebuffer_draw_rectangle(int x, int y, int width, int height, uint32_t color);
+
+void framebuffer_test_triangle();
+void framebuffer_test_rectangle();
+void framebuffer_test_circle();
+void framebuffer_test_pattern();
+
+void framebuffer_draw_char(int x, int y, char c, uint32_t color);
+void framebuffer_print_string(int x, int y, const char *str, uint32_t color);
+
+void init_console();
+void console_write(const char *str) ;
 #endif // FRAMEBUFFER_H

@@ -51,18 +51,11 @@ static void set_page(PTE *pte, PageAttributes attrs) {
 }
 
 
-typedef struct {
-    uintptr_t start_virt; // Start of the virtual address range
-    uintptr_t start_phys; // Start of the physical address range
-    size_t size;          // Size of the region in bytes
-    uint32_t pages;       // Number of pages in the region
-    PageAttributes attrs; // Attributes of the pages in the region
-} vmm_region;
 
 // Create a new virtual memory region
 vmm_region vmm_create_region(PDE *page_directory, uintptr_t start_virt, uintptr_t start_phys, size_t size, PageAttributes attrs) {
     if (!page_directory || size == 0) {
-        log("Invalid parameters for creating region!\n", RED);
+        log("vmm: Invalid parameters for creating region!\n", RED);
         return (vmm_region){0};
     }
 
@@ -77,7 +70,7 @@ vmm_region vmm_create_region(PDE *page_directory, uintptr_t start_virt, uintptr_
         vmm_map_page(page_directory, virt_addr, phys_addr, attrs);
     }
 
-    log("Region created successfully.\n", GREEN);
+    //log("Region created successfully.\n", GREEN);
     return (vmm_region){
         .start_virt = start_virt,
         .start_phys = start_phys,
@@ -100,7 +93,7 @@ void vmm_destroy_region(PDE *page_directory, vmm_region region) {
         vmm_unmap_page(page_directory, virt_addr);
     }
 
-    log("Region destroyed successfully.\n", GREEN);
+    //log("Region destroyed successfully.\n", GREEN);
 }
 
 void vmm_map_page(PDE *page_directory, uintptr_t virt_addr, uintptr_t phys_addr, PageAttributes attrs) {
@@ -169,13 +162,13 @@ void vmm_unmap_page(PDE *page_directory, uintptr_t virt_addr) {
 }
 
 void vmm_init() {
-    log("Initializing vmm...\n", LIGHT_GRAY);
+    log("vmm: initializing vmm...\n", LIGHT_GRAY);
     flop_memset(page_directory, 0, sizeof(PDE) * PAGE_DIRECTORY_SIZE);  // Initialize the page directory
-    log("VMM initialized.\n", GREEN);
+    log("vmm: vmm initialized.\n", GREEN);
 }
 
 void* vmm_malloc(uint32_t size) {
-    log("Allocating virtual memory...\n", WHITE);
+    log("vmm: allocating virtual memory...\n", WHITE);
 
     if (size == 0) return NULL;
 
@@ -226,7 +219,7 @@ void* vmm_malloc(uint32_t size) {
                         .user = 1
                     });
 
-                    log("Virtual memory allocated successfully.\n", GREEN);
+                    //log("Virtual memory allocated successfully.\n", GREEN);
                     return (void*)region.start_virt;
                 }
             } else {
@@ -235,9 +228,12 @@ void* vmm_malloc(uint32_t size) {
         }
     }
 
-    log("Virtual memory allocation failed.\n", RED);
+    log("vmm: Virtual memory allocation failed.\n", RED);
+    log_address((void*)start_virt, size);
     return NULL;
 }
+
+
 // Free virtual memory and unmap physical pages
 void vmm_free(void* virt_addr, uint32_t size) {
     if (!virt_addr || size == 0) return;
@@ -250,15 +246,19 @@ void vmm_free(void* virt_addr, uint32_t size) {
     vmm_region region = vmm_create_region(page_directory, start_virt, 0, size, (PageAttributes){0});
 
     if (region.size == 0) {
-        log("vmm_free: Region not found!\n", RED);
+        //log("vmm_free: Region not found!\n", RED);
+        log_address("vmm_free: Region not found at: ", start_virt);
         return;
     }
 
     // Unmap and free the region
     vmm_destroy_region(page_directory, region);
 
-    log("Virtual memory freed.\n", GREEN);
+    //log("Virtual memory freed.\n", GREEN);
 }
+
+
+
 // Get physical address of a virtual address
  uintptr_t vmm_virt_to_phys(PDE *page_directory, uintptr_t virt_addr) {
     uint32_t dir_idx = virt_addr >> 22;
@@ -296,7 +296,7 @@ void* vmm_map_struct_region(PDE *page_directory, size_t struct_size) {
     // Initialize the memory region to zero
     flop_memset(struct_region, 0, pages_needed * PAGE_SIZE);
     
-    log("Struct region mapped successfully.\n", GREEN);
+    //log("Struct region mapped successfully.\n", GREEN);
     return struct_region;
 }
 
@@ -312,94 +312,47 @@ void vmm_unmap_struct_region(PDE *page_directory, void *struct_region, size_t st
     // Free the virtual memory for the struct
     vmm_free(struct_region, pages_needed * PAGE_SIZE);
 
-    log("Struct region unmapped successfully.\n", GREEN);
+    //log("Struct region unmapped successfully.\n", GREEN);
 }
 
-void *vmm_reserve_region(PDE *page_directory, size_t size) {
-    if (!page_directory || size == 0) {
-        log("Invalid parameters for reserving region!\n", RED);
-        return NULL;
+vmm_region vmm_phys_to_region (PDE *page_directory, uintptr_t phys_addr) {
+    if (!page_directory) {
+        log("Invalid page directory!\n", RED);
+        return (vmm_region){0};
     }
 
-    // Align size to page size
-    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-    uint32_t pages_needed = size / PAGE_SIZE;
-    
-    uintptr_t start_virt = 0;
-    uint32_t found_pages = 0;
-
-    // Iterate through page tables to find contiguous pages
     for (uint32_t i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
         for (uint32_t j = 0; j < PAGE_TABLE_SIZE; j++) {
-            if (!page_tables[i][j].present) { 
-                if (found_pages == 0) {
-                    start_virt = (i << 22) | (j << 12);
-                }
-                found_pages++;
-                
-                if (found_pages == pages_needed) {
-                    log("Virtual region reserved successfully.\n", GREEN);
-                    return (void *)start_virt;
-                }
-            } else {
-                found_pages = 0;
+            PTE *pte = &page_tables[i][j];
+            if (pte->present && ((pte->frame_addr << 12) == phys_addr)) {
+                return (vmm_region){
+                    .start_virt = (i << 22) | (j << 12),
+                    .start_phys = phys_addr,
+                    .size = PAGE_SIZE,
+                    .pages = 1,
+                    .attrs = *(PageAttributes *)pte
+                };
             }
         }
     }
 
-    log("Failed to reserve virtual region.\n", RED);
-    return NULL;
+    log("Physical address not found in any region!\n", RED);
+    return (vmm_region){0};
 }
 
 
-void vmm_free_region(PDE *page_directory, void *virt_addr, size_t size) {
-    if (!page_directory || !virt_addr || size == 0) {
-        log("Invalid parameters for freeing region!\n", RED);
-        return;
-    }
 
-    // Align size to page size
-    size = (size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-    uint32_t pages_to_free = size / PAGE_SIZE;
-
-    // Calculate the start of the page range to free
-    uintptr_t start_virt = (uintptr_t)virt_addr;
-    uint32_t start_index = (start_virt >> 22) & 0x3FF;  
-    uint32_t start_table = (start_virt >> 12) & 0x3FF;  
-
-    for (uint32_t i = start_index; i < PAGE_DIRECTORY_SIZE; i++) {
-        for (uint32_t j = (i == start_index ? start_table : 0); j < PAGE_TABLE_SIZE; j++) {
-            // Calculate the physical address
-            uintptr_t page_addr = (i << 22) | (j << 12);
-            if (page_tables[i][j].present) {
-                // Mark the page as free
-                page_tables[i][j].present = 0;
-                page_tables[i][j].frame_addr = 0;  
-                pmm_free_pages((void *)page_addr, 1, 1); // Free the physical page
-            }
-            
-            if (--pages_to_free == 0) {
-                log("Virtual region freed successfully.\n", GREEN);
-                return;
-            }
-        }
-    }
-
-    log("Failed to free virtual region.\n", RED);
-}
 
 void test_vmm() {
-    log("Testing vmm_malloc and vmm_free...\n", LIGHT_GRAY);
+    log("vmm: testing vmm_malloc and vmm_free...\n", LIGHT_GRAY);
 
     // Allocate 16 KB of virtual memory
     void* addr = vmm_malloc(16 * 1024);
     if (addr) {
-        log_address("Allocated virtual memory at: ", (uint32_t)addr);
-
-        // Free the allocated memory
+        log("vmm: Virtual memory allocated successfully at: ", GREEN);
+        log_address("", (uint32_t)addr);
         vmm_free(addr, 16 * 1024);
-        log("Freed virtual memory.\n", GREEN);
     } else {
-        log("Failed to allocate virtual memory.\n", RED);
+        log("vmm: Failed to allocate virtual memory!\n", RED);
     }
 }

@@ -10,8 +10,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "../../lib/logging.h"
-extern Task task_queue[MAX_TASKS];
-#include "../../task/task_handler.h"
+
+#include "../../task/sched.h"
+#include "../../task/pid.h"
+// Structure representing a file in the embedded filesystem
+
 void tmpflopfs_strcopy(char *dest, const char *src) {
     while ((*dest++ = *src++));
 }

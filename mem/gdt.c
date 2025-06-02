@@ -54,25 +54,24 @@ void switch_to_user_mode() {
 }
 
 void switch_to_kernel_mode() {
-    log("Setting null descriptor entry...\n", LIGHT_GRAY);
+
     set_gdt_entry(0, 0, 0, 0, 0);               // Null Descriptor
-    
-    log("Setting code segment entry...\n", LIGHT_GRAY);
+
     set_gdt_entry(1, 0, 0xFFFFF, 0x9A, 0xCF);   // Code Segment
-    log("Setting data segment entry...\n", LIGHT_GRAY);
+
     set_gdt_entry(2, 0, 0xFFFFF, 0x92, 0xCF);   // Data Segment
 
-    log("Flushing gdt...\n", LIGHT_GRAY);
+    //log("Flushing gdt...\n", LIGHT_GRAY);
     gdt_flush((uint32_t)(uintptr_t)&gdt_ptr); 
 }
 void init_gdt() {
     gdt_ptr.limit = (sizeof(GDTEntry) * GDT_ENTRIES) - 1;
     gdt_ptr.base = (uintptr_t)&gdt; // Explicit cast
 
-    log("Initializing gdt... \n", LIGHT_GRAY);
+    log("Initializing gdt...\n", LIGHT_GRAY);
     
     switch_to_kernel_mode() ;
 
-    log("Gdt initialized. \n ", GREEN);
+    log("Gdt initialized.\n", GREEN);
 }
 

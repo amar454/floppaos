@@ -1,22 +1,40 @@
-section .multiboot               ; Multiboot header
-    dd 0x1BADB002                ; Multiboot magic number
-    dd 0x0                       ; Flags
-    dd -(0x1BADB002 + 0x0)       ; Checksum
+section .multiboot               
+    MAGIC equ 0x1BADB002
+    FLAGS equ 7
+    CHECKSUM equ -(MAGIC + FLAGS)
+    MODE_TYPE equ 0
+    W equ 1280
+    H equ 720
+    D equ 32
+
+    dd MAGIC                ; Multiboot magic number
+    dd FLAGS               
+    dd CHECKSUM            
+    dd 0                    ; header_addr
+    dd 0                    ; load_addr
+    dd 0                    ; load_end_addr
+    dd 0                    ; bss_end_addr
+    dd 0                    ; entry_addr
+    dd MODE_TYPE           
+    dd W                ; width                
+    dd H                ; height                
+    dd D                ; depth
 
 section .text
 global start
-extern kmain                     ; Declared in the kernel
+global stack_space
+extern kmain                     ; c main function
 
 start:
-    cli                          ; Disable interrupts
-    mov esp, stack_space         ; Set up stack
+    cli                         
+    mov esp, stack_space         
 
-    push ebx                     ; Push mb_info pointer
-    push eax                     ; Push mb_magic number
+    push ebx                     
+    push eax                     
 
-    call kmain                   ; Call kernel main function
+    call kmain                   ; jump to C main function
 
-    cli                          ; Disable interrupts
+    cli                          
     hlt                          ; Halt if main returns
 
 section .bss

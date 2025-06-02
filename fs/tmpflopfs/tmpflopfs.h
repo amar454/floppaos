@@ -3,13 +3,13 @@
 #define TMPFLOPFS_H
 
 #include "../../drivers/time/floptime.h"
+
 #include <stdint.h>
 #define TMP_FILESYSTEM_TYPE_ID 0x02
 #define MAX_TMP_PATH_LENGTH 100
 #define MAX_TMP_FILES 100
 #define TMP_DISK_SIZE (1024 * 1024)  
 #define TMP_DISK_FILENAME "tmpflopfs.bin"
-// Structure representing a file in the embedded filesystem
 struct TmpFile {
     char name[50];
     struct Time created;      // Creation time structure
@@ -25,6 +25,12 @@ struct TmpFileSystem {
     char tmp_root_directory[MAX_TMP_PATH_LENGTH]; // Root directory path
     uint32_t tmp_next_free_offset;            // Next available offset for file data
 };
+
+// Structure representing a file in the embedded filesystem
+struct TmpFile;
+
+// Structure representing the file system
+struct TmpFileSystem;
 
 // Function declarations
 void init_tmpflopfs(struct TmpFileSystem *tmp_fs);

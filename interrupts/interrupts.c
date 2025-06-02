@@ -1,6 +1,7 @@
 // IDT and IDT pointer
 #include "interrupts.h"
-#include "../task/task_handler.h"
+#include "../task/sched.h"
+#include "../task/pid.h"
 #include "../drivers/io/io.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../lib/logging.h"
@@ -12,22 +13,26 @@
 #include "../mem/paging.h"
 #include "../mem/utils.h"
 #include "../kernel.h"
-
+#include <stdbool.h>
 idt_entry_t idt[IDT_SIZE];
 idt_ptr_t idtp;
-
 void init_stack() { 
     uint32_t stack_top = (uint32_t)(interrupt_stack + ISR_STACK_SIZE);
     __asm__ volatile("mov %0, %%esp" :: "r"(stack_top));  // Set ESP to the top of the stack
 }
 
+// PIT Frequency (in Hz)
+#define PIT_FREQUENCY 100
+void scheduler_tick() {
+    return;
+}
 // PIT ISR (IRQ0)
 void __attribute__((interrupt, no_caller_saved_registers)) pit_isr(void *frame) {
     (void)frame; // Unused
     
     // Call the scheduler on each timer tick if enabled
-    if (scheduler_enabled) {
-        scheduler();
+    if (true) {
+        scheduler_tick();
     }
     
     outb(PIC1_COMMAND, 0x20); // Send EOI to PIC
@@ -86,24 +91,26 @@ void init_idt() {
     log("Setting up IDT entries...\n", LIGHT_GRAY);
 
     // Set up ISR for PIT (IRQ0) and keyboard (IRQ1)
+
     set_idt_entry(32, (uint32_t)(uintptr_t)&pit_isr, KERNEL_CODE_SEGMENT, 0x8E);
     set_idt_entry(33, (uint32_t)(uintptr_t)&keyboard_isr, KERNEL_CODE_SEGMENT, 0x8E);
 
     // Load the IDT
     __asm__ volatile ("lidt (%0)" :: "r"(&idtp) : "memory");
 }
+void disable_interrupts() {
+    __asm__ volatile ("cli");
 
+}
+void enable_interrupts() {
+    __asm__ volatile ("sti");
+}
 // Initialize interrupts
 void init_interrupts() {
     log("Initializing interrupts...\n", LIGHT_GRAY);
-
-    log("Setting up interrupt stack...\n", LIGHT_GRAY);
     init_stack();  // Set up the interrupt stack
-    log("Initializing PIC...\n", LIGHT_GRAY);
     init_pic();
-    log("Initializing PIT...\n", LIGHT_GRAY);
     init_pit();
-    log("Initializing IDT...\n", LIGHT_GRAY);
     init_idt(); 
     log("Interrupts initialized.\n", GREEN);
 }

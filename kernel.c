@@ -36,19 +36,24 @@ kernel.c:
 #include "drivers/keyboard/keyboard.h"
 #include "interrupts/interrupts.h"
 #include "lib/str.h"
+#include "lib/assert.h"
 #include "mem/pmm.h"
 #include "mem/utils.h"
 #include "mem/slab.h"
 #include "mem/vmm.h"
 #include "mem/gdt.h"
 #include "mem/alloc.h"
-#include "task/task_handler.h"
+#include "task/sched.h"
+#include "task/thread.h"
 #include "drivers/vga/vgahandler.h"
 #include "mem/paging.h"
 #include "lib/logging.h"
 #include "multiboot/multiboot.h"
 #include "drivers/vga/framebuffer.h"
 #include <stdint.h>
+#include "flanterm/flanterm.h"
+#include "flanterm/backends/fb.h"
+
 
  void halt() { 
     while (1) {
@@ -56,16 +61,14 @@ kernel.c:
     }
 }
 
-
  void cpuhalt() {
     __asm__ volatile("hlt");
 }
 
 void panic(uint32_t address, const char* msg, const char* err) {
-    // Clear the screen first
-    vga_clear_screen();
 
-    // Calculate dimensions for centered box
+    vga_clear_terminal();
+
     uint16_t width = 40;
     uint16_t height = 8;
     uint16_t x_start = (80 - width) / 2;  // Center horizontally
@@ -91,7 +94,8 @@ void panic(uint32_t address, const char* msg, const char* err) {
 }
 
 void mem_dump(uint32_t address, uint32_t length) {
-    uint32_t *ptr = (uint32_t *)(uintptr_t)address;    for (uint32_t i = 0; i < length; i++) {
+    uint32_t *ptr = (uint32_t *)(uintptr_t)address;    
+    for (uint32_t i = 0; i < length; i++) {
         if (i % 16 == 0) {
             echo("\n", WHITE);
         }
@@ -112,15 +116,13 @@ void draw_floppaos_logo() {
     sleep_seconds(1);
 }
 
-// cute helper function to check if the multiboot magic number is valid
 static void check_multiboot_magic(uint32_t magic) {
     if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
         panic(0, "Multiboot magic number mismatch!", "System halted.");
         halt();
     }
 }
-
-// cute helper function to check if the multiboot info structure is valid
+void fshell_task(void *arg);
 static void check_multiboot_info(multiboot_info_t *mb_info) {
     if (!mb_info) {
         panic((uintptr_t)mb_info, "The multiboot info structure could not be found!", "MultibootInfoNullError");
@@ -129,76 +131,38 @@ static void check_multiboot_info(multiboot_info_t *mb_info) {
 
 }
 
-
-// kernel main function, called by boot.asm, which is the entry point of the kernel.
 int kmain(uint32_t magic, multiboot_info_t *mb_info) {
-    echo("Booting floppaOS alpha v0.0.2-alpha...\n", WHITE);
-
-    // check if multiboot magic and info exist and are valid
+    sleep_seconds(1);
     check_multiboot_magic(magic);
     check_multiboot_info(mb_info);
-    
-    // Print Multiboot information
-    print_multiboot_info(mb_info);
+    framebuffer_init(mb_info); 
+    init_console();
     sleep_seconds(1);
-
     init_gdt(); // :meme:
-
-    /**
-     * Initialize Interrupts
-     */
     init_interrupts(); 
-    __asm__ volatile("sti"); // yay we have interrupts now
-
-
-    
-    
-
-    
+    IA32_INT_UNMASK(); 
+    sleep_seconds(1);
     pmm_init(mb_info);
-    slab_init(); // now we can use slabs to allocate smaller sizes
-    paging_init(); // yay now paging works (has to be enabled in x86 IA32)
-    vmm_init(); // we can now make virtual address spaces and reserve regions
-    test_vmm();
-    init_kernel_heap(); // now we can use pmm and slab for allocating in the kernel
-
-    //test_alloc(); 
-
-    /**
-     * Initialize Filesystem
-     */
+    slab_init(); 
+    paging_init(); 
+    vmm_init(); 
+    init_kernel_heap();
+    sleep_seconds(1);
     struct TmpFileSystem tmp_fs;
     init_tmpflopfs(&tmp_fs);  
-
-    /**
-     * Initialize Scheduler
-     */
-    sched_init(); 
-    add_task(fshell_task, &tmp_fs, 0, "fshell", "floppaos://fshell/fshell.c");  
-    add_task(keyboard_task, NULL, 1, "keyboard", "floppaos://drivers/keyboard/keyboard.c"); // mainly here for fun
-    struct Time system_time; 
-    add_task(time_task, &system_time, 2, "floptime", "floppaos://drivers/time/floptime.c"); // cool little time display
-    
-
+    scheduler_init(); 
+    test_threads();
     draw_floppaos_logo(); 
     echo ("Welcome to floppaOS!\n", WHITE);
     echo ("floppaOS - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
+  
 
 
-    // start scheduler
-    sched_start();
-    
-    // oh no the os has stopped scheduling
-
-
-    do {
-        halt(); // we're done here, halt the cpu.
-        // see you in the next life 
-        // thank you for using floppaOS.
-    } while (1);
+    while (1) {
+    }
+    return 0;
     
 }
-
 // bullshit placeholder bc C requires a main method but doesn't take the correct types of the magic number and info pointer in eax and ebx
 int main() {
     return 0;

@@ -340,8 +340,6 @@ Good luck reading half of this. Most of the memory addresses I found on osdev, s
 #define VGA_BRIGHT_CRIMSON     0xFE
 #define VGA_ULTRA_BLACK        0xFF
 
-// External framebuffer structure
-extern framebuffer_t fb;
 
 typedef struct {
     int pos;
@@ -350,6 +348,14 @@ typedef struct {
     void *memory;
 
 } Window;
+void vga_clear_terminal(void);
+void vga_place_char(uint16_t x, uint16_t y, char c, uint8_t color);
+void vga_place_string(uint16_t x, uint16_t y, const char *str, uint8_t color);
+void vga_place_bold_char(uint16_t x, uint16_t y, char c, uint8_t color);
+void vga_set_cursor_position(uint16_t x, uint16_t y);
+void vga_set_foreground_color(int x, int y, uint8_t color);
+void vga_save_terminal_state(void);
+void vga_restore_terminal_state(void);
 
 void vga_clear_terminal(void);
 void framebuffer_initialize_wrapper(multiboot_info_t *mbi);

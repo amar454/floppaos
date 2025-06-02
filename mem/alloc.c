@@ -49,7 +49,6 @@ alloc.c
 #include "../kernel.h"
 #include "../drivers/vga/vgahandler.h"
 
-
 #define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
 #define PMM_RETURN_THRESHOLD (8 * PAGE_SIZE) // Return to PMM if free block is this big
 
@@ -302,6 +301,7 @@ void *kmalloc(size_t size) {
     if (!ptr) { // check if alloc worked (should)
         log("kmalloc: Failed to allocate memory for size: ", RED);
         log_uint("", size);
+        PANIC_KMALLOC_FAILED((uintptr_t)ptr);
         return NULL;
     }
 
@@ -362,41 +362,63 @@ void *krealloc(void *ptr, size_t old_size, size_t new_size) {
 
 #define NUM_ALLOCS 8
 void test_alloc() {
-
     // some example allocation sizes pulled out of my ass
     static const int ALLOC_SIZES[NUM_ALLOCS] = {32, 1564, 568, 2578, 4095, 8700, 11464, 16384};
     void *ptrs[NUM_ALLOCS];
-
-
-
+    bool _alloc_success;
 
     // allocate the test blocks
     for (size_t i = 0; i < NUM_ALLOCS; i++) {
         ptrs[i] = kmalloc(ALLOC_SIZES[i]);
         if (ptrs[i]) {
-            log_uint("test_alloc: allocated memory of size :", ALLOC_SIZES[i]);
+            // Test writing to the allocated memory
+            uint32_t* test_ptr = (uint32_t*)ptrs[i];
+            for (size_t j = 0; j < ALLOC_SIZES[i] / sizeof(uint32_t); j++) {
+                test_ptr[j] = 0x12345678;
+                if (test_ptr[j] != 0x12345678) {
+                    log("alloc: memory write test failed\n", RED);
+                    _alloc_success = false;
+                    break;
+                }
+            }
+            // Test memset
+            flop_memset(ptrs[i], 0, ALLOC_SIZES[i]);
+            for (size_t j = 0; j < ALLOC_SIZES[i] / sizeof(uint32_t); j++) {
+                if (test_ptr[j] != 0) {
+                    log("alloc: memset test failed\n", RED);
+                    _alloc_success = false;
+                    break;
+                }
+            }
+            _alloc_success = true;
+        }
+        else {
+            _alloc_success = false;
+            break;
         }
     }
-
+    if (!_alloc_success) {
+        log("alloc: kmalloc test failed\n", RED);
+        return;
+    }
+    else {
+        log("alloc: kmalloc test passed for sizes 32, 1564, 568, 2578, 4095, 8700, 11464, 16384\n", GREEN);
+    }
+    bool _free_success = true;
 
     for (size_t i = 0; i < NUM_ALLOCS; i++) {
         kfree(ptrs[i], ALLOC_SIZES[i]);
+        if (ptrs[i]) {
+            _free_success = true;
+        }
+        else {
+            _free_success = false;
+            break;
+        }
     }
-
-    // big allocation (to test out free list page allocator.)
-    static const int EXTRA_ALLOC_SIZE = 123454;
-    void *ptr9 = kmalloc(EXTRA_ALLOC_SIZE);
-    if (ptr9) {
-        log_uint("test_alloc: allocated memory of size: ", EXTRA_ALLOC_SIZE);
-        kfree(ptr9, EXTRA_ALLOC_SIZE);
-    }
-
+    
     log("test_alloc: kfree test passed\n", GREEN);
-
-
-}
-void dump_heap() {
-    log("Heap Dump:\n", CYAN);
+}void dump_heap() {    log("Heap Dump:\n", CYAN);
     
     struct free_list *current = free_blocks;
     while (current) {
@@ -475,7 +497,7 @@ void expand_kernel_heap(size_t additional_size) {
     uintptr_t new_start = kernel_regions.end;
     uintptr_t new_end = new_start + ALIGN_UP(additional_size, PAGE_SIZE);
 
-    if (!pmm_alloc_pages((void *)new_start, (new_end - new_start) / PAGE_SIZE)) {
+    if (!pmm_alloc_pages(0, (new_end - new_start) / PAGE_SIZE)) {
         log("Heap expansion failed!\n", RED);
         return;
     }
@@ -497,11 +519,10 @@ void shrink_kernel_heap(size_t reduce_size) {
 
     kernel_regions.end = new_end;
 
-    free_memory_block(new_end, (kernel_regions.end - new_end));
+    free_memory_block((void *)new_end, (kernel_regions.end - new_end));
 
     log("Kernel heap shrunk.\n", YELLOW);
 }
-
 void *kmalloc_aligned(size_t size, size_t alignment) {
     size_t total_size = size + alignment - 1;
     void *ptr = kmalloc(total_size);

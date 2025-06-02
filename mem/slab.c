@@ -94,7 +94,7 @@ static slab_cache_t *create_slab_cache(size_t size) {
     if (size == 0) return NULL;
     
     size_t order = get_order(size);
-    slab_cache_t *cache = (slab_cache_t *)pmm_alloc_pages(0 , 1);
+    slab_cache_t *cache = (slab_cache_t *)vmm_malloc(sizeof(slab_cache_t));
     if (!cache) return NULL;
 
     if (!initialize_slab_cache(cache, size, order)) {
@@ -111,7 +111,7 @@ static slab_cache_t *create_slab_cache(size_t size) {
 static slab_t *create_slab(slab_cache_t *cache, size_t order) {
     if (!cache) return NULL;
 
-    slab_t *slab = (slab_t *)pmm_alloc_pages(order ,  1);;
+    slab_t *slab = (slab_t *)vmm_malloc(sizeof(slab_t) + cache->object_size * cache->num_objects*order);
     if (!slab) return NULL;
 
     if (!initialize_slab(slab, cache, order)) {
@@ -421,5 +421,4 @@ void unmap_slab_from_page_directory(PDE *page_directory, slab_t *slab) {
         vmm_unmap_page(page_directory, (uintptr_t)slab + (i * PAGE_SIZE));
     }
 }
-
 

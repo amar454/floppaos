@@ -12,7 +12,6 @@ FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARR
 You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "fshell.h"
 #include "../apps/echo.h"
 //#include "../apps/floptxt/floptxt.h"
 #include "../fs/flopfs/flopfs.h"
@@ -21,18 +20,17 @@ You should have received a copy of the GNU General Public License along with Flo
 #include "../lib/flopmath.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../drivers/acpi/acpi.h"
-#include "../task/task_handler.h"
+#include "../task/sched.h"
 #include "../drivers/time/floptime.h"
 #include "../mem/alloc.h"
 #include "command.h"  // Include the shared command header
 #include <stddef.h>
 #include <stdint.h>
-char current_time_string[32] = "";
 #define MAX_COMMAND_LENGTH 128 // Maximum command length
 #define MAX_ARGUMENTS 10       // Maximum number of arguments
 
 static void display_prompt() {
-    echo("fshell ->  ", WHITE); // Display the shell prompt
+    echo(" > ", WHITE); // Display the shell prompt
 }
 
 
@@ -129,7 +127,7 @@ void fshell_task(void *arg) {
     }
     // Initialize fshell
     if (!initialized) {
-        echo("\nfshell version v0.0.3-alpha\n", MAGENTA);
+        echo("\ndebug shell\n", MAGENTA);
         display_prompt();
         initialized = 1;
         return;
@@ -253,7 +251,7 @@ void fshell_task(void *arg) {
             }
             break;
         case 11: // "tdsp"
-            print_tasks();
+            //task_display();
             break;
         case 12: // "flopmath"
             //handle_flopmath_command(arguments, arg_count);
@@ -262,21 +260,21 @@ void fshell_task(void *arg) {
             qemu_power_off();
             break;
         case 14: // "vgatest"
-            vga_init();
-            vga_clear_screen();
-            console_print("Hi, this is a test of my VGA console", YELLOW);
-            sleep_seconds(5);
-            vga_clear_screen();
-            vga_desktop();
-            sleep_seconds(10);
-            vga_clear_screen();
+            //vga_init();
+            //vga_clear_screen();
+            //console_print("Hi, this is a test of my VGA console", YELLOW);
+            //sleep_seconds(5);
+            //vga_clear_screen();
+            //vga_desktop();
+            //sleep_seconds(10);
+            //vga_clear_screen();
             break;
         case 15: // "test_alloc"
             test_alloc();
             break;
         case 16: // "pause"
             if (arg_count > 1) {
-                sched_pause(flopatoi(arguments[1]));
+                //sched_pause_for(get_current_pid(), flopatoi(arguments[1]));
             } else {
                 echo("Usage: pause <ticks>\n", YELLOW);
             }

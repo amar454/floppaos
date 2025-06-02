@@ -11,15 +11,18 @@ void warn(uint32_t address, const char* msg, const char* warning);
 
 // kernel warning macros
 #define WARN(addr, msg, err) warn(addr, msg, warning)
-#define WARN_LOW_MEMORY_AVAILABLE(addr, used_mem)) WARN(used_mem_addr_end), "low amount of memory remaining: less than 32mb. Try clean_mem in the terminal or consider cancelling processes that are taking up large amounts of ram, or background processes.", "LOW_MEMORY_AVAILABLE")
+#define WARN_LOW_MEMORY_AVAILABLE(addr, used_mem) WARN(used_mem_addr_end), "low amount of memory remaining: less than 32mb. Try clean_mem in the terminal or consider cancelling processes that are taking up large amounts of ram, or background processes.", "LOW_MEMORY_AVAILABLE")
 
 
+void halt();
+void cpuhalt();
+void mem_dump(uint32_t address, uint32_t length);
 
 
 
 void panic(uint32_t address, const char* msg, const char* err);
 #define PANIC(addr, msg, err) panic(addr, msg, err)
-// Common panic macros
+// KERNEL PANIC LETS GOOOOOO
 #define PANIC_GENERIC(addr) PANIC(addr,"Generic panic error", "GENERIC_PANIC")
 #define PANIC_OUT_OF_MEMORY(addr) PANIC(addr,"Out of memory error", "OUT_OF_MEMORY")
 #define PANIC_MULTIBOOT_MAGIC_NOT_FOUND(addr) PANIC(addr,"Multiboot magic number not found", "MULTIBOOT_MAGIC_NOT_FOUND")
@@ -46,4 +49,7 @@ void panic(uint32_t address, const char* msg, const char* err);
 #define PANIC_FAILED_TO_CREATE_SLAB(addr) PANIC(addr,"Failed to create slab", "FAILED_TO_CREATE_SLAB")
 #define PANIC_PMM_NOT_INITIALIZED(addr) PANIC(addr,"PMM not initialized", "PMM_NOT_INITIALIZED")
 #define PANIC_FAILED_TO_FIND_CACHE_CONTAINING_SLAB(addr) PANIC(addr,"Failed to find cache containing slab", "FAILED_TO_FIND_CACHE_CONTAINING_SLAB")
+#define PANIC_KMALLOC_FAILED(addr) PANIC(addr,"kmalloc failed", "KMALLOC_FAILED")
+#define PANIC_FAILED_TO_ALLOCATE_TASK_STACK(stack_addr) PANIC(stack_addr, "failed to allocate stack for a task", "FAILED_TO_ALLOCATE_TASK_STACK")
+
 #endif // KERNEL_H

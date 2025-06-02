@@ -101,17 +101,14 @@ void pmm_init(multiboot_info_t* mb_info) {
 
     uint64_t total_memory = 0;
 
-    log("pmm: Looking through memory regions...\n", YELLOW);
+
     while ((uintptr_t)mmap < mmap_end) {
         if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE) {
             total_memory += mmap->len;
-            log("pmm: Available memory region found\n", LIGHT_GREEN);
         }
         else if (mmap->type == MULTIBOOT_MEMORY_RESERVED) {
-            log("pmm: Reserved memory region found\n", LIGHT_GRAY);
         }
-        log_address("pmm: Memory region start: ", mmap->addr);
-        log_uint("pmm: Memory region length: ", mmap->len / 1024);
+        
 
         mmap = (multiboot_memory_map_t*)((uintptr_t)mmap + mmap->size + sizeof(mmap->size));
     }
@@ -134,18 +131,42 @@ void pmm_init(multiboot_info_t* mb_info) {
         pmm_buddy.free_list[MAX_ORDER] = page;
     }
 
-    log_address("pmm: Memory start addr: ", pmm_buddy.memory_start);
-    log_address("pmm: Memory end addr: ", pmm_buddy.memory_end);
-    log_uint("pmm: Total memory (KB): ", total_memory / 1024);
-    log_uint("pmm: Total memory (MB): ", total_memory / (1024 * 1024));
-    log_uint("pmm: Total memory (GB): ", total_memory / (1024 * 1024 * 1024));
     log_uint("pmm: Total pages: ", pmm_buddy.total_pages);
-
+    log("pmm: memory availabe kb: ", LIGHT_GRAY);
+    log_uint("", total_memory / 1024);
+    log("pmm: memory availabe mb: ", LIGHT_GRAY);
+    log_uint("", total_memory / 1024 / 1024);
     log("pmm: Buddy allocator initialized\n", GREEN);
 }
 
 int pmm_get_memory_size(void) {
     return pmm_buddy.total_pages * PAGE_SIZE;
+}
+
+unsigned int pmm_get_free_memory_size(void) {
+    int free_pages = 0;
+    for (int i = 0; i <= MAX_ORDER; i++) {
+        struct Page* page = pmm_buddy.free_list[i];
+        while (page) {
+            free_pages++;
+            page = page->next;
+        }
+    }
+    return free_pages * PAGE_SIZE;
+}
+
+struct Page* pmm_get_last_used_page(void) {
+    for (int page_index = pmm_buddy.total_pages - 1; page_index >= 0; page_index--) {
+        struct Page* page = &pmm_buddy.page_info[page_index];
+        if (!page->is_free) {
+            return page;
+        }
+    }
+    return NULL;
+}
+
+inline uintptr_t page_to_phys_addr(struct Page* page) {
+    return page->address;
 }
 
 uint32_t page_index(uintptr_t addr) {
@@ -238,7 +259,7 @@ void print_mem_info() {
     log_uint("", pmm_buddy.total_pages);
     log("\nFree pages: ", LIGHT_GRAY);
     for (int i = 0; i <= MAX_ORDER; i++) {
-        log_uint("", pmm_buddy.free_list[i]);
+        log_uint("", (uint32_t)pmm_buddy.free_list[i]);
         log(" ", LIGHT_GRAY);
     }
     log("\n", LIGHT_GRAY);
