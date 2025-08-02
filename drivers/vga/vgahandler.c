@@ -44,12 +44,10 @@ static uint16_t terminal_x_saved = 0;
 static uint16_t terminal_y_saved = 0;
 
 void vga_clear_terminal() {
-    // Clear the entire terminal buffer
     for (unsigned int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-        terminal_buffer[i] = (0x07 << 8) | ' '; // Default color (light gray on black) and space character
+        terminal_buffer[i] = (0x07 << 8) | ' '; 
     }
 
-    // Reset the VGA index and cursor position
     vga_index = 0;
     vga_set_cursor_position(0, 0);
 }

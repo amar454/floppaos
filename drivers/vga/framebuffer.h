@@ -37,7 +37,7 @@ void framebuffer_init(multiboot_info_t *mbi);
 void framebuffer_put_pixel(int x, int y, uint32_t color);
 void framebuffer_draw_line(int x1, int y1, int x2, int y2, uint32_t color);
 void framebuffer_draw_rectangle(int x, int y, int width, int height, uint32_t color);
-
+void framebuffer_fill_screen(uint32_t color);
 void framebuffer_test_triangle();
 void framebuffer_test_rectangle();
 void framebuffer_test_circle();

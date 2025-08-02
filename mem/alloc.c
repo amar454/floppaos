@@ -46,7 +46,7 @@ alloc.c
 #include "../lib/str.h"
 #include "vmm.h"
 #include "../lib/logging.h"
-#include "../kernel.h"
+#include "../kernel/kernel.h"
 #include "../drivers/vga/vgahandler.h"
 
 #define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
@@ -211,7 +211,7 @@ void *get_memory_block_size(uintptr_t addr) {
     return (void *)(block->size & ~1);
 }
 
-PDE *kernel_page_directory = NULL;
+pde_t *kernel_page_directory = NULL;
 
 // get memory size, calculate appropriate heap size, allocate virtual address space for heap, and create the first memory block
 void init_kernel_heap(void) {
@@ -239,7 +239,12 @@ void init_kernel_heap(void) {
     kernel_regions.end = (uintptr_t)(KERNEL_HEAP_START + kernel_heap_size);
     kernel_regions.next = NULL;
 
-    log("Kernel heap initialized successfully\n", GREEN);
+    log("available memory kb: ", WHITE); log_uint("",(uint32_t)total_memory / 1024);
+    log("kernel heap size mb: ", WHITE); log_uint("",(uint32_t)kernel_heap_size / 1024 / 1024);
+    log("kernel heap size gb: ", WHITE); log_uint("",(uint32_t)kernel_heap_size / 1024 / 1024 / 1024);
+    log("kernel heap start: ", WHITE); log_uint("",(uint32_t)KERNEL_HEAP_START);
+    log("kernel heap end: ", WHITE); log_uint("",(uint32_t)KERNEL_HEAP_START + kernel_heap_size);
+    
 
     // now that we can alloc stuff, mark the heap as initialized.
     heap_initialized = 1;
@@ -250,8 +255,8 @@ void init_kernel_heap(void) {
 void free_memory_block(void *ptr, size_t size) {
     if (!ptr || size == 0) return;
 
-    if (size <= SLAB_MAX_SIZE) {
-        slab_free(ptr);
+    if (size <= 4096) {
+        slab_free(ptr, size);
         return;
     }
 
@@ -277,7 +282,7 @@ void *kmalloc(size_t size) {
     void *ptr = NULL;
 
     // allocate to slab if under 4kb
-    if (size <= SLAB_MAX_SIZE) {
+    if (size <= 4096) {
         void *ptr = slab_alloc(size);
         if (ptr) return ptr;
     }
@@ -296,7 +301,7 @@ void *kmalloc(size_t size) {
     }
 
     // now, if there is no suitable block in the free list, align to page size, and allocate physical pages
-    size_t pages = ALIGN_UP(size + sizeof(struct alloc_mem_block), SLAB_PAGE_SIZE) / SLAB_PAGE_SIZE;
+    size_t pages = ALIGN_UP(size + sizeof(struct alloc_mem_block), 4096) / 4096;
     ptr = pmm_alloc_pages(0, pages);
     if (!ptr) { // check if alloc worked (should)
         log("kmalloc: Failed to allocate memory for size: ", RED);
@@ -306,7 +311,7 @@ void *kmalloc(size_t size) {
     }
 
     // add that memory block
-    add_memory_block((uintptr_t)ptr, pages * SLAB_PAGE_SIZE, 0);
+    add_memory_block((uintptr_t)ptr, pages * 4096, 0);
 
     // return void pointer to the newly allocated memory block.
     return (void *)((struct alloc_mem_block *)ptr + 1);
@@ -317,9 +322,9 @@ void kfree(void *ptr, size_t size) {
     if (!ptr || size == 0) return;
 
     
-    if (size <= SLAB_MAX_SIZE) {
+    if (size <= 4096) {
         // woohoo slab dealloc is easy, just free from slab allocator
-        slab_free(ptr);
+        slab_free(ptr, size);
         return;
     }
     // otherwise, free mem block and add to free list.
@@ -635,7 +640,7 @@ bool is_heap_initialized() {
 }
 
 // zero, free, and mark the heap as uninitialized
-void destroy_kernel_heap(PDE *kernel_page_directory) {
+void destroy_kernel_heap(pde_t *kernel_page_directory) {
     log("alloc: Destroying kernel heap...\n", YELLOW);
     bool heap = is_heap_initialized();
     if (!heap) {

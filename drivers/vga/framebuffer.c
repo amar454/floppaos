@@ -406,6 +406,13 @@ void framebuffer_draw_rectangle(int x, int y, int width, int height, uint32_t co
         }
     }
 }
+void framebuffer_fill_screen(uint32_t color) {
+    for (int i = 0; i < _fb_instance.width; i++) {
+        for (int j = 0; j < _fb_instance.height; j++) {
+            framebuffer_put_pixel(i, j, color);
+        }
+    }
+}
 
 void framebuffer_draw_circle(int x_center, int y_center, int radius, uint32_t color) {
     int x = radius;
@@ -494,12 +501,19 @@ void init_console() {
         _fb_instance.red_mask_size, _fb_instance.red_field_position,
         _fb_instance.green_mask_size, _fb_instance.green_field_position,
         _fb_instance.blue_mask_size, _fb_instance.blue_field_position,
+        NULL, // bullshit
+        NULL, 
         NULL,
-        NULL, NULL,
-        NULL, NULL,
-        NULL, NULL,
-        NULL, 0, 0, 1,
-        0, 0,
+        NULL,
+        NULL,
+        NULL, 
+        NULL,
+        NULL, 
+        0, 
+        0, 
+        1,
+        0, 
+        0,
         0
     );
 }

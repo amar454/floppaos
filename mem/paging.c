@@ -6,329 +6,114 @@
 #include "../apps/echo.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../lib/logging.h"
-// Define page directory and page tables
-PDE page_directory[PAGE_DIRECTORY_SIZE] __attribute__((aligned(PAGE_SIZE)));
-PTE page_tables[PAGE_DIRECTORY_SIZE][PAGE_TABLE_SIZE] __attribute__((aligned(PAGE_SIZE)));
 
+#define PAGE_TABLE_SIZE 1024
+#define PAGE_DIRECTORY_SIZE 1024
+#define K_PD_INDEX 768
+#define K_HEAP_PD_INDEX 769
+#define PAGE_SIZE_SHIFT 12
+#define K_HEAP_START 0x00400000
+#define CR0_PG_BIT 0x80000000
+#define K_PHYS_START 0x00100000 // from linker 
 
-// Set page table entry flags using a PageAttributes struct
-void set_page_flags(PTE *entry, PageAttributes attributes) {
-    entry->present = attributes.present;
-    entry->rw = attributes.rw;
-    entry->user = attributes.user;
-    entry->write_thru = attributes.write_thru;
-    entry->cache_dis = attributes.cache_dis;
-    entry->accessed = attributes.accessed;
-    entry->dirty = attributes.dirty;
-    entry->pat = attributes.pat;
-    entry->global = attributes.global;
-    entry->available = attributes.available;
-    entry->frame_addr = attributes.frame_addr;
-}
+pde_t pd[PAGE_DIRECTORY_SIZE] __attribute__((aligned(PAGE_SIZE)));
+pte_t pt0[PAGE_TABLE_SIZE]    __attribute__((aligned(PAGE_SIZE)));
+pte_t pt1[PAGE_TABLE_SIZE]    __attribute__((aligned(PAGE_SIZE)));
+pte_t pt2[PAGE_TABLE_SIZE]    __attribute__((aligned(PAGE_SIZE)));
 
-void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
-    uint32_t cr0, cr4;
-
-    //log("paging: Initializing paging...\n", LIGHT_GRAY);
-
-
-    // Load the page directory base address into CR3
-    __asm__ volatile("mov %0, %%cr3" : : "r"(page_directory));
-
-
-    //log("paging: Modifying CR0 to enable paging...\n", LIGHT_BLUE);
-    //log("paging: Setting PG (Paging Enable) (bit 31)  bit...\n", LIGHT_BLUE);
-    if (enable_wp) {
-        log("paging: Enabling WP (Write Protect) (bit 31) in CR0...\n", LIGHT_BLUE);
-    }
-    __asm__ volatile(
-        "mov %%cr0, %0\n"
-        "or %1, %0\n"
-        "mov %0, %%cr0"
-        : "=r"(cr0) 
-        : "r"(enable_wp ? 0x80010000 : 0x80000000) // 0x80010000 -> PG + WP
+static void load_page_directory(uintptr_t _pd_addr) {
+    asm volatile (
+        "mov %0, %%cr3" :: "r"(_pd_addr) : "memory"
     );
-    log("paging: CR0 modified successfully.\n", LIGHT_GREEN);
-    // Enable PSE (Page Size Extension) if requested by setting the PSE bit (bit 4) in CR4
-    if (enable_pse) {
-        //log("paging: Enabling PSE (Page Size Extension) (bit 4) in CR4...\n", LIGHT_BLUE);
-        __asm__ volatile(
-            "mov %%cr0, %0\n"
-            "or %1, %0\n"
-            "mov %0, %%cr0"
-            : "=r"(cr0)
-            : "r"(enable_wp ? 0x80010000 : 0x80000000)
-            : "memory"
-        );
-        
-
-        // Log the updated CR4 value
-        //log("paging: PSE enabled successfully in CR4.\n", LIGHT_GREEN);
-    } else {
-        //log("paging: Skipping PSE (Page Size Extension) setup as requested.\n", LIGHT_BLUE);
-    }
-
-    // Final confirmation
-    log("paging: Paging successfully enabled.\n", GREEN);
 }
 
+static void enable_paging(void) {
+    uint32_t cr0;
+    __asm__ volatile("mov %%cr0, %0" : "=r"(cr0));
+    cr0 |= CR0_PG_BIT;
+    __asm__ volatile("mov %0, %%cr0" :: "r"(cr0));
+}
 
-static void create_first_page_table() {
-    log("paging: Creating first page table (identity-mapped 4 MiB)...\n", LIGHT_GRAY);
+void paging_init(void) {
+    log("paging: Initializing paging...\n", LIGHT_GRAY);
 
+    // Zero page directory
+    for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
+        page_attrs_t attrs = {0};
+        SET_PF((pte_t *)&pd[i], attrs);
+    }
+
+    // Identity map first 4MB 
     for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
-        uint32_t frame = i * PAGE_SIZE; // Physical address
-        PageAttributes attributes = {
+        page_attrs_t attrs = {
             .present = 1,
             .rw = 1,
             .user = 0,
-            .write_thru = 0,
-            .cache_dis = 0,
-            .accessed = 0,
-            .dirty = 0,
-            .pat = 0,
-            .global = 0,
-            .available = 0,
-            .frame_addr = frame >> 12
+            .frame_addr = i
         };
-
-        set_page_flags(&page_tables[0][i], attributes);
-
-        if (i % 64 == 0) { // Reduce log spam
-            //log("paging: Mapped frame: ", LIGHT_GRAY);
-            //log_address("", frame);
-        }
+        SET_PF(&pt0[i], attrs);
     }
-    //log("paging: First page table created.\n", GREEN);
-}
+    pd[0].present = 1;
+    pd[0].rw = 1;
+    pd[0].user = 0;
+    pd[0].table_addr = ((uintptr_t)pt0) >> PAGE_SIZE_SHIFT;
 
-
-// Create the page directory and link the first page table
-static void create_first_page_directory() {
-    //log("paging: Creating page directory...\n", LIGHT_GRAY);
-
-    //log("paging: Initializing page directory entries...\n", LIGHT_GRAY);
-    for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        PageAttributes attributes = {
-            .present = 0,
-            .rw = 1,   // Read/Write
-            .user = 0, // Supervisor (kernel mode)
-            .write_thru = 0,
-            .cache_dis = 0,
-            .accessed = 0,
-            .dirty = 0,
-            .pat = 0,
-            .global = 0,
-            .available = 0,
-            .frame_addr = 0
+    // Map kernel at 3GB (virtual) to physical 1MB
+    for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
+        page_attrs_t attrs = {
+            .present = 1,
+            .rw = 1,
+            .user = 0,
+            .frame_addr = (K_PHYS_START >> PAGE_SIZE_SHIFT) + i
         };
-        set_page_flags((PTE *)&page_directory[i], attributes);
+        SET_PF(&pt1[i], attrs);
     }
+    pd[K_PD_INDEX].present = 1;
+    pd[K_PD_INDEX].rw = 1;
+    pd[K_PD_INDEX].user = 0;
+    pd[K_PD_INDEX].table_addr = ((uintptr_t)pt1) >> PAGE_SIZE_SHIFT;
 
-    // Link the first page table
-    //log("paging: Linking the first page table...\n", LIGHT_GRAY);
-    page_directory[0].present = 1; // Mark the first entry as present
-    page_directory[0].rw = 1;      // Read/Write
-    page_directory[0].user = 0;   // Supervisor (kernel mode)
-    page_directory[0].table_addr = ((uintptr_t)&page_tables[0] >> 12);
-
-    //log("paging: Page directory created and first table linked.\n", GREEN);
-}
-
-// Create a new page directory
-PDE *create_new_page_directory() {
-    //log("paging: Creating a new page directory...\n", LIGHT_GRAY);
-
-    PDE *new_page_directory = (PDE *)pmm_alloc_page();
-    if (!new_page_directory) {
-        //log("paging: Failed to allocate memory for new page directory!\n", RED);
-        return NULL;
-    }
-
-    //log("paging: Initializing new page directory entries...\n", LIGHT_GRAY);
-    for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        PageAttributes attributes = {
-            .present = 0,
-            .rw = 1,   // Read/Write
-            .user = 0, // Supervisor (kernel mode)
-            .write_thru = 0,
-            .cache_dis = 0,
-            .accessed = 0,
-            .dirty = 0,
-            .pat = 0,
-            .global = 0,
-            .available = 0,
-            .frame_addr = 0
+    // Map kernel heap (next 4MB)
+    for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
+        page_attrs_t attrs = {
+            .present = (i != PAGE_TABLE_SIZE - 1) ? 1 : 0,
+            .rw = 1,
+            .user = 0,
+            .frame_addr = (K_HEAP_START >> PAGE_SIZE_SHIFT) + i
         };
-        set_page_flags((PTE *)&new_page_directory[i], attributes);
+        SET_PF(&pt2[i], attrs);
+    }
+    pd[K_HEAP_PD_INDEX].present = 1;
+    pd[K_HEAP_PD_INDEX].rw = 1;
+    pd[K_HEAP_PD_INDEX].user = 0;
+    pd[K_HEAP_PD_INDEX].table_addr = ((uintptr_t)pt2) >> PAGE_SIZE_SHIFT;
+
+    // Mark all other user entries as not present, but user-accessible
+    for (int i = 1; i < K_PD_INDEX; i++) {
+        pd[i].present = 0;
+        pd[i].rw = 1;
+        pd[i].user = 1;
     }
 
-    //log("paging: New page directory created successfully.\n", GREEN);
-    return new_page_directory;
-}
+    // Fractal mapping: last entry points to page directory itself
+    pd[PAGE_DIRECTORY_SIZE - 1].present = 1;
+    pd[PAGE_DIRECTORY_SIZE - 1].rw = 1;
+    pd[PAGE_DIRECTORY_SIZE - 1].user = 0;
+    pd[PAGE_DIRECTORY_SIZE - 1].table_addr = ((uintptr_t)pd) >> PAGE_SIZE_SHIFT;
 
-PDE *create_page_directory() {
-    PDE *page_directory = (PDE *)pmm_alloc_page();
-    if (!page_directory) {
-        //log("paging: Failed to allocate page directory!\n", RED);
-        return NULL;
-    }
-
-    PageAttributes attributes = {
-        .present = 0,
-        .rw = 0,
-        .user = 0,
-        .write_thru = 0,
-        .cache_dis = 0,
-        .accessed = 0,
-        .dirty = 0,
-        .pat = 0,
-        .global = 0,
-        .available = 0,
-        .frame_addr = 0
-    };
-
-    // Initialize all entries in the page directory
-    for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        set_page_flags((PTE *)&page_directory[i], attributes);
-    }
-
-    return page_directory;
-}
-
-PDE *create_user_page_directory() { 
-    PDE *user_page_directory = (PDE *)pmm_alloc_page();
-    if (!user_page_directory) {
-        //log("paging: Failed to allocate user page directory!\n", RED);
-        return NULL;
-    }
-
-    PageAttributes attributes = {
-        .present = 0,
-        .rw = 1,       // Read/Write
-        .user = 1,     // User mode
-        .write_thru = 0,
-        .cache_dis = 0,
-        .accessed = 0,
-        .dirty = 0,
-        .pat = 0,
-        .global = 0,
-        .available = 0,
-        .frame_addr = 0
-    };
-
-    for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        set_page_flags((PTE *)&user_page_directory[i], attributes);
-    }
-
-    return user_page_directory;
-}
-
-PDE *destroy_user_page_directory(PDE *user_page_directory) {
-    if (!user_page_directory) return NULL;
-
-    for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        if (user_page_directory[i].present) {
-            PDE *page_table = (PDE *)(uintptr_t)(user_page_directory[i].table_addr << 12);
-            pmm_free_page(page_table);
-        }
-    }
-
-    pmm_free_page(user_page_directory);
-    return NULL;
-}
-
-PTE *get_page_table(PDE *page_directory, uint32_t index) {
-    if (index >= PAGE_DIRECTORY_SIZE) {
-        log("paging: Invalid page directory index!\n", RED);
-        return NULL;
-    }
-
-    if (!page_directory[index].present) {
-        log_uint("Page table not present at index: ", index);
-        return NULL;
-    }
-
-    return (PTE *)(uintptr_t)(page_directory[index].table_addr << 12);
-}
-
-PTE *get_page_table_entry(PDE *page_directory, uintptr_t virt_addr) {
-    uint32_t dir_index = virt_addr >> 22;
-    uint32_t table_index = (virt_addr >> 12) & 0x3FF;
-
-    if (!page_directory[dir_index].present) {
-        log("paging: Page directory entry not present!\n", RED);
-        return NULL;
-    }
-
-    PTE *page_table = get_page_table(page_directory, dir_index);
-    if (!page_table) {
-        log("paging: Failed to get page table!\n", RED);
-        return NULL;
-    }
-
-    return &page_table[table_index];
-}
-
-PTE *get_page_table_entry_by_index(PDE *page_directory, uint32_t index) {
-    if (index >= PAGE_DIRECTORY_SIZE) {
-        log("paging: Invalid page directory index!\n", RED);
-        return NULL;
-    }
-
-    if (!page_directory[index].present) {
-        log_uint("paging: Page table not present at index: ", index);
-        return NULL;
-    }
-
-    return (PTE *)(uintptr_t)(page_directory[index].table_addr << 12);
-}
-
-PTE *destroy_page_table(PDE *page_directory, uint32_t index) {
-    if (index >= PAGE_DIRECTORY_SIZE) {
-        log("paging: Invalid page directory index!\n", RED);
-        return NULL;
-    }
-
-    if (!page_directory[index].present) {
-        log_uint("paging: Page table not present at index: ", index);
-        return NULL;
-    }
-
-    PTE *page_table = get_page_table(page_directory, index);
-    if (!page_table) {
-        log("paging: Failed to get page table!\n", RED);
-        return NULL;
-    }
-
-    pmm_free_page(page_table);
-    page_directory[index].present = 0;
-
-    return NULL;
-}
-
-void destroy_page_directory(PDE *page_directory) {
-    if (!page_directory) return;
-
-    for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        if (page_directory[i].present) {
-            PDE *page_table = (PDE *)(uintptr_t)(page_directory[i].table_addr << 12);
-            pmm_free_page(page_table);
-        }
-    }
-
-    pmm_free_page(page_directory);
-}
-
-
-
-// Initialize paging
-void paging_init() {
-
-    log("paging: Initializing paging...\n", LIGHT_GRAY);
-    create_first_page_directory();  // Create and initialize the page directory
-    create_first_page_table(); // Identity map the first 4 MiB
-    enable_paging(1, 1);      // Enable paging with WP and PSE
+    load_page_directory((uintptr_t)pd);
+    enable_paging();
     log("paging: Paging initialized.\n", GREEN);
+}
 
+void _flush_tlb(void) {
+    uintptr_t cr3;
+    __asm__ volatile("mov %%cr3, %0" : "=r"(cr3));
+    __asm__ volatile("mov %0, %%cr3" :: "r"(cr3));
+}
+
+void remove_id_map(void) {
+    pd[0].present = 0;
+    _flush_tlb();
+    log("paging: Removed identity map.\n", GREEN);
 }

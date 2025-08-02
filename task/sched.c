@@ -1,162 +1,144 @@
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-
 #include "sched.h"
 #include "thread.h"
-#include "../lib/logging.h"
 #include "../mem/alloc.h"
-#include "../mem/utils.h"
+#include "../mem/pmm.h"
+#include "../mem/vmm.h"
+#include "../lib/logging.h"
+#include "../lib/str.h"
+#include "../interrupts/interrupts.h"
+#include <stdint.h>
+#include <stddef.h>
 
-extern void context_switch(thread_t* new_thread);
-extern void _thread_entry(void (*fn)(void*), void* arg);  // Assembly function
-extern uint32_t stack_space; // from boot.asm
-
-#define THREAD_LIST_INIT ((thread_list_t){ .count = 0, .head = NULL, .tail = NULL })
-#define LIST_CONTAINER_GET(ptr, type, member) ((type*)((char*)(ptr) - offsetof(type, member)))
-
-static thread_list_t ready_list = THREAD_LIST_INIT;
+thread_t* thread_list_head = NULL;
 thread_t* current_thread = NULL;
-static void _initial_node(thread_list_t* list, list_node_t* node) {
-    log("sched: initializing thread list with single node\n", WHITE);
-    node->next = node->prev = NULL;
-    list->head = list->tail = node;
-    list->count = 1;
+thread_t* idle_thread = NULL;
+uint32_t next_thread_id = 1;
+
+extern uint32_t global_tick_count;
+
+static void idle_loop() {
+    while (1) {
+        asm volatile ("hlt");
+    }
+}
+void ctx_switch(cpu_ctx_t* _old, cpu_ctx_t* _new) {
+    asm volatile (
+        "pushf\n"
+        "pusha\n"
+        "movl %%esp, %[old]\n"
+        "movl %[new], %%esp\n"
+        "popa\n"
+        "popf\n"
+        "ret\n"
+        : [old] "=m"(*_old)
+        : [new] "m"(*_new)
+        : "memory"
+    );
+}
+void sched_init() {
+    thread_list_head = NULL;
+    current_thread = NULL;
+    next_thread_id = 1;
+    idle_thread = sched_create_thread(idle_loop);
+    idle_thread->id = 0;
+    idle_thread->state = THREAD_READY;
 }
 
-static void _node_append(thread_list_t* list, list_node_t* pos, list_node_t* node) {
-    log("sched: appending node to list\n", WHITE);
-    node->next = pos->next;
-    node->prev = pos;
-    if (pos->next) pos->next->prev = node;
-    pos->next = node;
-    if (list->tail == pos) list->tail = node;
-    list->count++;
+thread_t* sched_create_thread(void (*entry)(void)) {
+    thread_t* t = (thread_t*)kmalloc(sizeof(thread_t));
+    t->stack = (uint8_t*)kmalloc(THREAD_STACK_SIZE);
+    t->ctx.eip = (uint32_t)entry;
+    t->ctx.esp = (uint32_t)(t->stack + THREAD_STACK_SIZE);
+    t->state = THREAD_READY;
+    t->wake_tick = 0;
+    t->id = next_thread_id++;
+    sched_add_thread(t);
+    return t;
 }
 
-static void _node_delete(thread_list_t* list, list_node_t* node) {
-    log("sched: deleting node from list\n", WHITE);
-    if (list->head == node) list->head = node->next;
-    if (list->tail == node) list->tail = node->prev;
-    if (node->prev) node->prev->next = node->next;
-    if (node->next) node->next->prev = node->prev;
-    node->next = node->prev = NULL;
-    list->count--;
-}
-
-static void _push_back(thread_list_t* list, list_node_t* node) {
-    log("sched: pushing node to back of list\n", WHITE);
-    if (!list->tail) {
-        _initial_node(list, node);
+void sched_add_thread(thread_t* t) {
+    if (!thread_list_head) {
+        thread_list_head = t;
+        t->next = t;
+        t->prev = t;
     } else {
-        _node_append(list, list->tail, node);
+        thread_t* tail = thread_list_head->prev;
+        tail->next = t;
+        t->prev = tail;
+        t->next = thread_list_head;
+        thread_list_head->prev = t;
     }
 }
 
-static list_node_t* _pop_front(thread_list_t* list) {
-    if (!list->head) return NULL;
-    log("sched: popping node from front of list\n", WHITE);
-    list_node_t* node = list->head;
-    _node_delete(list, node);
-    return node;
-}
-
-void thread_enqueue(thread_t* thread) {
-    log("sched: enqueueing thread\n", WHITE);
-    if (thread->state == THREAD_READY) {
-        _push_back(&ready_list, &thread->node);
+void sched_remove_thread(thread_t* t) {
+    if (t->next == t) {
+        thread_list_head = NULL;
+    } else {
+        t->prev->next = t->next;
+        t->next->prev = t->prev;
+        if (thread_list_head == t)
+            thread_list_head = t->next;
     }
 }
 
-void thread_dequeue(thread_t* thread) {
-    log("sched: dequeueing thread\n", WHITE);
-    list_node_t* current = ready_list.head;
-    while (current) {
-        if (current == &thread->node) {
-            _node_delete(&ready_list, &thread->node);
-            return;
-        }
-        current = current->next;
-    }
-}
-
-thread_t* _create_initial_thread(void) {
-    log("sched: creating initial thread\n", WHITE);
-    thread_t* thread = thread_alloc();
-    if (!thread) {
-        log("sched: failed to allocate initial thread\n", WHITE);
-        for (;;);
-    }
-    thread->id = 0;
-    thread->state = THREAD_RUNNING;
-    uint32_t esp;
-    asm volatile("mov %%esp, %0" : "=r"(esp));
-    thread->esp = esp;
-    thread->base_esp = (uintptr_t)&stack_space - STACK_SIZE;
-    return thread;
-}
-
-void scheduler_init(void) {
-    log("sched: initializing scheduler\n", WHITE);
-    thread_t* init = _create_initial_thread();
-    current_thread = init;
-    ready_list = THREAD_LIST_INIT;
-    log("sched: scheduler initialized\n", WHITE);
-}
-
-void schedule(void) {
-    log("sched: starting schedule\n", WHITE);
-    
-    // Clean up current thread if it's done
-    if (current_thread && 
-        (current_thread->state == THREAD_EXITED || current_thread->state == THREAD_DEAD)) {
-        log("sched: current thread exited/dead, deallocating\n", WHITE);
-        thread_t* old = current_thread;
-        current_thread = NULL;
-        dealloc_thread(old);
-    }
-    
-    // Pick the next thread from ready list
-    thread_t* next_thread = NULL;
-    list_node_t* node = ready_list.head;
-    while (node) {
-        thread_t* t = LIST_CONTAINER_GET(node, thread_t, node);
-        if (t->state == THREAD_READY) {
-            next_thread = t;
+void sched_yield() {
+    if (!current_thread) return;
+    thread_t* old = current_thread;
+    thread_t* t = current_thread->next;
+    while (t != current_thread) {
+        if (t->state == THREAD_READY)
+            break;
+        if (t->state == THREAD_SLEEPING && global_tick_count >= t->wake_tick) {
+            t->state = THREAD_READY;
             break;
         }
-        node = node->next;
+        t = t->next;
     }
-    
-    if (!next_thread) {
-        if (current_thread && current_thread->state == THREAD_RUNNING) {
-            log("sched: no ready thread, continuing current\n", WHITE);
-            return;
-        }
-        log("sched: no ready thread and no running thread. System halted.\n", WHITE);
-        for (;;);
+    if (t == current_thread && current_thread->state != THREAD_READY)
+        t = idle_thread;
+    if (t != current_thread) {
+        current_thread = t;
+        ctx_switch(&old->ctx, &current_thread->ctx);
     }
-
-    log("sched: found next thread, preparing to switch\n", WHITE);
-
-    if (current_thread && current_thread->state == THREAD_RUNNING) {
-        log("sched: requeueing current thread\n", WHITE);
-        current_thread->state = THREAD_READY;
-        thread_enqueue(current_thread);
-    }
-    log("sched: removing next thread from ready list\n", WHITE);
-    _node_delete(&ready_list, &next_thread->node);
-    next_thread->state = THREAD_RUNNING;
-    
-    log("sched: calling context_switch\n", WHITE);
-    
-    context_switch(next_thread);
-    
-
-    log("sched: returned from context_switch\n", WHITE);
 }
 
-void yield(void) {
-    log("sched: yield called\n", WHITE);
-    schedule();
+thread_t* sched_get_current() {
+    return current_thread;
+}
+
+void sched_sleep(uint32_t ticks) {
+    if (!current_thread) return;
+    current_thread->state = THREAD_SLEEPING;
+    current_thread->wake_tick = global_tick_count + ticks;
+    sched_yield();
+}
+
+void sched_exit() {
+    if (!current_thread) return;
+    thread_t* exiting = current_thread;
+    current_thread->state = THREAD_EXITED;
+    sched_remove_thread(current_thread);
+    sched_yield();
+    kfree(exiting->stack, THREAD_STACK_SIZE);
+    kfree(exiting, sizeof(thread_t));
+}
+
+void sched_tick() {
+    thread_t* t = thread_list_head;
+    if (!t) return;
+    do {
+        if (t->state == THREAD_SLEEPING && global_tick_count >= t->wake_tick)
+            t->state = THREAD_READY;
+        t = t->next;
+    } while (t != thread_list_head);
+}
+
+void sched_start() {
+    if (!thread_list_head) return;
+    current_thread = thread_list_head;
+    if (current_thread->state == THREAD_READY)
+        current_thread->state = THREAD_RUNNING;
+    void (*fn)(void) = (void (*)(void))current_thread->ctx.eip;
+    fn();
+    sched_exit();
 }

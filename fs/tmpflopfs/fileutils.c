@@ -13,7 +13,7 @@ extern uint8_t *simulated_disk;
 uint32_t tmp_next_free_offset = 0;
 
 TmpFileDescriptor *flop_open(const char *tmp_filename, int mode) {
-    TmpFileDescriptor *fd = (TmpFileDescriptor *)vmm_malloc(sizeof(TmpFileDescriptor));
+    TmpFileDescriptor *fd = (TmpFileDescriptor *)kmalloc(sizeof(TmpFileDescriptor));
     if (!fd) return NULL;
 
     if (mode == FILE_MODE_WRITE) {
@@ -36,7 +36,7 @@ TmpFileDescriptor *flop_open(const char *tmp_filename, int mode) {
 // Close the file and free resources
 int flop_close(TmpFileDescriptor *tmp_file) {
     if (!tmp_file) return -1;
-    vmm_free(tmp_file, tmp_file->size);  // Free the allocated memory for file descriptor
+    kfree(tmp_file, tmp_file->size);  // Free the allocated memory for file descriptor
     return 0;
 }
 
@@ -67,7 +67,7 @@ size_t flop_write(TmpFileDescriptor *tmp_file, const void *buffer, size_t size) 
 
     // Ensure the file has allocated memory
     if (!tmp_file->data) {
-        tmp_file->data = (uint8_t *)vmm_malloc(TMP_DISK_SIZE);  // Allocate memory via VMM
+        tmp_file->data = (uint8_t *)kmalloc(TMP_DISK_SIZE);  // Allocate memory via VMM
         if (!tmp_file->data) {
             echo("flop_write: Failed to allocate virtual memory for file.\n", RED);
             return 0;

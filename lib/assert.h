@@ -2,7 +2,7 @@
 #include "../drivers/vga/vgahandler.h"
 #include "../lib/logging.h"
 
-#include "../kernel.h"
+#include "../kernel/kernel.h"
 
 
 #define ASSERT(expr) if (!(expr)) { \

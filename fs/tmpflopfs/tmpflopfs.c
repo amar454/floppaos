@@ -6,6 +6,7 @@
 #include "fileutils.h"
 #include "../../mem/vmm.h"
 #include "../../mem/pmm.h"
+#include "../../mem/alloc.h"
 #include "../../mem/utils.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -36,7 +37,7 @@ void init_tmpflopfs(struct TmpFileSystem *tmp_fs) {
     flop_memset(tmp_fs->tmp_root_directory, 0, MAX_TMP_PATH_LENGTH);
     tmpflopfs_strcopy(tmp_fs->tmp_root_directory, "root");
 
-    simulated_disk = vmm_malloc(TMP_DISK_SIZE);
+    simulated_disk = kmalloc(TMP_DISK_SIZE);
     if (!simulated_disk) {
         log("init_tmpflopfs: Failed to allocate memory for simulated disk!\n", RED);
         return;

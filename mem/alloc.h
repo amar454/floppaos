@@ -19,6 +19,6 @@ void* kcalloc(uint32_t num, size_t size);
 
 void *krealloc(void *ptr, size_t old_size, size_t new_size) ;
 void init_kernel_heap(void);
-void destroy_kernel_heap(PDE *kernel_page_directory);
+void destroy_kernel_heap(pde_t *kernel_page_directory);
 void test_alloc();
 #endif // KMALLOC_H

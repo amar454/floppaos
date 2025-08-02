@@ -3,11 +3,16 @@
 
 #include <stdint.h>
 
-#define PAGE_DIRECTORY_SIZE 1024
-#define PAGE_TABLE_SIZE     1024
-#define PAGE_SIZE           4096
+#define PAGE_SIZE             4096
+#define PAGE_TABLE_SIZE       1024
+#define PAGE_DIRECTORY_SIZE   1024
+#define PAGE_SIZE_SHIFT       12
+#define K_PD_INDEX            768
+#define K_HEAP_PD_INDEX       769
+#define K_HEAP_START          0x00400000
+#define KERNEL_PHYSICAL_START 0x00100000
+#define CR0_PG_BIT            0x80000000
 
-// Page Table Entry (PTE) structure
 typedef struct {
     uint32_t present    : 1;
     uint32_t rw         : 1;
@@ -20,9 +25,8 @@ typedef struct {
     uint32_t global     : 1;
     uint32_t available  : 3;
     uint32_t frame_addr : 20;
-} __attribute__((packed)) PTE;
+} __attribute__((packed)) pte_t;
 
-// Page Directory Entry (PDE) structure
 typedef struct {
     uint32_t present    : 1;
     uint32_t rw         : 1;
@@ -35,9 +39,8 @@ typedef struct {
     uint32_t global     : 1;
     uint32_t available  : 3;
     uint32_t table_addr : 20;
-} __attribute__((packed)) PDE;
+} __attribute__((packed)) pde_t;
 
-// Helper structure for page attributes
 typedef struct {
     uint32_t present    : 1;
     uint32_t rw         : 1;
@@ -50,27 +53,28 @@ typedef struct {
     uint32_t global     : 1;
     uint32_t available  : 3;
     uint32_t frame_addr : 20;
-} PageAttributes;
+} page_attrs_t;
 
-// Global page directory and page tables
-extern PDE page_directory[PAGE_DIRECTORY_SIZE];
-extern PTE page_tables[PAGE_DIRECTORY_SIZE][PAGE_TABLE_SIZE];
+#define SET_PF(entry, attrs) do {             \
+    (entry)->present    = (attrs).present;    \
+    (entry)->rw         = (attrs).rw;         \
+    (entry)->user       = (attrs).user;       \
+    (entry)->write_thru = (attrs).write_thru; \
+    (entry)->cache_dis  = (attrs).cache_dis;  \
+    (entry)->accessed   = (attrs).accessed;   \
+    (entry)->dirty      = (attrs).dirty;      \
+    (entry)->pat        = (attrs).pat;        \
+    (entry)->global     = (attrs).global;     \
+    (entry)->available  = (attrs).available;  \
+    (entry)->frame_addr = (attrs).frame_addr; \
+} while(0)
+extern pde_t pd[PAGE_DIRECTORY_SIZE];
+extern pte_t pt0[PAGE_TABLE_SIZE];
+extern pte_t pt1[PAGE_TABLE_SIZE];
+extern pte_t pt2[PAGE_TABLE_SIZE];
 
-// Function declarations
-void set_page_flags(PTE *entry, PageAttributes attributes);
-void enable_paging(uint8_t enable_wp, uint8_t enable_pse);
-
-PDE* create_page_directory();
-PTE* create_page_table();
-PTE* get_page_table(PDE *page_directory, uint32_t index);
-PTE* get_page_table_entry(PDE *page_directory, uintptr_t virt_addr);
-PTE* get_page_table_entry_by_index(PDE *page_directory, uint32_t index);
-PTE* destroy_page_table(PDE *page_directory, uint32_t index);
-void destroy_page_directory(PDE *page_directory);
-
-PDE* create_user_page_directory();
-PDE* destroy_user_page_directory(PDE *user_page_directory);
-
-void paging_init();
+void paging_init(void);
+void remove_id_map(void);
+void _flush_tlb(void);
 
 #endif

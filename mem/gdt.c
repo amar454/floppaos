@@ -9,7 +9,6 @@
 GDTEntry gdt[GDT_ENTRIES];
 GDTPointer gdt_ptr;
 
-// Inline assembly function to flush the GDT
 void gdt_flush(uint32_t gdt_ptr_address) {
     __asm__ __volatile__ (
         "lgdt (%0)\n"          
@@ -27,7 +26,6 @@ void gdt_flush(uint32_t gdt_ptr_address) {
     );
 }
 
-// Function to set an entry in the GDT
 void set_gdt_entry(int num, uint32_t base, uint32_t limit, uint8_t access, uint8_t granularity) {
 
     gdt[num].base_low = (uint16_t)(base & 0xFFFF);
@@ -66,7 +64,7 @@ void switch_to_kernel_mode() {
 }
 void init_gdt() {
     gdt_ptr.limit = (sizeof(GDTEntry) * GDT_ENTRIES) - 1;
-    gdt_ptr.base = (uintptr_t)&gdt; // Explicit cast
+    gdt_ptr.base = (uintptr_t)&gdt;
 
     log("Initializing gdt...\n", LIGHT_GRAY);
     
