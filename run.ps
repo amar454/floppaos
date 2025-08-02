@@ -1,2 +1,14 @@
+<<<<<<< HEAD
 cd 'C:\Program Files\qemu\'  
 .\'C:\Program Files\qemu\qemu-system-i386.exe' -cdrom 'iso/floppaOS-alpha.iso' --no-shutdown -monitor stdio
+=======
+$exists = Get-Command qemu-system-i386.exe -ErrorAction SilentlyContinue
+if (-not $exists) {
+    Write-Host "QEMU is not installed or not in PATH."
+    pause
+    exit 1
+}
+
+$iso = "$env:USERPROFILE\floppaos\iso\floppaOS-alpha.iso"
+Start-Process "qemu-system-i386.exe" -ArgumentList "-cdrom `"$iso`""
+>>>>>>> 9ece86aa2498942de36ba94735bbaac0ccea77db
