@@ -32,7 +32,6 @@ kernel.c:
 #include "../apps/echo.h"
 #include "../drivers/time/floptime.h"
 #include "../fs/tmpflopfs/tmpflopfs.h"
-#include "../fshell/fshell.h"
 #include "../drivers/keyboard/keyboard.h"
 #include "../interrupts/interrupts.h"
 #include "../lib/str.h"
@@ -138,12 +137,12 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     init_kernel_heap();
 
     sleep_seconds(1);
-    struct TmpFileSystem tmp_fs;
-    init_tmpflopfs(&tmp_fs);  
+    tmpfs_init();
 
     sched_init();
     sleep_seconds(1);
   
+    sched_start();
     draw_floppaos_logo(); 
     echo ("Flopperating System - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
   

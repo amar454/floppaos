@@ -54,6 +54,7 @@ void buddy_merge(uintptr_t addr, uint32_t order) {
         while (*prev && *prev != buddy_page) {
             prev = &(*prev)->next;
         }
+
         if (*prev) {
             *prev = buddy_page->next;
         }
@@ -128,6 +129,7 @@ void pmm_init(multiboot_info_t* mb_info) {
     log_uint("", total_memory / 1024 / 1024);
     log("pmm: Buddy allocator initialized\n", GREEN);
 }
+
 void pmm_copy_page(void* dst, void* src) {
     for (int i = 0; i < PAGE_SIZE / sizeof(uint32_t); i++) {
         ((uint32_t*)dst)[i] = ((uint32_t*)src)[i];
@@ -182,6 +184,16 @@ void pmm_free_pages(void* addr, uint32_t order, uint32_t count) {
         current_addr += (1 << order) * PAGE_SIZE;
     }
 }
+int pmm_is_valid_addr(uintptr_t addr) {
+    if (addr % PAGE_SIZE != 0) return 0;
+
+    if (addr < buddy.memory_start || addr >= buddy.memory_end) return 0;
+
+    uint32_t index = page_index(addr);
+    if (index >= buddy.total_pages) return 0;
+
+    return 1;
+}
 
 void* pmm_alloc_page(void) {
     return pmm_alloc_pages(0, 1);
@@ -228,6 +240,7 @@ struct Page* phys_to_page_index(uintptr_t addr) {
     if (index >= buddy.total_pages) return NULL;
     return &buddy.page_info[index];
 }
+
 
 void log_page_info(struct Page* page) {
     log_address("pmm: Page address: ", page->address);

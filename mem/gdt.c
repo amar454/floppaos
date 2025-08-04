@@ -43,32 +43,18 @@ void create_user_data_segment(uint32_t base, uint32_t limit, uint8_t access, uin
     set_gdt_entry(2, base, limit, access, granularity);
 }
 
-void switch_to_user_mode() {
-    gdt_flush((uint32_t)(uintptr_t)&gdt_ptr);
-    set_gdt_entry(0, 0, 0, 0, 0);               // Null Descriptor
-    set_gdt_entry(1, 0, 0xFFFFF, 0x9A, 0xCF);   // Code Segment
-    set_gdt_entry(2, 0, 0xFFFFF, 0x92, 0xCF);   // Data Segment
-    gdt_flush((uint32_t)(uintptr_t)&gdt_ptr);
-}
 
-void switch_to_kernel_mode() {
-
-    set_gdt_entry(0, 0, 0, 0, 0);               // Null Descriptor
-
-    set_gdt_entry(1, 0, 0xFFFFF, 0x9A, 0xCF);   // Code Segment
-
-    set_gdt_entry(2, 0, 0xFFFFF, 0x92, 0xCF);   // Data Segment
-
-    //log("Flushing gdt...\n", LIGHT_GRAY);
-    gdt_flush((uint32_t)(uintptr_t)&gdt_ptr); 
-}
 void init_gdt() {
     gdt_ptr.limit = (sizeof(GDTEntry) * GDT_ENTRIES) - 1;
     gdt_ptr.base = (uintptr_t)&gdt;
 
     log("Initializing gdt...\n", LIGHT_GRAY);
     
-    switch_to_kernel_mode() ;
+    set_gdt_entry(0, 0, 0, 0, 0);               // Null
+    set_gdt_entry(1, 0, 0xFFFFF, 0x9A, 0xCF);   // Kernel Code (DPL 0)
+    set_gdt_entry(2, 0, 0xFFFFF, 0x92, 0xCF);   // Kernel Data (DPL 0)
+    set_gdt_entry(3, 0, 0xFFFFF, 0xFA, 0xCF);   // User Code (DPL 3)
+    set_gdt_entry(4, 0, 0xFFFFF, 0xF2, 0xCF);   // User Data (DPL 3)
 
     log("Gdt initialized.\n", GREEN);
 }

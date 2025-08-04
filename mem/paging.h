@@ -68,10 +68,49 @@ typedef struct {
     (entry)->available  = (attrs).available;  \
     (entry)->frame_addr = (attrs).frame_addr; \
 } while(0)
+
+typedef struct {
+    uint32_t present    : 1;
+    uint32_t rw         : 1;
+    uint32_t user       : 1;
+    uint32_t write_thru : 1;
+    uint32_t cache_dis  : 1;
+    uint32_t accessed   : 1;
+    uint32_t reserved   : 1;
+    uint32_t page_size  : 1;
+    uint32_t global     : 1;
+    uint32_t available  : 3;
+    uint32_t table_addr : 20;
+} pde_attrs_t;
+
+typedef struct {
+    uint32_t present    : 1;
+    uint32_t rw         : 1;
+    uint32_t user       : 1;
+    uint32_t write_thru : 1;
+    uint32_t cache_dis  : 1;
+    uint32_t accessed   : 1;
+    uint32_t dirty      : 1;
+    uint32_t pat        : 1;
+    uint32_t global     : 1;
+    uint32_t available  : 3;
+    uint32_t frame_addr : 20;
+} pte_attrs_t;
+#define SET_PD(entry, attrs) do { \
+    (entry)->present    = (attrs).present; \
+    (entry)->rw         = (attrs).rw; \
+    (entry)->user       = (attrs).user; \
+    (entry)->write_thru = (attrs).write_thru; \
+    (entry)->cache_dis  = (attrs).cache_dis; \
+    (entry)->accessed   = (attrs).accessed; \
+    (entry)->reserved   = 0; \
+    (entry)->page_size  = (attrs).page_size; \
+    (entry)->global     = (attrs).global; \
+    (entry)->available  = (attrs).available; \
+    (entry)->table_addr = (attrs).table_addr; \
+} while(0)
 extern pde_t pd[PAGE_DIRECTORY_SIZE];
-extern pte_t pt0[PAGE_TABLE_SIZE];
-extern pte_t pt1[PAGE_TABLE_SIZE];
-extern pte_t pt2[PAGE_TABLE_SIZE];
+extern pte_t first_pt[PAGE_TABLE_SIZE];
 
 void paging_init(void);
 void remove_id_map(void);

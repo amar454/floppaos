@@ -7,21 +7,18 @@
 #include "../../apps/echo.h"
 #include "../vga/vgahandler.h"
 #include "../../task/sched.h"
-#include "../../fshell/command.h"
-#include "../../fshell/fshell.h"
+
 char current_time_string[32];
 // Helper to read a byte from a CMOS register
 static unsigned char read_cmos(unsigned char reg) {
     unsigned char val;
 
-    // Write the CMOS register number to 0x70 port
     __asm__ volatile (
         "outb %1, %0"
         : 
         : "dN"((unsigned short)0x70), "a"(reg)
     );
     
-    // Read the value from port 0x71
     __asm__ volatile (
         "inb %1, %0"
         : "=a"(val)

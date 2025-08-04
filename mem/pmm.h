@@ -38,4 +38,5 @@ int pmm_get_memory_size();
 struct Page* phys_to_page_index(uintptr_t addr);
 uint32_t page_index(uintptr_t addr);
 void pmm_copy_page(void* dst, void* src);
+int pmm_is_valid_addr(uintptr_t addr);
 #endif

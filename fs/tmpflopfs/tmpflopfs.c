@@ -1,155 +1,227 @@
-#include "tmpflopfs.h"
-#include "../../apps/echo.h"
-#include "../../lib/str.h"
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
 #include "../../drivers/vga/vgahandler.h"
 #include "../../drivers/time/floptime.h"
-#include "fileutils.h"
-#include "../../mem/vmm.h"
-#include "../../mem/pmm.h"
-#include "../../mem/alloc.h"
-#include "../../mem/utils.h"
-#include <stdint.h>
-#include <stdio.h>
+#include "../../apps/echo.h"
+#include "../../lib/str.h"
 #include "../../lib/logging.h"
+#include "../../mem/vmm.h"
+#include "tmpflopfs.h"
+#include "../../mem/utils.h"
 
-#include "../../task/sched.h"
-#include "../../task/pid.h"
-// Structure representing a file in the embedded filesystem
+static TmpFileSystem *tmpfs_instance = NULL;
 
-void tmpflopfs_strcopy(char *dest, const char *src) {
-    while ((*dest++ = *src++));
-}
+void tmpfs_init(void) {
+    if (tmpfs_instance) return;
 
-// Simulated disk memory (global variable)
- uint8_t *simulated_disk = NULL;
+    page_attrs_t attrs = {
+        .present = 1,
+        .rw = 1,
+        .user = 0
+    };
 
-void init_tmpflopfs(struct TmpFileSystem *tmp_fs) {
-    if (!tmp_fs) {
-        log("init_tmpflopfs: Invalid TmpFileSystem pointer!\n", RED);
+    tmpfs_instance = (TmpFileSystem*)vmm_create_address_space(TMPFS_ADDR_SPACE_SIZE, attrs);
+    if (!tmpfs_instance) {
+        log("tmpfs_init: failed to allocate virtual memory for FS", RED);
         return;
     }
 
-    // Initialize file system metadata
-    tmp_fs->type_id = TMP_FILESYSTEM_TYPE_ID;
-    tmp_fs->tmp_file_count = 0;
-    tmp_fs->tmp_next_free_offset = 0;
-    flop_memset(tmp_fs->tmp_files, 0, sizeof(tmp_fs->tmp_files));
-    flop_memset(tmp_fs->tmp_root_directory, 0, MAX_TMP_PATH_LENGTH);
-    tmpflopfs_strcopy(tmp_fs->tmp_root_directory, "root");
+    flop_memset(tmpfs_instance, 0, sizeof(TmpFileSystem));
+    tmpfs_instance->node_count = 1;
+    tmpfs_instance->root_idx = 0;
 
-    simulated_disk = kmalloc(TMP_DISK_SIZE);
-    if (!simulated_disk) {
-        log("init_tmpflopfs: Failed to allocate memory for simulated disk!\n", RED);
-        return;
-    }
-
-    // Clear the allocated memory (simulate a blank disk)
-    flop_memset(simulated_disk, 0, TMP_DISK_SIZE);
-
-    log("TmpFlopFS initialized successfully with 10 MB virtual disk space!\n", GREEN);
-}
-void create_tmp_directory(struct TmpFileSystem *tmp_fs, const char *tmp_dirname) {
-    if (tmp_fs->tmp_file_count < MAX_TMP_FILES) {
-        struct TmpFile *tmp_dir = &tmp_fs->tmp_files[tmp_fs->tmp_file_count++];
-        tmpflopfs_strcopy(tmp_dir->name, tmp_dirname);
-        tmp_dir->size = 0;
-        tmp_dir->data_offset = 0;       
-        time_get_current(&tmp_dir->created);
-
-        echo("Directory created successfully!\n", GREEN);
-    } else {
-        echo("Max file limit reached. Cannot create directory.\n", RED);
-    }
+    TmpNode *root = &tmpfs_instance->nodes[0];
+    root->type = TMP_NODE_DIR;
+    flopstrcopy(root->name, "/", 1);
+    root->parent_idx = UINT32_MAX;
 }
 
-void create_tmp_file(struct TmpFileSystem *tmp_fs, const char *tmp_filename) {
-    if (tmp_fs->tmp_file_count < MAX_TMP_FILES) {
-        struct TmpFile *tmp_file = &tmp_fs->tmp_files[tmp_fs->tmp_file_count++];
-        tmpflopfs_strcopy(tmp_file->name, tmp_filename);
-        tmp_file->size = 0;
-        tmp_file->data_offset = tmp_fs->tmp_next_free_offset;
-        time_get_current(&tmp_file->created);
-
-        echo("File created successfully!\n", GREEN);
-    } else {
-        echo("File limit reached!\n", RED);
-    }
+TmpFileSystem *tmpfs_get_instance(void) {
+    return tmpfs_instance;
 }
 
-void write_tmp_file(struct TmpFileSystem *tmp_fs, const char *tmp_filename, const char *data, uint32_t size) {
-    for (int i = 0; i < tmp_fs->tmp_file_count; i++) {
-        struct TmpFile *tmp_file = &tmp_fs->tmp_files[i];
-        if (flopstrcmp(tmp_file->name, tmp_filename) == 0) {
-            // Check if there's enough space to write
-            if (tmp_fs->tmp_next_free_offset + size > TMP_DISK_SIZE) {
-                echo("Not enough space on the virtual disk!\n", RED);
-                return;
+void tmpfs_destroy(TmpFileSystem* fs) {
+    if (!fs) return;
+
+    vmm_free_address_space((void*)fs, TMPFS_ADDR_SPACE_SIZE);
+}
+
+TmpNode *tmpfs_find_node(TmpFileSystem *fs, const char *path) {
+    if (!fs || !path || path[0] != '/') return NULL;
+    if (flopstrcmp(path, "/") == 0) return &fs->nodes[fs->root_idx];
+
+    char temp[TMP_MAX_PATH_LENGTH];
+    flopstrcopy(temp, path, TMP_MAX_PATH_LENGTH - 1);
+    temp[TMP_MAX_PATH_LENGTH - 1] = '\0';
+
+    TmpNode *curr = &fs->nodes[fs->root_idx];
+    char *token = flopstrtok(temp, "/");
+    while (token && curr) {
+        bool found = false;
+        for (uint32_t i = 0; i < curr->child_count; ++i) {
+            TmpNode *child = &fs->nodes[curr->children[i]];
+            if (flopstrcmp(child->name, token) == 0) {
+                curr = child;
+                found = true;
+                break;
             }
+        }
+        if (!found) return NULL;
+        token = flopstrtok(NULL, "/");
+    }
+    return curr;
+}
 
-            // Ensure that memory is properly allocated before copying
-            uint8_t *dest_addr = simulated_disk + tmp_file->data_offset;
-            if (!dest_addr) {
-                echo("Failed to access memory for writing data!\n", RED);
-                return;
-            }
+int tmpfs_mkdir(TmpFileSystem *fs, const char *path, const char *name) {
+    if (!fs || fs->node_count >= TMP_MAX_NODES) return -1;
+    TmpNode *parent = tmpfs_find_node(fs, path);
+    if (!parent || parent->type != TMP_NODE_DIR || parent->child_count >= TMP_MAX_CHILDREN)
+        return -1;
+    for (uint32_t i = 0; i < parent->child_count; ++i)
+        if (flopstrcmp(fs->nodes[parent->children[i]].name, name) == 0)
+            return -1;
+    TmpNode *dir = &fs->nodes[fs->node_count];
+    flop_memset(dir, 0, sizeof(TmpNode));
+    dir->type = TMP_NODE_DIR;
+    flopstrcopy(dir->name, name, TMP_MAX_NAME_LEN - 1);
+    dir->parent_idx = (uint32_t)(parent - fs->nodes);
+    parent->children[parent->child_count++] = fs->node_count;
+    fs->node_count++;
+    return 0;
+}
 
-            tmp_file->size = size;
-            flop_memcpy(dest_addr, data, size); // Now safe to copy memory
+int tmpfs_create_file(TmpFileSystem *fs, const char *path, const char *name, const void *data, uint32_t size) {
+    if (!fs || fs->node_count >= TMP_MAX_NODES || size > TMP_MAX_FILE_SIZE) return -1;
+    TmpNode *parent = tmpfs_find_node(fs, path);
+    if (!parent || parent->type != TMP_NODE_DIR || parent->child_count >= TMP_MAX_CHILDREN)
+        return -1;
+    for (uint32_t i = 0; i < parent->child_count; ++i)
+        if (flopstrcmp(fs->nodes[parent->children[i]].name, name) == 0)
+            return -1;
+    TmpNode *file = &fs->nodes[fs->node_count];
+    flop_memset(file, 0, sizeof(TmpNode));
+    file->type = TMP_NODE_FILE;
+    flopstrcopy(file->name, name, TMP_MAX_NAME_LEN - 1);
+    file->parent_idx = (uint32_t)(parent - fs->nodes);
+    file->size = size;
+    flop_memcpy(file->file_data, data, size);
+    parent->children[parent->child_count++] = fs->node_count;
+    fs->node_count++;
+    return 0;
+}
+/**
+ * @param recursive if set, delete all dirs/files in directory.
+ */
+int tmpfs_delete_node(TmpFileSystem *fs, const char *path, int recursive) {
+    if (!fs || !path) return -1;
+    TmpNode *node = tmpfs_find_node(fs, path);
+    if (!node || node == &fs->nodes[fs->root_idx]) return -1; // Don't delete root
 
-            tmp_fs->tmp_next_free_offset += size;
-
-            echo("File data written successfully!\n", GREEN);
-            return;
+    TmpNode *parent = &fs->nodes[node->parent_idx];
+    // Remove from parent's children
+    bool found = false;
+    for (uint32_t i = 0; i < parent->child_count; ++i) {
+        if (parent->children[i] == (uint32_t)(node - fs->nodes)) {
+            found = true;
+            for (uint32_t j = i; j < parent->child_count - 1; ++j)
+                parent->children[j] = parent->children[j + 1];
+            parent->child_count--;
+            break;
         }
     }
-    echo("File not found!\n", RED);
-}
+    if (!found) return -1;
 
 
-void remove_tmp_file(struct TmpFileSystem *tmp_fs, const char *tmp_filename) {
-    for (int i = 0; i < tmp_fs->tmp_file_count; i++) {
-        if (flopstrcmp(tmp_fs->tmp_files[i].name, tmp_filename) == 0) {
-            // Shift files in the array
-            for (int j = i; j < tmp_fs->tmp_file_count - 1; j++) {
-                tmp_fs->tmp_files[j] = tmp_fs->tmp_files[j + 1];
+    if (node->type == TMP_NODE_DIR) {
+        if (node->child_count > 0 && !recursive) {
+
+            parent->children[parent->child_count++] = (uint32_t)(node - fs->nodes);
+            return -1;
+        }
+        while (node->child_count > 0 && recursive) {
+            uint32_t child_idx = node->children[0];
+            char child_path[TMP_MAX_PATH_LENGTH];
+            char parent_path[TMP_MAX_PATH_LENGTH] = "";
+            TmpNode *tmp = node;
+            while (tmp->parent_idx != UINT32_MAX) {
+                char temp[TMP_MAX_PATH_LENGTH];
+                flopsnprintf(temp, sizeof(temp), "/%s%s", tmp->name, parent_path);
+                flopstrcopy(parent_path, temp, sizeof(parent_path));
+                tmp = &fs->nodes[tmp->parent_idx];
             }
-            tmp_fs->tmp_file_count--;
-            echo("File removed from Tmpfilesystem.\n", GREEN);
-            return;
+            flopsnprintf(child_path, sizeof(child_path), "%s/%s", parent_path[0] ? parent_path : "/", fs->nodes[child_idx].name);
+            tmpfs_delete_node(fs, child_path, 1);
+        }
+        if (node->child_count > 0 && !recursive) {
+            // Should not reach here, but just in case
+            return -1;
         }
     }
-    echo("File not found!\n", RED);
+
+    uint32_t idx = (uint32_t)(node - fs->nodes);
+    if (idx != fs->node_count - 1) {
+        fs->nodes[idx] = fs->nodes[fs->node_count - 1];
+        if (fs->nodes[idx].parent_idx != UINT32_MAX) {
+            TmpNode *moved_parent = &fs->nodes[fs->nodes[idx].parent_idx];
+            for (uint32_t i = 0; i < moved_parent->child_count; ++i)
+                if (moved_parent->children[i] == fs->node_count - 1)
+                    moved_parent->children[i] = idx;
+        }
+        if (fs->nodes[idx].type == TMP_NODE_DIR) {
+            for (uint32_t i = 0; i < fs->nodes[idx].child_count; ++i) {
+                TmpNode *child = &fs->nodes[fs->nodes[idx].children[i]];
+                child->parent_idx = idx;
+            }
+        }
+    }
+    fs->node_count--;
+    return 0;
 }
 
-void list_tmp_files(struct TmpFileSystem *tmp_fs, int colored) {
-    for (int i = 0; i < tmp_fs->tmp_file_count; i++) {
-        const char *tmp_filename = tmp_fs->tmp_files[i].name;
-        if (colored) {
-            unsigned char color = floprand() % 16;
-            echo(tmp_filename, color);
+// Write to a file (overwrite from offset)
+int tmpfs_write_file(TmpFileSystem *fs, const char *path, const void *data, uint32_t size, uint32_t offset) {
+    if (!fs || !data) return -1;
+    TmpNode *file = tmpfs_find_node(fs, path);
+    if (!file || file->type != TMP_NODE_FILE) return -1;
+    if (offset > TMP_MAX_FILE_SIZE || size > TMP_MAX_FILE_SIZE || offset + size > TMP_MAX_FILE_SIZE)
+        return -1;
+    flop_memcpy(file->file_data + offset, data, size);
+    if (offset + size > file->size)
+        file->size = offset + size;
+    return 0;
+}
+
+
+static TmpNodePerms node_perms[TMP_MAX_NODES];
+
+int tmpfs_set_permissions(TmpFileSystem *fs, const char *path, TmpPerms perms) {
+    if (!fs || !path) return -1;
+    TmpNode *node = tmpfs_find_node(fs, path);
+    if (!node) return -1;
+    uint32_t idx = (uint32_t)(node - fs->nodes);
+    node_perms[idx].perms = perms;
+    return 0;
+}
+
+TmpPerms tmpfs_get_permissions(TmpFileSystem *fs, const char *path) {
+    if (!fs || !path) return 0;
+    TmpNode *node = tmpfs_find_node(fs, path);
+    if (!node) return 0;
+    uint32_t idx = (uint32_t)(node - fs->nodes);
+    return node_perms[idx].perms;
+}
+
+void tmpfs_list_dir(TmpFileSystem *fs, TmpNode *dir) {
+    if (!dir || dir->type != TMP_NODE_DIR) return;
+    for (uint32_t i = 0; i < dir->child_count; ++i) {
+        TmpNode *child = &fs->nodes[dir->children[i]];
+        char buffer[TMP_MAX_NAME_LEN + 32];
+        if (child->type == TMP_NODE_DIR) {
+            flopsnprintf(buffer, sizeof(buffer), "[DIR] %s\n", child->name);
         } else {
-            echo(tmp_filename, WHITE);
+            flopsnprintf(buffer, sizeof(buffer), "[FILE] %s (%u bytes)\n", child->name, child->size);
         }
-        echo("\n", WHITE);
+        echo(buffer, WHITE);
     }
-}
-
-void read_tmp_file(struct TmpFileSystem *tmp_fs, const char *tmp_filename) {
-    for (int i = 0; i < tmp_fs->tmp_file_count; i++) {
-        struct TmpFile *tmp_file = &tmp_fs->tmp_files[i];
-        if (flopstrcmp(tmp_file->name, tmp_filename) == 0) {
-            if (tmp_file->size == 0) {
-                echo("File is empty!\n", YELLOW);
-                return;
-            }
-            // Read directly from the virtual disk
-            char *buffer = (char *)(simulated_disk + tmp_file->data_offset);
-
-            echo("***********File Contents***********\n", CYAN);
-            echo(buffer, WHITE);
-            echo("\n", WHITE);
-            return;
-        }
-    }
-    echo("File not found!\n", RED);
 }

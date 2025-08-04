@@ -34,6 +34,8 @@ start:
 
     call kmain                   ; jump to C
 
+    ; we cannot be serious
+
     cli                          
     hlt                        
 

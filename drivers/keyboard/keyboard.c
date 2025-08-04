@@ -16,8 +16,6 @@ You should have received a copy of the GNU General Public License along with Flo
 
 #include "keyboard.h"
 #include "../../apps/echo.h"
-#include "../../fshell/fshell.h"
-#include "../../fshell/command.h"  // Include the shared command header
 #include "../vga/vgahandler.h"
 #include "../io/io.h"
 #include <stdint.h>
@@ -28,7 +26,7 @@ static int ctrl_pressed = 0;
 static int alt_pressed = 0;
 
 // Define the command buffer
-char command[MAX_COMMAND_LENGTH];
+
 int command_ready = 0;  // Initialize the flag as 0 (no command is ready)
 
 const char *key_to_char(unsigned char key) {
@@ -176,15 +174,15 @@ void keyboard_task(void *arg) {
         vga_set_cursor_position(x, y);
         
     } else if (c == '\n') {                   // Enter key
-        command[pos] = '\0';                  // Null-terminate command
+        //command[pos] = '\0';                  // Null-terminate command
         echo("\n", WHITE);
         command_ready = 1;    // Signal that command is ready to be parsed (hook for fshell in ../../fshell/command.h)
         pos = 0;              // Reset buffer position
         vga_set_foreground_color(WHITE, vga_index / VGA_WIDTH, WHITE);
         vga_set_cursor_position(0, (vga_index / VGA_WIDTH));
      
-    } else if (c >= 32 && c <= 126 && pos < MAX_COMMAND_LENGTH - 1) { 
-        command[pos++] = c;
+    } else if (c >= 32 && c <= 126 && pos < 40 - 1) { 
+        //command[pos++] = c;
         put_char(c, WHITE);
         uint16_t x = vga_index % VGA_WIDTH;
         uint16_t y = vga_index / VGA_WIDTH;

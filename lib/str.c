@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with Flo
 #include <stdint.h>
 #include "../mem/utils.h"
 #include "../mem/vmm.h"
+#include "../mem/alloc.h"
 static char *flopstrtok_next = NULL;
 
 // Copies src string to dest
