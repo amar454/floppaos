@@ -12,11 +12,11 @@ You should have received a copy of the GNU General Public License along with Flo
 
 ------------------------------------------------------------------------------
 
-vmm.c - functions for mapping and unmapping physical pages to virtual addresses
+    vmm.c - functions for mapping and unmapping physical pages to virtual addresses
 
-    map_page(vaddr, paddr, attrs) - maps a page at paddr to vaddr with the given attributes
+        map_page(vaddr, paddr, attrs) - maps a page at paddr to vaddr with the given attributes
 
-    unmap_page(vaddr) unmaps
+        unmap_page(vaddr) - unmaps a page 
 
 
 ------------------------------------------------------------------------------
@@ -92,13 +92,13 @@ static pte_t* alloc_page_table(void) {
 }
 
 static void _paging_init_recursive(void) {
-    // Clear page directory
+
     for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
         pde_attrs_t zero_attrs = {0};
         SET_PD(&pd[i], zero_attrs);
     }
 
-    // Set recursive entry at index 1023 to point to pd itself
+
     pde_attrs_t recursive_attrs = {
         .present = 1,
         .rw = 1,
@@ -125,7 +125,7 @@ static pte_t* get_page_table(uint32_t pd_idx) {
     return (pte_t*)pt_virt;
 }
 
-// Map a single page: vaddr -> paddr with given attrs
+
 int map_page(uintptr_t vaddr, uintptr_t paddr, page_attrs_t attrs) {
     vaddr = align_down(vaddr);
     paddr = align_down(paddr);
@@ -157,7 +157,6 @@ int map_page(uintptr_t vaddr, uintptr_t paddr, page_attrs_t attrs) {
         SET_PD(pd_entry, pt_attrs);
     }
 
-    // Get page table virtual address from recursive mapping
     pte_t* pt = get_page_table(pd_idx);
     pte_t* pte_entry = &pt[pt_idx];
 
@@ -172,13 +171,11 @@ int map_page(uintptr_t vaddr, uintptr_t paddr, page_attrs_t attrs) {
     attrs.frame_addr = paddr >> 12;
     SET_PF(pte_entry, attrs);
 
-    // Flush TLB for this page
     __asm__ volatile("invlpg (%0)" :: "r"(vaddr) : "memory");
 
     return 0;
 }
 
-// Unmap a page at vaddr
 int unmap_page(uintptr_t vaddr) {
     vaddr = align_down(vaddr);
 
@@ -218,7 +215,8 @@ int unmap_page(uintptr_t vaddr) {
         SET_PF((pte_t*)pd_entry, zero_attrs_pd);
     }
 
-    __asm__ volatile("invlpg (%0)" :: "r"(vaddr) : "memory");
+    __asm__ volatile("invlpg (%0)" :: "a"(vaddr));
+
     return 0;
 }
 
@@ -372,6 +370,7 @@ int unmap_range(uintptr_t vaddr, size_t size) {
             return -1;
         }
     }
+    
     return 0;
 }
 
@@ -462,7 +461,7 @@ static void _id_map(void) {
             .dirty = 0,
             .global = 0,
             .available = 0,
-            .frame_addr = 0  // will be set by map_page
+            .frame_addr = 0  
         };
         // Identity map: vaddr == paddr
         map_page(addr, addr, attrs);
@@ -489,7 +488,7 @@ static void _map_kernel(uintptr_t k_start_addr, size_t size) {
             .dirty = 0,
             .global = 0,
             .available = 0,
-            .frame_addr = 0  // will be set by map_page
+            .frame_addr = 0  
         };
         map_page(vaddr, paddr, attrs);
     }
@@ -561,6 +560,7 @@ uintptr_t phys_to_virt(uintptr_t paddr) {
     }
     return 0;
 }
+
 int map_kernel_space(uintptr_t vaddr, size_t size) {
     if (vaddr < KERNEL_VADDR_BASE) {
         return -1;
@@ -591,7 +591,6 @@ int map_user_space(uintptr_t vaddr, size_t size) {
     uintptr_t phys_addr = (uintptr_t)pmm_alloc_pages(0, size / PAGE_SIZE);
     return map_range(vaddr, phys_addr, size, attrs);
 }
-
 
 // Find region containing vaddr
 static vm_region_t* find_region(uintptr_t vaddr) {
@@ -643,4 +642,3 @@ void vmm_dump_mappings(void) {
     }
     log("\n", GREEN);
 }
-
