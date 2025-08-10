@@ -6,37 +6,18 @@
 #include "../lib/logging.h"
 #include "../lib/str.h"
 #include "../interrupts/interrupts.h"
+#include "../task/sync/spinlock.h"
+#include "../drivers/time/floptime.h"
 #include <stdint.h>
 #include <stddef.h>
 
-
-static uint32_t cpu_core_count = 1;
-#define MAX_CORES 8
-static thread_list_t core_thread_lists[MAX_CORES];
-static thread_t* core_current_thread[MAX_CORES];
-static thread_t* core_idle_thread[MAX_CORES];
-extern uint32_t global_tick_count;
-static uint32_t next_thread_id = 1;
+scheduler_t sched;
+static uint64_t global_ticks = 0;
 
 static void idle_loop() {
     while (1) {
-        asm volatile ("hlt");
+        asm volatile ("sti; hlt");
     }
-}
-
-void ctx_switch(cpu_ctx_t* _old, cpu_ctx_t* _new) {
-    asm volatile (
-        "pushf\n"
-        "pusha\n"
-        "movl %%esp, %[old]\n"
-        "movl %[new], %%esp\n"
-        "popa\n"
-        "popf\n"
-        "ret\n"
-        : [old] "=m"(*_old)
-        : [new] "m"(*_new)
-        : "memory"
-    );
 }
 
 static uint32_t get_cpu_core_count() {
@@ -52,152 +33,314 @@ static uint32_t get_cpu_core_count() {
     return logical > 0 ? logical : 1;
 }
 
+
+
+void ctx_switch(cpu_ctx_t* old, cpu_ctx_t* new_ctx) {
+    asm volatile (
+        "pushf\n"
+        "pusha\n"
+        "movl %%esp, %0\n"
+        "movl %1, %%esp\n"
+        "popa\n"
+        "popf\n"
+        "iret\n"
+        : "=m"(old->esp)
+        : "m"(new_ctx->esp)
+        : "memory"
+    );
+}
+static spinlock_t _sched_lock_init = SPINLOCK_INIT;
 void sched_init() {
-    cpu_core_count = get_cpu_core_count();
-    if (cpu_core_count > MAX_CORES) cpu_core_count = MAX_CORES;
-    for (uint32_t i = 0; i < cpu_core_count; ++i) {
-        core_thread_lists[i].head = NULL;
-        core_current_thread[i] = NULL;
+    sched.core_count = get_cpu_core_count();
+    if (sched.core_count > MAX_CORES) 
+        sched.core_count = MAX_CORES;
+    
+    sched.thread_count = 0;
+    sched.next_tid = 1;
+    sched.sched_lock = _sched_lock_init;
+
+    spinlock_init(&sched.sched_lock);
+    
+    for (uint32_t i = 0; i < sched.core_count; ++i) {
+        sched.ready_queues[i].head = NULL;
+        sched.ready_queues[i].tail = NULL;
+        sched.ready_queues[i].count = 0;
+        sched.current_threads[i] = NULL;
+        sched.idle_threads[i] = NULL;
     }
+    
+    sched.sleep_queue.head = NULL;
+    sched.sleep_queue.tail = NULL;
+    sched.sleep_queue.count = 0;
 }
 
-thread_t* sched_create_thread(void (*entry)(void)) {
+thread_t* sched_create_thread(void (*entry)(void), uint32_t priority) {
     thread_t* t = (thread_t*)kmalloc(sizeof(thread_t));
     t->stack = (uint8_t*)kmalloc(THREAD_STACK_SIZE);
+    
     t->ctx.eip = (uint32_t)entry;
-    t->ctx.esp = (uint32_t)(t->stack + THREAD_STACK_SIZE);
+    t->ctx.esp = (uint32_t)(t->stack + THREAD_STACK_SIZE - 16);
+    t->ctx.eflags = 0x202;
+    
     t->state = THREAD_READY;
-    t->id = next_thread_id++;
+    t->id = sched.next_tid++;
+    t->priority = priority;
+    t->time_slice = 10 + priority;
+    t->cpu_usage = 0;
+    t->last_run = 0;
+    t->wake_time = 0;
+    
     return t;
 }
 
 void sched_add_thread(thread_t* t) {
-    uint32_t min_core = 0, min_count = (uint32_t)-1;
-    for (uint32_t i = 0; i < cpu_core_count; ++i) {
-        uint32_t count = 0;
-        thread_t* iter = core_thread_lists[i].head;
-        if (iter) {
-            do {
-                count++;
-                iter = iter->next;
-            } while (iter != core_thread_lists[i].head);
-        }
-        if (count < min_count) {
-            min_count = count;
-            min_core = i;
+    spinlock(&sched.sched_lock);
+    
+    uint32_t target_core = 0;
+    uint32_t min_load = (uint32_t)-1;
+    
+    for (uint32_t i = 0; i < sched.core_count; ++i) {
+        if (sched.ready_queues[i].count < min_load) {
+            min_load = sched.ready_queues[i].count;
+            target_core = i;
         }
     }
-    thread_list_t* list = &core_thread_lists[min_core];
-    if (!list->head) {
-        list->head = t;
+    
+    t->core_id = target_core;
+    
+    if (!sched.ready_queues[target_core].head) {
+        sched.ready_queues[target_core].head = t;
+        sched.ready_queues[target_core].tail = t;
         t->next = t;
         t->prev = t;
     } else {
-        thread_t* tail = list->head->prev;
+        thread_t* tail = sched.ready_queues[target_core].tail;
         tail->next = t;
         t->prev = tail;
-        t->next = list->head;
-        list->head->prev = t;
+        t->next = sched.ready_queues[target_core].head;
+        sched.ready_queues[target_core].head->prev = t;
+        sched.ready_queues[target_core].tail = t;
     }
-    t->core_id = min_core;
+    
+    sched.ready_queues[target_core].count++;
+    sched.thread_count++;
+    
+    spinlock_unlock(&sched.sched_lock, true);
 }
 
 void sched_remove_thread(thread_t* t) {
-    thread_list_t* list = &core_thread_lists[t->core_id];
+    spinlock(&sched.sched_lock);
+    
+    uint32_t core = t->core_id;
+    thread_list_t* list = &sched.ready_queues[core];
+    
     if (t->next == t) {
         list->head = NULL;
+        list->tail = NULL;
     } else {
         t->prev->next = t->next;
         t->next->prev = t->prev;
-        if (list->head == t)
-            list->head = t->next;
+        if (list->head == t) list->head = t->next;
+        if (list->tail == t) list->tail = t->prev;
     }
+    
+    list->count--;
+    sched.thread_count--;
+    
+    spinlock_unlock(&sched.sched_lock, true);
 }
 
-uint32_t get_core_id() {
+uint32_t sched_get_core_id() {
     uint32_t core_id;
-    __asm__ volatile ("movl %%gs:0, %0" : "=r"(core_id));
+    asm volatile ("movl %%fs, %0" : "=r"(core_id));
     return core_id;
 }
 
-void sched_yield_core(uint32_t core_id) {
-    thread_t* old = core_current_thread[core_id];
-    thread_list_t* list = &core_thread_lists[core_id];
-
-    if (!old) {
-        old = core_idle_thread[core_id];
-        core_current_thread[core_id] = old;
+static inline scheduler_t* get_core_sched() {
+    uint32_t core_id = sched_get_core_id();
+    if (core_id >= sched.core_count) {
+        return NULL;
     }
+    return &sched;
+}
 
-    if (!list->head || !list->head->next) {
-        thread_t* idle = core_idle_thread[core_id];
-        if (idle && old != idle) {
-            core_current_thread[core_id] = idle;
-            ctx_switch(&old->ctx, &idle->ctx);
+static void sched_reschedule_core(uint32_t core_id) {
+    if (core_id >= sched.core_count) return;
+    
+    thread_t* old = sched.current_threads[core_id];
+    thread_list_t* ready = &sched.ready_queues[core_id];
+    
+    if (!old) {
+        old = sched.idle_threads[core_id];
+        sched.current_threads[core_id] = old;
+    }
+    
+    if (!ready->head) {
+        if (old != sched.idle_threads[core_id]) {
+            sched.current_threads[core_id] = sched.idle_threads[core_id];
+            ctx_switch(&old->ctx, &sched.idle_threads[core_id]->ctx);
         }
         return;
     }
-
-    thread_t* t = old->next ? old->next : list->head;
-    thread_t* start = t;
-
+    
+    thread_t* next = ready->head;
+    thread_t* start = next;
+    
     do {
-        if (t->state == THREAD_READY)
-            break;
-        t = t->next ? t->next : list->head;
-    } while (t != start);
-
-    if (t->state != THREAD_READY)
-        t = core_idle_thread[core_id];
-
-    if (t && t != old) {
-        core_current_thread[core_id] = t;
-        ctx_switch(&old->ctx, &t->ctx);
+        if (next->state == THREAD_READY) break;
+        next = next->next;
+    } while (next != start);
+    
+    if (next->state != THREAD_READY) {
+        next = sched.idle_threads[core_id];
+    }
+    
+    if (next && next != old) {
+        sched.current_threads[core_id] = next;
+        old->state = THREAD_READY;
+        next->state = THREAD_RUNNING;
+        next->last_run = global_ticks;
+        ctx_switch(&old->ctx, &next->ctx);
     }
 }
 
-
+void schedule() {
+    uint32_t core_id = sched_get_core_id();
+    sched_reschedule_core(core_id);
+}
 
 void sched_yield() {
-    uint32_t core_id = get_core_id();
-    if (core_id >= cpu_core_count) {
-        log("sched_yield: Invalid core ID %u\n", core_id);
-        return;
-    }
-    sched_yield_core(core_id);
-}
-
-thread_t* sched_get_current() {
-    uint32_t core_id = get_core_id();
-    return core_current_thread[core_id];
+    schedule();
 }
 
 void sched_exit() {
-    uint32_t core_id = get_core_id();
-    thread_t* exiting = core_current_thread[core_id];
+    uint32_t core_id = sched_get_core_id();
+    thread_t* exiting = sched.current_threads[core_id];
+    
     if (!exiting) return;
+    
     exiting->state = THREAD_EXITED;
     sched_remove_thread(exiting);
-    sched_yield_core(core_id);
+    
     kfree(exiting->stack, THREAD_STACK_SIZE);
     kfree(exiting, sizeof(thread_t));
+    
+    schedule();
 }
 
+void sched_sleep(uint64_t ms) {
+    uint32_t core_id = sched_get_core_id();
+    thread_t* current = sched.current_threads[core_id];
+    
+    if (!current) return;
+    
+    current->wake_time = global_ticks + ms;
+    current->state = THREAD_SLEEPING;
+    
+    spinlock(&sched.sched_lock);
+    
+    if (!sched.sleep_queue.head) {
+        sched.sleep_queue.head = current;
+        sched.sleep_queue.tail = current;
+        current->next = current;
+        current->prev = current;
+    } else {
+        thread_t* tail = sched.sleep_queue.tail;
+        tail->next = current;
+        current->prev = tail;
+        current->next = sched.sleep_queue.head;
+        sched.sleep_queue.head->prev = current;
+        sched.sleep_queue.tail = current;
+    }
+    
+    sched.sleep_queue.count++;
+    
+    spinlock_unlock(&sched.sched_lock, true);
+    
+    schedule();
+}
 
+void sched_wake_expired() {
+    spinlock(&sched.sched_lock);
+    
+    thread_t* current = sched.sleep_queue.head;
+    if (!current) {
+        spinlock_unlock(&sched.sched_lock, true);
+        return;
+    }
+    
+    thread_t* start = current;
+    uint64_t now = global_ticks;
+    
+    do {
+        thread_t* next = current->next;
+        
+        if (current->wake_time <= now) {
+            if (current->prev == current) {
+                sched.sleep_queue.head = NULL;
+                sched.sleep_queue.tail = NULL;
+            } else {
+                current->prev->next = current->next;
+                current->next->prev = current->prev;
+                if (sched.sleep_queue.head == current) 
+                    sched.sleep_queue.head = current->next;
+                if (sched.sleep_queue.tail == current) 
+                    sched.sleep_queue.tail = current->prev;
+            }
+            
+            sched.sleep_queue.count--;
+            current->state = THREAD_READY;
+            sched_add_thread(current);
+        }
+        
+        current = next;
+    } while (current != start);
+    
+    spinlock_unlock(&sched.sched_lock, true);
+}
+
+void sched_timer_tick() {
+    global_ticks++;
+    sched_wake_expired();
+    
+    for (uint32_t i = 0; i < sched.core_count; ++i) {
+        if (sched.ready_queues[i].count > 0) {
+            sched_reschedule(i);
+        }
+    }
+}
+
+void sched_balance_load() {
+    spinlock(&sched.sched_lock);
+    for (uint32_t i = 0; i < sched.core_count; ++i) {
+        if (sched.ready_queues[i].count > 1) {
+            thread_list_t* list = &sched.ready_queues[i];
+            thread_t* current = list->head;
+            thread_t* next = current->next;
+            while (current != list->tail) {
+                if (current->state == THREAD_READY && next->state == THREAD_READY) {
+                    // Move next to a less loaded core      
+                    uint32_t target_core = (i + 1) % sched.core_count;
+                    while (sched.ready_queues[target_core].count >= sched.ready_queues[i].count) {
+                        target_core = (target_core + 1) % sched.core_count;
+                    }
+                    sched_remove_thread(next);
+                    next->core_id = target_core;
+                    sched_add_thread(next);
+                }
+                current = next;
+                next = next->next;
+            }
+        }
+    }       
+    spinlock_unlock(&sched.sched_lock, true);
+}
 
 void sched_start() {
-    for (uint32_t i = 0; i < cpu_core_count; ++i) {
-        thread_t* idle = sched_create_thread(idle_loop);
-        idle->id = 0;
-        idle->state = THREAD_READY;
-        idle->core_id = i;
-        core_idle_thread[i] = idle;
-        sched_add_thread(idle);
-        core_current_thread[i] = core_thread_lists[i].head;
-        if (core_current_thread[i]->state == THREAD_READY)
-            core_current_thread[i]->state = THREAD_RUNNING;
-        void (*fn)(void) = (void (*)(void))core_current_thread[i]->ctx.eip;
-        fn();
-        sched_exit();
+    for (uint32_t i = 0; i < sched.core_count; ++i) {
+        sched.idle_threads[i] = sched_create_thread(idle_loop, 0);
+        sched.idle_threads[i]->state = THREAD_RUNNING;
+        sched.current_threads[i] = sched.idle_threads[i];
     }
+    sched_balance_load();
 }

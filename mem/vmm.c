@@ -31,12 +31,6 @@ You should have received a copy of the GNU General Public License along with Flo
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#define KERNEL_VADDR_BASE  0xC0000000
-#define USER_SPACE_END     0xBFFFFFFF
-#define GNU_INLINE      __attribute__((always_inline))
-#define PAGE_ALIGN(addr)   (((addr) + 0xFFF) & ~0xFFF)
-#define RESOLVE_RECURSIVE_PD      ((pde_t*)0xFFFFF000)
-#define RESOLVE_RECURSIVE_PT(i)   ((pte_t*)(0xFFC00000 + ((i) << 12)))
 
 typedef struct vm_region {
     uintptr_t start;
@@ -56,167 +50,119 @@ static vm_region_t* vm_regions = NULL;
 uintptr_t kernel_heap_start;
 uintptr_t kernel_heap_end;
 
-extern pde_t pd[PAGE_DIRECTORY_SIZE];
-extern pte_t first_pt[PAGE_TABLE_SIZE];
 
 extern uint8_t _kernel_start;
 extern uint8_t _kernel_end;
 
 extern pde_t pd[PAGE_DIRECTORY_SIZE] __attribute__((aligned(PAGE_SIZE)));
 
-static inline uint32_t pd_index(uintptr_t vaddr) {
-    return (vaddr >> 22) & 0x3FF;
+static inline GNU_INLINE uint32_t _pd_index(uintptr_t addr) {
+   return (addr >> 22) & 0x3FF;
 }
 
-static inline uint32_t pt_index(uintptr_t vaddr) {
-    return (vaddr >> 12) & 0x3FF;
+static inline GNU_INLINE uint32_t _pt_index(uintptr_t addr) {
+   return (addr >> 12) & 0x3FF;
 }
 
-static inline uintptr_t align_down(uintptr_t addr) {
+static inline GNU_INLINE uintptr_t _align_down(uintptr_t addr) {
     return addr & ~(PAGE_SIZE - 1);
 }
 
-static void zero_page_table(pte_t* pt) {
+static inline GNU_INLINE uintptr_t _align_up(uintptr_t addr) {
+    return PAGE_ALIGN(addr);
+}
+
+static void _zero_pt(pte_t* pt) {
+    
     flop_memset(pt, 0, PAGE_TABLE_SIZE * sizeof(pte_t));
 }
 
-// Allocate a new page table, zero it, return pointer or NULL
-static pte_t* alloc_page_table(void) {
-    void* page = pmm_alloc_page();
-    if (!page) {
-        log("alloc_page_table: pmm_alloc_page failed\n", RED);
-        return NULL;
-    }
-    zero_page_table((pte_t*)page);
-    return (pte_t*)page;
-}
-
-static void _paging_init_recursive(void) {
-
+static void _zero_pd(void) {
     for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        pde_attrs_t zero_attrs = {0};
-        SET_PD(&pd[i], zero_attrs);
+        page_attrs_t zero = {0};
+        SET_PF((pte_t*)&pd[i], zero);
     }
-
-
-    pde_attrs_t recursive_attrs = {
-        .present = 1,
-        .rw = 1,
-        .user = 0,
-        .write_thru = 0,
-        .cache_dis = 0,
-        .accessed = 0,
-        .page_size = 0,
-        .global = 0,
-        .available = 0,
-        .table_addr = ((uintptr_t)pd) >> 12
-    };
-    SET_PD(&pd[1023], recursive_attrs);
-
-    uintptr_t pd_phys = virt_to_phys((uintptr_t)pd);
-    __asm__ volatile ("mov %0, %%cr3" :: "r" (pd_phys) : "memory");
 }
 
-
-static pte_t* get_page_table(uint32_t pd_idx) {
-    // The recursive entry maps page directory at virtual address: 0xFFFFF000
-    // So page tables start at 0xFFC00000 + (pd_idx * PAGE_SIZE)
-    uintptr_t pt_virt = 0xFFC00000 + (pd_idx * PAGE_SIZE);
-    return (pte_t*)pt_virt;
+static pte_t* _alloc_pt(void) {
+    void* pt = pmm_alloc_page();
+    if (!pt) return NULL;
+    return (pte_t*)pt;
 }
 
+static int _pd_lvl(pte_t* tables[2], uint32_t indices[2], page_attrs_t attrs) {
+    if (!tables[0][indices[0]].present) {
+        pte_t* new_pt = (pte_t*)pmm_alloc_page();
+        if (!new_pt) return -1;
+        _zero_pt((pte_t*)((uintptr_t)new_pt));
+
+        page_attrs_t new_attrs = {
+            .present = attrs.present,
+            .rw = attrs.rw,
+            .user = attrs.user,
+            .frame_addr = ((uintptr_t)new_pt) >> 12 // SDM: bits 12-31 are base address
+        };
+        SET_PF((pte_t*)&tables[0][indices[0]], new_attrs);
+    }
+    tables[1] = RESOLVE_RECURSIVE_PT(indices[0]);
+    return 0;
+}
+
+static void _pt_lvl(pte_t* tables[2], uint32_t indices[2], uintptr_t paddr, page_attrs_t attrs) {
+    if (tables[1][indices[1]].present) {
+        pmm_free_page((void*)(tables[1][indices[1]].frame_addr << 12));
+    }
+    attrs.frame_addr = paddr >> 12; // SDM: bits 12-31 are base address
+    SET_PF(&tables[1][indices[1]], attrs);
+}
 
 int map_page(uintptr_t vaddr, uintptr_t paddr, page_attrs_t attrs) {
-    vaddr = align_down(vaddr);
-    paddr = align_down(paddr);
+    vaddr = _align_down(vaddr);
+    paddr = _align_down(paddr);
+    if (vaddr == 0) return -1; 
 
-    if (vaddr == 0) return -1;
-
-    uint32_t pd_idx = pd_index(vaddr);
-    uint32_t pt_idx = pt_index(vaddr);
-
-    pde_t* pd_entry = &pd[pd_idx];
-
-    if (!pd_entry->present) {
-        pte_t* new_pt = alloc_page_table();
-        if (!new_pt) return -2;
-
-        uintptr_t pt_phys = virt_to_phys((uintptr_t)new_pt);
-        pde_attrs_t pt_attrs = {
-            .present = 1,
-            .rw = 1,
-            .user = attrs.user,
-            .write_thru = 0,
-            .cache_dis = 0,
-            .accessed = 0,
-            .page_size = 0,
-            .global = 0,
-            .available = 0,
-            .table_addr = pt_phys >> 12
-        };
-        SET_PD(pd_entry, pt_attrs);
-    }
-
-    pte_t* pt = get_page_table(pd_idx);
-    pte_t* pte_entry = &pt[pt_idx];
-
-    // If already present, free old page frame
-    if (pte_entry->present) {
-        uintptr_t old_paddr = pte_entry->frame_addr << 12;
-        if (pmm_is_valid_addr(old_paddr)) {
-            pmm_free_page((void*)old_paddr);
+    uint32_t indices[2] = {_pd_index(vaddr), _pt_index(vaddr)};
+    pte_t* tables[2] = {(pte_t*)RESOLVE_RECURSIVE_PD, NULL};
+    for (int i = 0; i < 2; i++) { // walk page table levels
+        switch (i) { // in ia32 we have two levels 
+            case 0:
+                _pd_lvl(tables, indices, attrs);
+            case 1:
+                _pt_lvl(tables, indices, paddr, attrs);
         }
     }
 
-    attrs.frame_addr = paddr >> 12;
-    SET_PF(pte_entry, attrs);
-
-    __asm__ volatile("invlpg (%0)" :: "r"(vaddr) : "memory");
-
+    __asm__ volatile("invlpg (%0)" :: "a"(vaddr));
     return 0;
 }
 
 int unmap_page(uintptr_t vaddr) {
-    vaddr = align_down(vaddr);
+    vaddr = _align_down(vaddr);
+    uint32_t pd_idx = _pd_index(vaddr);
+    uint32_t pt_idx = _pt_index(vaddr);
 
-    uint32_t pd_idx = pd_index(vaddr);
-    uint32_t pt_idx = pt_index(vaddr);
+    if (!RESOLVE_RECURSIVE_PD[pd_idx].present) return -1;
 
-    pde_t* pd_entry = &pd[pd_idx];
-    if (!pd_entry->present) return -1;
+    pte_t* pt = RESOLVE_RECURSIVE_PT(pd_idx); 
 
-    pte_t* pt = get_page_table(pd_idx);
-    pte_t* pte_entry = &pt[pt_idx];
-
-    if (!pte_entry->present) return -1;
-
-    uintptr_t old_paddr = pte_entry->frame_addr << 12;
-    if (pmm_is_valid_addr(old_paddr)) {
-        pmm_free_page((void*)old_paddr);
-    }
-
-    page_attrs_t zero_attrs = {0};
-    SET_PF(pte_entry, zero_attrs);
-
-    // Check if page table empty, free it if so
-    bool empty = true;
+    if (!pt[pt_idx].present) return -1;
+    pmm_free_page((void*)(pt[pt_idx].frame_addr << 12));
+    page_attrs_t zero = {0};
+    SET_PF(&pt[pt_idx], zero);
+    bool pt_empty = true;
     for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
         if (pt[i].present) {
-            empty = false;
+            pt_empty = false;
             break;
         }
     }
-    if (empty) {
-        uintptr_t pt_phys = pd_entry->table_addr << 12;
-        if (pmm_is_valid_addr(pt_phys)) {
-            pmm_free_page((void*)pt_phys);
-        }
-        page_attrs_t zero_attrs_pd = {0};
-        SET_PF((pte_t*)pd_entry, zero_attrs_pd);
+    if (pt_empty) {
+        pmm_free_page((void*)(RESOLVE_RECURSIVE_PD[pd_idx].table_addr << 12));
+        page_attrs_t zero_pd = {0};
+        SET_PF((pte_t*)&RESOLVE_RECURSIVE_PD[pd_idx], zero_pd);
     }
 
-    __asm__ volatile("invlpg (%0)" :: "a"(vaddr));
-
+    asm volatile("invlpg (%0)" :: "a"(vaddr));
     return 0;
 }
 
@@ -295,6 +241,32 @@ int clone_pagemap(uintptr_t src_base, uintptr_t dst_base, size_t size) {
     }
     return 0;
 }
+int nuke_pagemap(uintptr_t base, size_t size) {
+    size_t pages = _align_up(size) / PAGE_SIZE;
+
+    for (size_t i = 0; i < pages; i++) {
+        uintptr_t vaddr = base + i * PAGE_SIZE;
+
+        uint32_t pd_idx = _pd_index(vaddr);
+        uint32_t pt_idx = _pt_index(vaddr);
+
+        if (!RESOLVE_RECURSIVE_PD[pd_idx].present) {
+            i += PAGE_TABLE_SIZE - pt_idx - 1;
+            continue;
+        }
+
+        pte_t *pt = RESOLVE_RECURSIVE_PT(pd_idx);
+        if (!pt[pt_idx].present)
+            continue;
+
+        uintptr_t paddr = pt[pt_idx].frame_addr << PAGE_SIZE_SHIFT;
+        pmm_free_page((void *)paddr);
+
+        unmap_page(vaddr);
+    }
+
+    return 0;
+}
 
 static vm_region_t* _make_region(uintptr_t start, uintptr_t end, page_attrs_t attrs) {
     vm_region_t* r = pmm_alloc_page();
@@ -316,6 +288,10 @@ static vm_region_t* _clone_region(vm_region_t* src) {
     return r;
 }
 
+static void _free_region(vm_region_t* r) {
+    if (!r) return;
+    pmm_free_page(r);
+}
 int map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, page_attrs_t attrs) {
     size_t pages = _align_up(size) / PAGE_SIZE;
 
@@ -373,27 +349,67 @@ int unmap_range(uintptr_t vaddr, size_t size) {
     
     return 0;
 }
+#define KERNEL_VADDR_LIMIT   0xFF000000UL
+static uintptr_t vmm_expand_kernel_space(size_t size) {
 
+    uintptr_t max_end = KERNEL_VADDR_BASE;
+
+    for (vm_region_t *it = vm_regions; it; it = it->next) {
+        if (it->end > max_end)
+            max_end = it->end;
+    }
+
+    uintptr_t candidate = PAGE_ALIGN(max_end);
+
+    if (candidate < KERNEL_VADDR_BASE)
+        candidate = KERNEL_VADDR_BASE;
+
+    if ((candidate + size) >= KERNEL_VADDR_LIMIT)
+        return 0;
+
+    return candidate;
+}
 void* vmm_create_address_space(size_t size, page_attrs_t attrs) {
     size_t pages = _align_up(size) / PAGE_SIZE;
-    uintptr_t vaddr = vmm_find_free_region(KERNEL_VADDR_BASE, size);
+
+    uintptr_t vaddr;
+    uintptr_t paddr;
+    vm_region_t *r;
+
+retry_find:
+    vaddr = vmm_find_free_region(KERNEL_VADDR_BASE, size);
     if (vaddr == 0) {
-        return NULL; // no free region found
+        /* no free region found — try to expand kernel virtual space */
+        vaddr = vmm_expand_kernel_space(size);
+        if (vaddr == 0) {
+            return NULL; /* completely out of virtual address space */
+        }
     }
-    uintptr_t paddr = (uintptr_t)pmm_alloc_pages(0, pages);
+
+    /* 2) allocate physical pages */
+    paddr = (uintptr_t)pmm_alloc_pages(0, pages);
     if (paddr == 0) {
-        return NULL; // no free pages available
+        return NULL; /* no free physical memory */
     }
 
-
-    vm_region_t* r = _make_region(vaddr, vaddr + size, attrs);
+    /* create region descriptor */
+    r = _make_region(vaddr, vaddr + size, attrs);
     if (!r) {
         pmm_free_pages((void*)paddr, 0, pages);
-        return NULL;
+
+        /*
+         * If _make_region failed because of internal fragmentation or collisions,
+         * try again: either find a different region or expand further.
+         * Use the goto retry to attempt another allocation/region find.
+         */
+        goto retry_find;
     }
+
+    /* link into region list */
     r->next = vm_regions;
     vm_regions = r;
 
+    /* map pages */
     for (size_t i = 0; i < pages; i++) {
         uintptr_t va = vaddr + i * PAGE_SIZE;
         uintptr_t pa = paddr + i * PAGE_SIZE;
@@ -402,22 +418,25 @@ void* vmm_create_address_space(size_t size, page_attrs_t attrs) {
             .present = 1,
             .rw = attrs.rw,
             .user = attrs.user,
-            .frame_addr = pa >> 12
+            .frame_addr = pa >> PAGE_SIZE_SHIFT
         };
+
         if (map_page(va, pa, pg_attrs) < 0) {
-            // Rollback on failure
+            /* Rollback on failure */
             for (size_t j = 0; j < i; j++) {
-                uintptr_t undo_va = vaddr + j * PAGE_SIZE;
-                unmap_page(undo_va);
+                unmap_page(vaddr + j * PAGE_SIZE);
             }
+
+            /* unlink and free region metadata */
             vm_regions = r->next;
+            _free_region(r);
             pmm_free_pages((void*)paddr, 0, pages);
             return NULL;
         }
     }
+
     return (void*)vaddr;
 }
-
 void vmm_free_address_space(void* base, size_t size) {
     uintptr_t vaddr = (uintptr_t)base;
     size_t pages = _align_up(size) / PAGE_SIZE;
@@ -449,30 +468,6 @@ void vmm_free_address_space(void* base, size_t size) {
     }
 }
 
-static void _id_map(void) {
-    for (uintptr_t addr = 0; addr < 0x100000; addr += PAGE_SIZE) {
-        page_attrs_t attrs = {
-            .present = 1,
-            .rw = 1,
-            .user = 0,
-            .write_thru = 0,
-            .cache_dis = 0,
-            .accessed = 0,
-            .dirty = 0,
-            .global = 0,
-            .available = 0,
-            .frame_addr = 0  
-        };
-        // Identity map: vaddr == paddr
-        map_page(addr, addr, attrs);
-    }
-}
-
-static void _undo_id_map(void) {
-    for (uintptr_t addr = 0; addr < 0x100000; addr += PAGE_SIZE) {
-        unmap_page(addr);
-    }
-}
 
 static void _map_kernel(uintptr_t k_start_addr, size_t size) {
     for (uintptr_t offset = 0; offset < size; offset += PAGE_SIZE) {
@@ -499,20 +494,53 @@ int vmm_init(void) {
     uintptr_t k_end_addr   = (uintptr_t)&_kernel_end;
     size_t k_size = PAGE_ALIGN(k_end_addr - k_start_addr);
 
-    _zero_pd();
-
-    _paging_init_recursive();
-
-    _id_map();
-
     _map_kernel(k_start_addr, k_size);
 
-    _undo_id_map();
+    size_t phys_mem_size = pmm_get_memory_size();   
 
-    log("vmm: initialized\n", GREEN);
-    return 0;
+    size_t kernel_space_size = phys_mem_size / 3;
+    size_t user_space_size   = phys_mem_size - kernel_space_size;
+
+    uintptr_t kernel_phys_start = 0x00000000;
+    uintptr_t kernel_phys_end   = kernel_phys_start + kernel_space_size;
+
+    uintptr_t user_phys_start   = kernel_phys_end;
+    uintptr_t user_phys_end     = user_phys_start + user_space_size;
+
+    for (uintptr_t paddr = kernel_phys_start; paddr < kernel_phys_end; paddr += PAGE_SIZE) {
+        uintptr_t vaddr = KERNEL_VADDR_BASE + (paddr - kernel_phys_start);
+        page_attrs_t attrs = {
+            .present = 1,
+            .rw = 1,
+            .user = 0,
+            .write_thru = 0,
+            .cache_dis = 0,
+            .accessed = 0,
+            .dirty = 0,
+            .global = 1,
+            .available = 0,
+            .frame_addr = 0
+        };
+        map_page(vaddr, paddr, attrs);
+    }
+
+    for (uintptr_t paddr = user_phys_start; paddr < user_phys_end; paddr += PAGE_SIZE) {
+        uintptr_t vaddr = USER_VADDR_BASE + (paddr - user_phys_start);
+        page_attrs_t attrs = {
+            .present = 1,
+            .rw = 1,
+            .user = 1,
+            .write_thru = 0,
+            .cache_dis = 0,
+            .accessed = 0,
+            .dirty = 0,
+            .global = 0,
+            .available = 0,
+            .frame_addr = 0
+        };
+        map_page(vaddr, paddr, attrs);
+    }
 }
-
 static inline uintptr_t _fetch_frame_paddr(uintptr_t frame_addr) {
     return frame_addr << 12;
 }
@@ -592,7 +620,6 @@ int map_user_space(uintptr_t vaddr, size_t size) {
     return map_range(vaddr, phys_addr, size, attrs);
 }
 
-// Find region containing vaddr
 static vm_region_t* find_region(uintptr_t vaddr) {
     vm_region_t* cur = vm_regions;
     while (cur) {

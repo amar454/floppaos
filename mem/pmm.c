@@ -203,11 +203,14 @@ void pmm_free_page(void* addr) {
     pmm_free_pages(addr, 0, 1);
 }
 
-int pmm_get_memory_size(void) {
+uint32_t pmm_get_memory_size(void) {
     return buddy.total_pages * PAGE_SIZE;
 }
 
-unsigned int pmm_get_free_memory_size(void) {
+uint32_t pmm_get_page_count() {
+    return buddy.total_pages;
+}
+uint32_t pmm_get_free_memory_size(void) {
     int free_pages = 0;
     for (int i = 0; i <= MAX_ORDER; i++) {
         struct Page* page = buddy.free_list[i];

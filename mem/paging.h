@@ -12,7 +12,8 @@
 #define K_HEAP_START          0x00400000
 #define KERNEL_PHYSICAL_START 0x00100000
 #define CR0_PG_BIT            0x80000000
-
+#define PAGE_PRESENT    0x1
+#define PAGE_RW         0x2
 typedef struct {
     uint32_t present    : 1;
     uint32_t rw         : 1;

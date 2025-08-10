@@ -15,82 +15,67 @@
 // Aligned page directory and single page table
 pde_t pd[PAGE_DIRECTORY_SIZE] __attribute__((aligned(PAGE_SIZE)));
 pte_t first_pt[PAGE_TABLE_SIZE] __attribute__((aligned(PAGE_SIZE)));
-
-static inline void load_pd(void* pd_addr) {
+ 
+static void load_pd(void* pd_addr) {
     __asm__ volatile ("mov %0, %%cr3" :: "r" (pd_addr) : "memory");
 }
 
-static inline void enable_paging(void) {
+static void enable_paging(void) {
+    uint32_t cr0;
     __asm__ volatile (
-        "mov %%cr0, %%eax\n\t"
-        "or $0x80000000, %%eax\n\t"
-        "mov %%eax, %%cr0"
-        :
-        :
-        : "eax", "memory"
+        "mov %%cr0, %0" : "=r"(cr0)
+    );
+    cr0 |= CR0_PG_BIT;
+    __asm__ (
+        "mov %0, %%cr0" 
+        :: "r"(cr0)
     );
 }
 
+pde_t *current_page_directory = NULL;
 
-void clear_pds(void) {
-    for (int i = 0; i < PAGE_DIRECTORY_SIZE; i++) {
-        ((uint32_t*)pd)[i] = 0x00000002; 
-    }
-}
+void paging_init(void) {
+    void *pd_page = pmm_alloc_page();
+    void *pt_page = pmm_alloc_page();
 
-void pg_frame_set(uintptr_t addr) {
-    uintptr_t aligned_addr = addr & ~(PAGE_SIZE - 1);
-
-    pte_attrs_t pt_attrs = {
-        .present = 1,
-        .rw = 1,
-        .user = 0,
-        .write_thru = 0,
-        .cache_dis = 0,
-        .accessed = 0,
-        .dirty = 0,
-        .global = 0,
-        .available = 0,
-        .frame_addr = 0  
-    };
-
-    for (int i = 0; i < PAGE_TABLE_SIZE; i++) {
-        pt_attrs.frame_addr = (aligned_addr + (i * PAGE_SIZE)) >> 12;
-        SET_PF(&first_pt[i], pt_attrs);
+    if (!pd_page || !pt_page) {
+        log("paging_init: pmm_alloc_page failed\n", RED);
+        return;
     }
 
-    pde_attrs_t pd_attrs = {
-        .present = 1,
-        .rw = 1,
-        .user = 0,
-        .write_thru = 0,
-        .cache_dis = 0,
-        .accessed = 0,
-        .page_size = 0,
-        .global = 0,
-        .available = 0,
-        .table_addr = ((uintptr_t)first_pt) >> 12
-    };
+    pde_t *pd = (pde_t *)pd_page;
+    pte_t *first_pt = (pte_t *)pt_page;
 
-    SET_PD(&pd[0], pd_attrs);
+    flop_memset(pd, 0, PAGE_SIZE);
+    flop_memset(first_pt, 0, PAGE_SIZE);
 
-    pde_attrs_t selfref_attrs = pd_attrs;
-    selfref_attrs.table_addr = ((uintptr_t)pd) >> 12;
-    SET_PD(&pd[1023], selfref_attrs);
-}
+    // Identity map first 4 MiB (4KiB pages)
+    for (uint32_t i = 0; i < PAGE_TABLE_SIZE; ++i) {
+        pte_attrs_t a = {0};
+        a.present    = 1;
+        a.rw         = 1;
+        a.frame_addr = i;
+        SET_PF(&first_pt[i], a);
+    }
 
-void paging_init() {
-    log("clearing pds\n", GREEN);
-    clear_pds();
+    pde_attrs_t pd0 = {0};
+    pd0.present    = 1;
+    pd0.rw         = 1;
+    pd0.table_addr = ((uint32_t)first_pt) >> PAGE_SIZE_SHIFT;
+    SET_PD(&pd[0], pd0);
 
-    log("pg_frame_set ...\n", GREEN);
-    pg_frame_set(0);
+    pde_attrs_t rec = {0};
+    rec.present    = 1;
+    rec.rw         = 1;
+    rec.table_addr = ((uint32_t)pd) >> PAGE_SIZE_SHIFT;
+    SET_PD(&pd[1023], rec);
+
+    load_pd(pd);
+
+    current_page_directory = pd;
     
-    log("loading pd\n", GREEN);
-    load_pd((void*)pd);
-
     log("enabling paging\n", GREEN);
     enable_paging();
-
     log("paging init - ok\n", GREEN);
-}
+
+    }

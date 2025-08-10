@@ -5,6 +5,14 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "paging.h"
+#define KERNEL_VADDR_BASE  0xC0000000
+#define USER_VADDR_BASE         0x00000000 
+#define USER_SPACE_END     0xBFFFFFFF
+#define GNU_INLINE      __attribute__((always_inline))
+#define PAGE_ALIGN(addr)   (((addr) + 0xFFF) & ~0xFFF)
+#define RESOLVE_RECURSIVE_PD      ((pde_t*)0xFFFFF000)
+#define RESOLVE_RECURSIVE_PT(i)   ((pte_t*)(0xFFC00000 + ((i) << 12)))
+
 int map_page(uintptr_t vaddr, uintptr_t paddr, page_attrs_t attrs);
 int unmap_page(uintptr_t vaddr);
 int map_range(uintptr_t vaddr, uintptr_t paddr, size_t size, page_attrs_t attrs);
