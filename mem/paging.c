@@ -12,7 +12,6 @@
 #define PAGE_TABLE_SIZE 1024
 #define PAGE_SIZE 4096
 
-// Aligned page directory and single page table
 pde_t pd[PAGE_DIRECTORY_SIZE] __attribute__((aligned(PAGE_SIZE)));
 pte_t first_pt[PAGE_TABLE_SIZE] __attribute__((aligned(PAGE_SIZE)));
  
@@ -64,6 +63,42 @@ void paging_init(void) {
     pd0.table_addr = ((uint32_t)first_pt) >> PAGE_SIZE_SHIFT;
     SET_PD(&pd[0], pd0);
 
+    /* 
+    * Recursive mapping:
+    *
+    * PDE 1023 points to the Page Directory itself:
+    *
+    *   +-------------------------+ 0xFFFFF000
+    *   | Page Directory (PD)     | <--- PDE[1023] points here 
+    *   +-------------------------+
+    *              ^
+    *              ^
+    *   +-------------------------+ 0xFFC00000
+    *   | Page Tables (PTs) area  |  Covers PDE[0..1022]
+    *   | +---------------------+ |
+    *   | | PT 0                | | <-- PDE[0]
+    *   | +---------------------+ |
+    *   | | PT 1                | | <-- PDE[1]
+    *   | +---------------------+ |
+    *   | |        ...            | <- PDE[...]
+    *   | +---------------------+ |
+    *   | | PT 1022             | | <-- PDE[1022]
+    *   | +---------------------+ |
+    *   +-------------------------+
+    *
+    * virt address bit layout (32 bits):
+    *
+    *   [10 bits PDE][10 bits PT][12 bits offset]
+    *
+    * get pt:
+    *
+    *   0xFFC00000 + (PDE_index << 12) + (PT_index * 4)
+    *
+    * get pd:
+    *
+    *   0xFFFFF000 + (PDE_index * 4)
+    */
+
     pde_attrs_t rec = {0};
     rec.present    = 1;
     rec.rw         = 1;
@@ -73,9 +108,9 @@ void paging_init(void) {
     load_pd(pd);
 
     current_page_directory = pd;
-    
+
     log("enabling paging\n", GREEN);
     enable_paging();
     log("paging init - ok\n", GREEN);
 
-    }
+}

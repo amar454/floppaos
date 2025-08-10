@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License along with Flo
 #include "pmm.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../lib/logging.h"
+
 #include <stdint.h>
 
 struct buddy_allocator_t buddy;
@@ -121,13 +122,18 @@ void pmm_init(multiboot_info_t* mb_info) {
 
     uint64_t total_memory = iterate_mb_mmap(mb_info);
     buddy_init(total_memory, (uintptr_t)mb_info->mmap_addr);
-
+    static spinlock_t buddy_lock_initializer = SPINLOCK_INIT;
+    buddy.lock = buddy_lock_initializer;
+    spinlock_init(&buddy.lock);
     log_uint("pmm: Total pages: ", buddy.total_pages);
     log("pmm: memory available kb: ", LIGHT_GRAY);
     log_uint("", total_memory / 1024);
     log("pmm: memory available mb: ", LIGHT_GRAY);
     log_uint("", total_memory / 1024 / 1024);
     log("pmm: Buddy allocator initialized\n", GREEN);
+
+    
+
 }
 
 void pmm_copy_page(void* dst, void* src) {
@@ -137,6 +143,10 @@ void pmm_copy_page(void* dst, void* src) {
 }
 
 void* pmm_alloc_pages(uint32_t order, uint32_t count) {
+
+    spinlock(&buddy.lock);
+
+
     if (order > MAX_ORDER || count == 0) return NULL;
 
     void* first_page = NULL;
@@ -168,11 +178,12 @@ void* pmm_alloc_pages(uint32_t order, uint32_t count) {
             first_page = page;
         }
     }
-
+    spinlock_unlock(&buddy.lock, true);
     return first_page;
 }
 
 void pmm_free_pages(void* addr, uint32_t order, uint32_t count) {
+    spinlock(&buddy.lock);
     if (!addr || order > MAX_ORDER || count == 0) return;
 
     uintptr_t current_addr = (uintptr_t)addr;
@@ -183,6 +194,7 @@ void pmm_free_pages(void* addr, uint32_t order, uint32_t count) {
         buddy_merge(page->address, order);
         current_addr += (1 << order) * PAGE_SIZE;
     }
+    spinlock_unlock(&buddy.lock, true);
 }
 int pmm_is_valid_addr(uintptr_t addr) {
     if (addr % PAGE_SIZE != 0) return 0;

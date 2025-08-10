@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "../multiboot/multiboot.h"
 #include "paging.h"
+#include "../task/sync/spinlock.h"
 #define PAGE_SIZE 4096
 #define PAGE_SHIFT 12
 #define MAX_ORDER 10
@@ -23,6 +24,7 @@ struct buddy_allocator_t {
     uint32_t total_pages;
     uintptr_t memory_start;
     uintptr_t memory_end;
+    spinlock_t lock;
 };
 
 extern struct buddy_allocator_t buddy;

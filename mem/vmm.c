@@ -50,11 +50,147 @@ static vm_region_t* vm_regions = NULL;
 uintptr_t kernel_heap_start;
 uintptr_t kernel_heap_end;
 
-
 extern uint8_t _kernel_start;
 extern uint8_t _kernel_end;
 
 extern pde_t pd[PAGE_DIRECTORY_SIZE] __attribute__((aligned(PAGE_SIZE)));
+
+/**
+ * Virtual address space setup for floppaOS, the Flopperating System:
+ *
+ *   Virtual Address Space (4 GiB total):
+ *
+ *     0xFFFFFFFF  +--------------------------+
+ *                 |      Kernel Space        |  (1 GiB)
+ *                 |  [Supervisor Only]       |
+ *                 |  gbl, rw, non-user       |
+ *                 +--------------------------+ 0xC0000000 (KERNEL_VADDR_BASE)
+ *                 |      User Space          |  (3 GiB)
+ *                 |  [User + Kernel Access]  |
+ *                 |  Demand-paged, RW/User   |
+ *                 +--------------------------+ 0x00000000
+ *
+ *    Physical memory layout to virtual address mapping:
+ * 
+ *     Example: 96 MiB physical memory
+ *
+ *     0x05FFFFFF  +--------------------------+
+ *                 |  User Physical Memory    |  (2/3 of total)
+ *                 |                          |
+ *                 |                          |
+ *                 |                          |
+ *     0x02000000  +--------------------------+
+ *                 | Kernel physical memory   |  (1/3 of total)
+ *                 | Kernel image + kmalloc   |
+ *     0x00000000  +--------------------------+
+ *
+ * Final virtual address mapping:
+ *
+ *     Kernel Physical 0x00000000 → Kernel Virtual 0xC0000000
+ *     User Physical   0x02000000 → User Virtual   0x00000000
+ *
+ */
+int vmm_init(void) {
+    uintptr_t k_start_addr = (uintptr_t)&_kernel_start;
+    uintptr_t k_end_addr   = (uintptr_t)&_kernel_end;
+    size_t k_size = PAGE_ALIGN(k_end_addr - k_start_addr);
+
+    log_address("vmm_init: kernel start address: \n", k_start_addr);
+    log_address("vmm_init: kernel end address: \n", k_end_addr);
+    log_uint("vmm_init: kernel size: ", k_size);
+    log_uint("vmm_init: kernel size in pages: ", k_size / PAGE_SIZE);
+
+    if (k_start_addr == 0 || k_end_addr == 0) {
+        log("vmm_init: kernel start or end address is 0, something went wrong\n", RED);
+        return -1;
+    }
+    if (k_size == 0) {
+        log("vmm_init: k_size is 0, something went wrong\n", RED);
+        return -1;
+    }
+
+    // map kernel executable into kernel space 
+    // taken from linker script
+    
+    log("vmm_init: mapping kernel executable into kernel space\n", BLUE);
+    for (uintptr_t offset = 0; offset < k_size; offset += PAGE_SIZE) {
+        uintptr_t vaddr = KERNEL_VADDR_BASE + offset;
+        uintptr_t paddr = k_start_addr + offset;
+        page_attrs_t attrs = {
+            .present = 1,
+            .rw = 1,
+            .user = 0,
+            .write_thru = 0,
+            .cache_dis = 0,
+            .accessed = 0,
+            .dirty = 0,
+            .global = 0,
+            .available = 0,
+            .frame_addr = 0  
+        };
+        map_page(vaddr, paddr, attrs);
+    }
+
+    log("vmm_init: mapping kernel pages into kernel space\n", BLUE);
+    size_t phys_mem_size = pmm_get_memory_size();   
+
+    size_t kernel_space_size    = phys_mem_size / 3;
+    size_t user_space_size      = phys_mem_size - kernel_space_size;
+
+    uintptr_t kernel_phys_start = 0x00000000;
+    uintptr_t kernel_phys_end   = kernel_phys_start + kernel_space_size;
+
+    uintptr_t user_phys_start   = kernel_phys_end;
+    uintptr_t user_phys_end     = user_phys_start + user_space_size;
+
+    log_address("kernel_phys_start: \n", kernel_phys_start);
+    log_address("kernel_phys_end: \n", kernel_phys_end);
+    log_address("user_phys_start: \n", user_phys_start);
+    log_address("user_phys_end: \n", user_phys_end);
+
+    log("vmm_init: constructing kernel virtual address space\n", BLUE);
+    // construct kernel virtual address space
+    for (uintptr_t paddr = kernel_phys_start; paddr < kernel_phys_end; paddr += PAGE_SIZE) {
+        uintptr_t vaddr = KERNEL_VADDR_BASE + (paddr - kernel_phys_start);
+        page_attrs_t attrs = {
+            .present = 1,
+            .rw = 1,
+            .user = 0,
+            .write_thru = 0,
+            .cache_dis = 0,
+            .accessed = 0,
+            .dirty = 0,
+            .global = 1,
+            .available = 0,
+            .frame_addr = 0
+        };
+        map_page(vaddr, paddr, attrs);
+    }
+
+    log("vmm_init: kernel virtual address space constructed\n", GREEN);
+
+    log("vmm_init: constructing user virtual address space\n", BLUE);
+
+    // construct user virtual address space
+    for (uintptr_t paddr = user_phys_start; paddr < user_phys_end; paddr += PAGE_SIZE) {
+        uintptr_t vaddr = USER_VADDR_BASE + (paddr - user_phys_start);
+        page_attrs_t attrs = {
+            .present = 1,
+            .rw = 1,
+            .user = 1,
+            .write_thru = 0,
+            .cache_dis = 0,
+            .accessed = 0,
+            .dirty = 0,
+            .global = 0,
+            .available = 0,
+            .frame_addr = 0
+        };
+        map_page(vaddr, paddr, attrs);
+    }
+    log("vmm_init: user virtual address space constructed\n", GREEN);
+    log("vmm_init - ok\n", GREEN);
+}
 
 static inline GNU_INLINE uint32_t _pd_index(uintptr_t addr) {
    return (addr >> 22) & 0x3FF;
@@ -73,7 +209,6 @@ static inline GNU_INLINE uintptr_t _align_up(uintptr_t addr) {
 }
 
 static void _zero_pt(pte_t* pt) {
-    
     flop_memset(pt, 0, PAGE_TABLE_SIZE * sizeof(pte_t));
 }
 
@@ -87,7 +222,8 @@ static void _zero_pd(void) {
 static pte_t* _alloc_pt(void) {
     void* pt = pmm_alloc_page();
     if (!pt) return NULL;
-    return (pte_t*)pt;
+    _zero_pt((pte_t*)pt);
+    return _align_down((uintptr_t)pt);
 }
 
 static int _pd_lvl(pte_t* tables[2], uint32_t indices[2], page_attrs_t attrs) {
@@ -288,6 +424,11 @@ static vm_region_t* _clone_region(vm_region_t* src) {
     return r;
 }
 
+static vm_region_t* _merge_regions(vm_region_t* a, vm_region_t* b) {
+    if (a->end < b->start) return NULL;
+    if (b->end < a->start) return NULL;
+    return _make_region(a->start, b->end, a->attrs);
+}
 static void _free_region(vm_region_t* r) {
     if (!r) return;
     pmm_free_page(r);
@@ -349,6 +490,7 @@ int unmap_range(uintptr_t vaddr, size_t size) {
     
     return 0;
 }
+
 #define KERNEL_VADDR_LIMIT   0xFF000000UL
 static uintptr_t vmm_expand_kernel_space(size_t size) {
 
@@ -369,6 +511,89 @@ static uintptr_t vmm_expand_kernel_space(size_t size) {
 
     return candidate;
 }
+vm_region_t* vmm_find_region_by_start(uintptr_t addr) {
+    vm_region_t *r = vm_regions;
+    while (r) {
+        if (r->start == addr) {
+            return r;
+        }
+        r = r->next;
+    }
+    return NULL;
+}
+
+int vmm_unlink_region(vm_region_t *region) {
+    if (!region) return -1;
+    vm_region_t **p = &vm_regions;
+    while (*p && *p != region) {
+        p = &(*p)->next;
+    }
+    if (*p == region) {
+        *p = region->next;
+        return 0;
+    }
+    return -1;
+}
+
+int vmm_attrs_cmp(const page_attrs_t *a, const page_attrs_t *b) {
+    return flop_memcmp(a, b, sizeof(page_attrs_t)) == 0;
+}
+
+void vmm_unmap_region(vm_region_t *r) {
+    size_t pages = (r->end - r->start) / PAGE_SIZE;
+    for (size_t i = 0; i < pages; i++) {
+        uintptr_t va = r->start + i * PAGE_SIZE;
+        if (vmm_is_mapped(va)) {
+            uintptr_t pa = virt_to_phys(va);
+            unmap_page(va);
+            pmm_free_page((void*)pa);
+        }
+    }
+}
+
+void vmm_free_region(vm_region_t *r) {
+    if (!r) return;
+    vmm_unmap_region(r);
+    vmm_unlink_region(r);
+    _free_region(r);
+}
+vm_region_t* vmm_find_region_containing(uintptr_t addr) {
+    vm_region_t *r = vm_regions;
+    while (r) {
+        if (addr >= r->start && addr < r->end) {
+            return r;
+        }
+        r = r->next;
+    }
+    return NULL;
+}
+
+int vmm_is_range_free(uintptr_t start, size_t size) {
+    uintptr_t end = start + size;
+    vm_region_t *r = vm_regions;
+    while (r) {
+        if (!(end <= r->start || start >= r->end)) {
+            return 0; 
+        }
+        r = r->next;
+    }
+    return 1; // No overlap, range is free
+}
+void _vmm_secure_page_free(void *p) {
+    // we memset here to prevent data leakage.
+    flop_memset(p, 0, PAGE_SIZE);
+    pmm_free_page(p);
+}
+
+// whenever a process wants to access its address space, we need to check if it can
+// please remember this maybe?
+int vmm_check_access(uintptr_t vaddr, int write_access, int user_mode) {
+    vm_region_t *r = vmm_find_region_containing(vaddr);
+    if (!r) return -1;
+    if (user_mode && !r->attrs.user) return -2;
+    if (write_access && !r->attrs.rw) return -3;
+    return 0;
+}
 void* vmm_create_address_space(size_t size, page_attrs_t attrs) {
     size_t pages = _align_up(size) / PAGE_SIZE;
 
@@ -376,40 +601,29 @@ void* vmm_create_address_space(size_t size, page_attrs_t attrs) {
     uintptr_t paddr;
     vm_region_t *r;
 
-retry_find:
+retry: // todo: prevent infinite lopp in case of failure?
     vaddr = vmm_find_free_region(KERNEL_VADDR_BASE, size);
     if (vaddr == 0) {
-        /* no free region found — try to expand kernel virtual space */
         vaddr = vmm_expand_kernel_space(size);
         if (vaddr == 0) {
-            return NULL; /* completely out of virtual address space */
+            return NULL;
         }
     }
 
-    /* 2) allocate physical pages */
     paddr = (uintptr_t)pmm_alloc_pages(0, pages);
     if (paddr == 0) {
-        return NULL; /* no free physical memory */
+        return NULL;
     }
 
-    /* create region descriptor */
     r = _make_region(vaddr, vaddr + size, attrs);
     if (!r) {
         pmm_free_pages((void*)paddr, 0, pages);
-
-        /*
-         * If _make_region failed because of internal fragmentation or collisions,
-         * try again: either find a different region or expand further.
-         * Use the goto retry to attempt another allocation/region find.
-         */
-        goto retry_find;
+        goto retry;
     }
 
-    /* link into region list */
     r->next = vm_regions;
     vm_regions = r;
 
-    /* map pages */
     for (size_t i = 0; i < pages; i++) {
         uintptr_t va = vaddr + i * PAGE_SIZE;
         uintptr_t pa = paddr + i * PAGE_SIZE;
@@ -422,12 +636,10 @@ retry_find:
         };
 
         if (map_page(va, pa, pg_attrs) < 0) {
-            /* Rollback on failure */
             for (size_t j = 0; j < i; j++) {
                 unmap_page(vaddr + j * PAGE_SIZE);
             }
 
-            /* unlink and free region metadata */
             vm_regions = r->next;
             _free_region(r);
             pmm_free_pages((void*)paddr, 0, pages);
@@ -437,109 +649,133 @@ retry_find:
 
     return (void*)vaddr;
 }
+
 void vmm_free_address_space(void* base, size_t size) {
-    uintptr_t vaddr = (uintptr_t)base;
+    vm_region_t *r = vmm_find_region_by_start((uintptr_t)base);
+    if (r && ((r->end - r->start) == size)) {
+        vmm_free_region(r);
+    }
+}
+
+int vmm_merge_address_spaces(void* base1, void* base2) {
+    vm_region_t *r1 = vmm_find_region_by_start((uintptr_t)base1);
+    vm_region_t *r2 = vmm_find_region_by_start((uintptr_t)base2);
+
+    if (!r1 || !r2) {
+        return -1;
+    }
+    if (r1->end != r2->start) {
+        return -2;
+    }
+    if (!vmm_attrs_equal(&r1->attrs, &r2->attrs)) {
+        return -3;
+    }
+
+    r1->end = r2->end;
+    vmm_unlink_region(r2);
+    _free_region(r2);
+
+    return 0;
+}
+
+void* vmm_clone_address_space(void* base, size_t size) {
     size_t pages = _align_up(size) / PAGE_SIZE;
+    uintptr_t src_base = (uintptr_t)base;
 
-    vm_region_t **prev = &vm_regions;
-    vm_region_t *r = vm_regions;
+    uintptr_t dst_vaddr = vmm_find_free_region(KERNEL_VADDR_BASE, size);
+    if (dst_vaddr == 0) {
+        dst_vaddr = vmm_expand_kernel_space(size);
+        if (dst_vaddr == 0) {
+            return NULL;
+        }
+    }
 
-    while (r) {
-        if (r->start == vaddr && (r->end - r->start) == size) {
-            *prev = r->next;
+    uintptr_t dst_paddr = (uintptr_t)pmm_alloc_pages(0, pages);
+    if (dst_paddr == 0) {
+        return NULL;
+    }
 
-            for (size_t i = 0; i < pages; ++i) {
-                uintptr_t va = vaddr + i * PAGE_SIZE;
+    for (size_t i = 0; i < pages; i++) {
+        uintptr_t src_va = src_base + i * PAGE_SIZE;
+        uintptr_t dst_va = dst_vaddr + i * PAGE_SIZE;
 
-                if (!vmm_is_mapped(va)) continue;
-
-                uintptr_t pa = virt_to_phys(va);
-                unmap_page(va);
-                pmm_free_page((void*)pa);
-            }
-
-
-            flop_memset(r, 0, sizeof(vm_region_t)); 
-            return;
+        if (!vmm_is_mapped(src_va)) {
+            continue;
         }
 
-        prev = &r->next;
-        r = r->next;
-    }
-}
+        uintptr_t src_pa = virt_to_phys(src_va);
+        void* dst_frame = pmm_alloc_page();
+        if (!dst_frame) {
+            vmm_unmap_range(dst_vaddr, i * PAGE_SIZE);
+            pmm_free_pages((void*)dst_paddr, 0, pages);
+            return NULL;
+        }
+        flop_memcpy(dst_frame, (void*)src_pa, PAGE_SIZE);
 
-
-static void _map_kernel(uintptr_t k_start_addr, size_t size) {
-    for (uintptr_t offset = 0; offset < size; offset += PAGE_SIZE) {
-        uintptr_t vaddr = KERNEL_VADDR_BASE + offset;
-        uintptr_t paddr = k_start_addr + offset;
-        page_attrs_t attrs = {
-            .present = 1,
-            .rw = 1,
-            .user = 0,
-            .write_thru = 0,
-            .cache_dis = 0,
-            .accessed = 0,
-            .dirty = 0,
-            .global = 0,
-            .available = 0,
-            .frame_addr = 0  
-        };
-        map_page(vaddr, paddr, attrs);
-    }
-}
-
-int vmm_init(void) {
-    uintptr_t k_start_addr = (uintptr_t)&_kernel_start;
-    uintptr_t k_end_addr   = (uintptr_t)&_kernel_end;
-    size_t k_size = PAGE_ALIGN(k_end_addr - k_start_addr);
-
-    _map_kernel(k_start_addr, k_size);
-
-    size_t phys_mem_size = pmm_get_memory_size();   
-
-    size_t kernel_space_size = phys_mem_size / 3;
-    size_t user_space_size   = phys_mem_size - kernel_space_size;
-
-    uintptr_t kernel_phys_start = 0x00000000;
-    uintptr_t kernel_phys_end   = kernel_phys_start + kernel_space_size;
-
-    uintptr_t user_phys_start   = kernel_phys_end;
-    uintptr_t user_phys_end     = user_phys_start + user_space_size;
-
-    for (uintptr_t paddr = kernel_phys_start; paddr < kernel_phys_end; paddr += PAGE_SIZE) {
-        uintptr_t vaddr = KERNEL_VADDR_BASE + (paddr - kernel_phys_start);
-        page_attrs_t attrs = {
-            .present = 1,
-            .rw = 1,
-            .user = 0,
-            .write_thru = 0,
-            .cache_dis = 0,
-            .accessed = 0,
-            .dirty = 0,
-            .global = 1,
-            .available = 0,
-            .frame_addr = 0
-        };
-        map_page(vaddr, paddr, attrs);
-    }
-
-    for (uintptr_t paddr = user_phys_start; paddr < user_phys_end; paddr += PAGE_SIZE) {
-        uintptr_t vaddr = USER_VADDR_BASE + (paddr - user_phys_start);
         page_attrs_t attrs = {
             .present = 1,
             .rw = 1,
             .user = 1,
-            .write_thru = 0,
-            .cache_dis = 0,
-            .accessed = 0,
-            .dirty = 0,
-            .global = 0,
-            .available = 0,
-            .frame_addr = 0
+            .frame_addr = ((uintptr_t)dst_frame) >> PAGE_SIZE_SHIFT
         };
-        map_page(vaddr, paddr, attrs);
+
+        if (map_page(dst_va, (uintptr_t)dst_frame, attrs) < 0) {
+            pmm_free_page(dst_frame);
+            vmm_unmap_range(dst_vaddr, i * PAGE_SIZE);
+            pmm_free_pages((void*)dst_paddr, 0, pages);
+            return NULL;
+        }
     }
+
+    vm_region_t *r = _make_region(dst_vaddr, dst_vaddr + size, (page_attrs_t){.present=1,.rw=1,.user=1});
+    if (!r) {
+        vmm_unmap_range(dst_vaddr, size);
+        pmm_free_pages((void*)dst_paddr, 0, pages);
+        return NULL;
+    }
+    r->next = vm_regions;
+    vm_regions = r;
+
+    return (void*)dst_vaddr;
+}
+int vmm_protect_address_space(void* base, size_t size, page_attrs_t new_attrs) {
+    if (!base || size == 0) {
+        return -1; // invalid parameters
+    }
+
+    uintptr_t vaddr = (uintptr_t)base;
+    size_t pages = _align_up(size) / PAGE_SIZE;
+
+    vm_region_t *r = vmm_find_region_by_start(vaddr);
+    if (!r || (r->end - r->start) != size) {
+        return -2;
+    }
+
+
+    for (size_t i = 0; i < pages; i++) {
+        uintptr_t va = vaddr + (i * PAGE_SIZE);
+
+        if (!vmm_is_mapped(va)) {
+            continue; // skip unmapped pages
+        }
+
+        uintptr_t pa = virt_to_phys(va);
+
+        page_attrs_t pg_attrs = {
+            .present    = new_attrs.present,
+            .rw         = new_attrs.rw,
+            .user       = new_attrs.user,
+            .frame_addr = pa >> PAGE_SIZE_SHIFT
+        };
+
+        if (map_page(va, pa, pg_attrs) < 0) {
+            return -3; // failed to remap page with new protection
+        }
+    }
+
+    r->attrs = new_attrs;
+
+    return 0; // success
 }
 static inline uintptr_t _fetch_frame_paddr(uintptr_t frame_addr) {
     return frame_addr << 12;
@@ -662,7 +898,7 @@ void vmm_dump_mappings(void) {
     vm_region_t* cur = vm_regions;
     while (cur) {
         char buf[64];
-        flopsnprintf(buf, sizeof(buf), "Region: [0x%p - 0x%p], attrs: {present: %d, rw: %d, user: %d}\n",
+        flopsnprintf(buf, sizeof(buf), "Region: [0x - 0x], attrs: {present: %d, rw: %d, user: %d}\n",
                  cur->start, cur->end, cur->attrs.present, cur->attrs.rw, cur->attrs.user);
         log(buf, LIGHT_GRAY);
         cur = cur->next;

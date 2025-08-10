@@ -144,7 +144,7 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
   
     sched_start();
     draw_floppaos_logo(); 
-    echo ("Flopperating System - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
+    echo ("floppaOS, The Flopperating System - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
   
     
 
