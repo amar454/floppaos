@@ -41,7 +41,7 @@ void paging_init(void) {
         log("paging_init: pmm_alloc_page failed\n", RED);
         return;
     }
-
+    
     pde_t *pd = (pde_t *)pd_page;
     pte_t *first_pt = (pte_t *)pt_page;
 
@@ -101,7 +101,7 @@ void paging_init(void) {
 
     pde_attrs_t rec = {0};
     rec.present    = 1;
-    rec.rw         = 1;
+    rec.rw         = 1; 
     rec.table_addr = ((uint32_t)pd) >> PAGE_SIZE_SHIFT;
     SET_PD(&pd[1023], rec);
 

@@ -6,12 +6,13 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#define HEAP_PERCENTAGE 25  // Use 25% of total memory for heap
-#define MIN_HEAP_SIZE (4UL * 1024 * 1024)  // 4MB minimum
-#define MAX_HEAP_SIZE (512UL * 1024 * 1024)  // 512MB maximum
-#define KERNEL_HEAP_START 0xC0400000  // Starting virtual address for kernel heap
-#define ALIGN_UP(x, align) (((x) + ((align)-1)) & ~((align)-1))
-#define PMM_RETURN_THRESHOLD (8 * PAGE_SIZE) // Return to PMM if free block is this big
+#define PAGE_SIZE           4096
+#define KERNEL_VADDR_BASE   0xC0000000
+#define USER_VADDR_BASE     0x00000000
+#define KERNEL_HEAP_START   0xC8000000  
+#define MAX_HEAP_SIZE       (128 * 1024 * 1024) 
+#define MIN_HEAP_SIZE       (4 * 1024 * 1024)   
+#define HEAP_PERCENTAGE     10                 
 
 void* kmalloc(size_t size);
 void kfree(void* ptr, size_t size);

@@ -14,10 +14,22 @@ static inline void spinlock_init(spinlock_t* lock) {
     atomic_store(&lock->state, 0);
 }
 
+static inline bool spinlock_trylock(spinlock_t* lock) {
+    unsigned int expected = 0;
+    return __atomic_compare_exchange_n(
+        &lock->state, 
+        &expected, 
+        1,
+        false,
+        __ATOMIC_ACQUIRE, 
+        __ATOMIC_RELAXED
+    );
+}
+
 static inline bool spinlock(spinlock_t* lock) {
     bool interrupts_enabled = IA32_INT_ENABLED();
     __asm__ volatile ("cli");
-    while (__atomic_test_and_set(&lock->state, __ATOMIC_ACQUIRE)) {
+    while (!spinlock_trylock(lock)) {
         IA32_CPU_RELAX();
     }
     return interrupts_enabled;
