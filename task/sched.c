@@ -43,7 +43,7 @@ void ctx_switch(cpu_ctx_t* old, cpu_ctx_t* new_ctx) {
         "movl %1, %%esp\n"
         "popa\n"
         "popf\n"
-        "iret\n"
+        "ret\n"
         : "=m"(old->esp)
         : "m"(new_ctx->esp)
         : "memory"
