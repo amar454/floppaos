@@ -15,18 +15,10 @@
 
 ### **Copyright © Amar Djulovic 2024, 2025**  
 
-**floppaOS** is a free and open-source 32-bit operating system written in C, built entirely from scratch—except for the GNU GRUB bootloader.  
-
-This project is meant to be the **magnum opus** of my programming portfolio, created both for job opportunities and my deep interest in low-level programming.  
-
-I chose **not** to conform to UNIX standards, which are common in OS development. My reasoning? **GNU/Linux already exists and represents the peak of UNIX operating systems.** Rather than competing with that, I aim to build something distinct from the usual UNIX-based systems.  
-
-Obviously, **floppaOS** is not intended for production use in its current state. OS development is **time-consuming**, and updates will be **inconsistent**, especially during this alpha stage.  
-
-**Contributions and help are always welcome!** If you're interested, feel free to fork the project, submit pull requests, or reach out on Discord: **@amarat**.  
-
-Thank you for checking out **floppaOS**—and if you read all this, I appreciate it!  
-
+FloppaOS, or the Flopperating System is a lightweight, multitasking, and simplicity focused os.
+It features a monolithic kernel with a self-documented, diagram oriented, and easy to read code style
+is intended to be easy to approach and study for beginners. 
+ 
 ---
 
 ## **Compiling Instructions**  
@@ -70,13 +62,13 @@ make cleanobj
 
 ## **Feature Overview**  
 
-✅ Simple and lightweight command-line OS  
-✅ Custom scripting language (**fshell**)  
-✅ Memory handler  
-✅ VGA text mode & graphics *(graphics WIP)*  
-✅ Task handler  
-✅ Basic file system  
-✅ Command-line scientific calculator *(some functions WIP, wrapper not yet complete)*  
+✅ Memory allocation (pmm, vmm, paging, heap)
+✅ Task scheduling (smp) 
+✅ Multiboot 1   
+✅ Tmpfs
+✅ Obviously an IDT and GDT :^)
+✅ Full graphical support 
+✅ Flanterm 
 
 ---
 
