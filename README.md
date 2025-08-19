@@ -1,7 +1,3 @@
-<div style="text-align: center;">  
-  <img src="https://github.com/amar454/floppaos/blob/main/floppaOS_logo.jpeg?raw=true" alt="floppaOS Logo" width="100">  
-</div>  
-
 # **floppaOS**  
 
 ```
@@ -62,24 +58,14 @@ make cleanobj
 
 ## **Feature Overview**  
 
-✅ Memory allocation (pmm, vmm, paging, heap)
-✅ Task scheduling (smp) 
-✅ Multiboot 1   
-✅ Tmpfs
-✅ Obviously an IDT and GDT :^)
-✅ Full graphical support 
-✅ Flanterm 
+- [x] Memory allocation (pmm, vmm, paging, heap)
+- [x] Task scheduling (smp) 
+- [x] Multiboot 1   
+- [x] Tmpfs 
+- [x] vfs
+- [x] Full graphical support 
+- [x] Flanterm 
 
----
-
-## **Project Goals**  
-
-- [x] **Runs on minimal hardware**  
-- [x] **Completely built from scratch**  
-- [ ] **Uniqueness factor** *(Still in progress)*  
-- [ ] **Thorough documentation**  
-- [ ] **Focus on security through cryptography**  
-- [x] **Small OS size** *(As of 12/13/2024, floppaOS is only **27.65MB**!)*  
-- [ ] **Unique file system with permissions** *(Not POSIX-compliant)*  
+- [ ] if youre wondering if i have a gdt, you're in the wrong place
 
 ---
