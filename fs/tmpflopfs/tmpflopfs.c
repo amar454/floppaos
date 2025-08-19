@@ -235,7 +235,6 @@ static int tmpfs_unmount(struct vfs_mountpoint* mp, char* device) {
     return 0;
 }
 
-
 static struct vfs_node* tmpfs_open(struct vfs_node* node, char* relpath) {
     tmpfs_super_t* sb = (tmpfs_super_t*)node->mountpoint->data_pointer;
     if (!sb) return NULL;
@@ -556,6 +555,7 @@ static int tmpfs_rename(struct vfs_mountpoint* mp, char* oldp, char* newp) {
     spinlock_unlock(&sb->lock, sb_ints);
     return 0;
 }
+
 static struct vfs_directory_list* tmpfs_listdir(struct vfs_mountpoint* mp, char* relpath) {
     tmpfs_super_t* sb = (tmpfs_super_t*)mp->data_pointer;
     bool sb_ints = spinlock(&sb->lock);
@@ -678,9 +678,7 @@ static int tmpfs_ctrl(struct vfs_node* node, unsigned long cmd, unsigned long ar
     return ret;
 }
 
-
 // only expose the tmpfs through the vfs op table
-
 
 static int tmpfs_init_op_table(int fs_type) {
     flop_memset(&tmpfs_fs, 0, sizeof(tmpfs_fs));
