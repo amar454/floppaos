@@ -258,31 +258,6 @@ struct Page* phys_to_page_index(uintptr_t addr) {
     return &buddy.page_info[index];
 }
 
-typedef struct page_cache_entry {
-    uintptr_t phys;
-    uint64_t idx;
-    struct page_cache_entry *prev_lru;
-    struct page_cache_entry *next_lru;
-    bool dirty;
-    uint32_t refcount;
-} page_cache_entry_t;
-
-typedef struct {
-    uint8_t *keys;
-    void   **vals;
-    uint8_t *state;  /* 0=empty,1=used,2=deleted */
-    size_t   cap;
-    size_t   len;
-} child_map_t;
-
-typedef struct radix_node {
-    page_cache_entry_t *entry;
-    child_map_t map;
-} radix_node_t;
-
-typedef struct {
-    radix_node_t *root;
-} radix_tree_t;
 
 static size_t cm_next_pow2(size_t x) {
     if (x <= 4) return 4;
@@ -562,15 +537,8 @@ static void radix_del_entry(radix_tree_t *t, uint64_t key) {
     }
 }
 
-typedef struct {
-    radix_tree_t *tree;
-    page_cache_entry_t *lru_head;
-    page_cache_entry_t *lru_tail;
-    spinlock_t lock;
-    uint64_t page_count;
-} page_cache_t;
 
-static page_cache_t page_cache;
+ page_cache_t page_cache;
 
 void page_cache_init(void) {
     page_cache.tree = NULL;
