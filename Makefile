@@ -39,7 +39,7 @@ SCHED_SRC = task/sched.c task/thread.c task/pid.c task/sync/mutex.c task/sync/sp
 MEM_SRC = mem/vmm.c mem/pmm.c mem/paging.c mem/utils.c mem/gdt.c mem/alloc.c mem/slab.c
 DRIVER_SRC = drivers/vga/vgahandler.c drivers/keyboard/keyboard.c drivers/time/floptime.c \
              drivers/io/io.c drivers/vga/framebuffer.c drivers/acpi/acpi.c drivers/mouse/ps2ms.c
-FS_SRC = fs/tmpflopfs/tmpflopfs.c
+FS_SRC = fs/tmpflopfs/tmpflopfs.c fs/vfs/vfs.c
 LIB_SRC = lib/str.c lib/flopmath.c lib/logging.c
 APP_SRC = apps/echo.c apps/dsp/dsp.c
 OTHER_SRC = kernel/kernel.c multiboot/multiboot.c 

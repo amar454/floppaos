@@ -4,7 +4,6 @@
 #include "../apps/echo.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../lib/logging.h"
-// Define the Global Descriptor Table (GDT) and its pointer
 #define GDT_ENTRIES 3
 GDTEntry gdt[GDT_ENTRIES];
 GDTPointer gdt_ptr;
@@ -21,7 +20,7 @@ void gdt_flush(uint32_t gdt_ptr_address) {
         "jmp $0x08, $.next\n" 
         ".next:\n"
         :                     
-        : "r" (gdt_ptr_address) //
+        : "r" (gdt_ptr_address) 
         : "eax"               
     );
 }
@@ -48,7 +47,6 @@ void init_gdt() {
     gdt_ptr.limit = (sizeof(GDTEntry) * GDT_ENTRIES) - 1;
     gdt_ptr.base = (uintptr_t)&gdt;
 
-    log("Initializing gdt...\n", LIGHT_GRAY);
     
     set_gdt_entry(0, 0, 0, 0, 0);               // Null
     set_gdt_entry(1, 0, 0xFFFFF, 0x9A, 0xCF);   // Kernel Code (DPL 0)
@@ -56,6 +54,8 @@ void init_gdt() {
     set_gdt_entry(3, 0, 0xFFFFF, 0xFA, 0xCF);   // User Code (DPL 3)
     set_gdt_entry(4, 0, 0xFFFFF, 0xF2, 0xCF);   // User Data (DPL 3)
 
-    log("Gdt initialized.\n", GREEN);
+    gdt_flush((uint32_t)&gdt_ptr);
+
+    log("gdt init - ok\n", GREEN);
 }
 

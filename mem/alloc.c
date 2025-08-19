@@ -76,6 +76,12 @@ struct kernel_region {
     struct free_list *free_list;
 } kernel_regions;
 
+typedef struct alloc_info {
+    spinlock_t lock;
+    struct alloc_mem_block *first_block;
+    struct free_list *free_list;
+} alloc_info_t;
+static alloc_info_t this_allocator = { .lock = SPINLOCK_INIT, .first_block = NULL, .free_list = NULL };
 static struct free_list *free_blocks = NULL; 
 static int heap_initialized = 0;
 static struct alloc_mem_block *first_block = NULL;
@@ -239,6 +245,10 @@ void init_kernel_heap(void) {
     kernel_regions.end = (uintptr_t)(KERNEL_HEAP_START + kernel_heap_size);
     kernel_regions.next = NULL;
 
+    static spinlock_t alloc_lock_initializer = SPINLOCK_INIT;
+    this_allocator.lock = alloc_lock_initializer;
+    spinlock_init(&this_allocator.lock);
+
     log("available memory kb: ", WHITE); log_uint("",(uint32_t)total_memory / 1024);
     log("kernel heap size mb: ", WHITE); log_uint("",(uint32_t)kernel_heap_size / 1024 / 1024);
     log("kernel heap size gb: ", WHITE); log_uint("",(uint32_t)kernel_heap_size / 1024 / 1024 / 1024);
@@ -269,6 +279,7 @@ void free_memory_block(void *ptr, size_t size) {
 }
 
 
+
 // return a pointer to a memory block of requested size via slab allocator or physical pages
 // note: it is strongly discouraged to use kmalloc for any sizes above 4kb, as it can be prevented by using virtual addresses.
 void *kmalloc(size_t size) {
@@ -283,24 +294,32 @@ void *kmalloc(size_t size) {
 
     // allocate to slab if under 4kb
     if (size <= 4096) {
+        spinlock(&this_allocator.lock);
         void *ptr = slab_alloc(size);
         if (ptr) return ptr;
+        spinlock_unlock(&this_allocator.lock, true);
     }
 
     // if over 4kb, try to alloc from the free list
+    
     ptr = get_from_free_list(size);
     if (ptr) {
+        spinlock(&this_allocator.lock);
         // if we can find one and do that, take block from free list 
         struct alloc_mem_block *block = (struct alloc_mem_block *)ptr;
 
         // Mark block as allocated
         block->size &= ~1; 
-
+        
+        spinlock_unlock(&this_allocator.lock, true);
         // return void pointer to the block.
         return (void *)(block + 1);
+        
     }
 
     // now, if there is no suitable block in the free list, align to page size, and allocate physical pages
+
+    spinlock(&buddy.lock);
     size_t pages = ALIGN_UP(size + sizeof(struct alloc_mem_block), 4096) / 4096;
     ptr = pmm_alloc_pages(0, pages);
     if (!ptr) { // check if alloc worked (should)
@@ -312,8 +331,9 @@ void *kmalloc(size_t size) {
 
     // add that memory block
     add_memory_block((uintptr_t)ptr, pages * 4096, 0);
+    spinlock_unlock(&buddy.lock, true);
+    // return void pointer to the newly allocated memory block. 
 
-    // return void pointer to the newly allocated memory block.
     return (void *)((struct alloc_mem_block *)ptr + 1);
 }
 

@@ -198,7 +198,7 @@ static void _pit_init() {
 
     outb(PIT_CHANNEL0_PORT,  divisor &  PIT_DIVISOR_LSB_MASK);
     outb(PIT_CHANNEL0_PORT, (divisor >> PIT_DIVISOR_MSB_SHIFT) & PIT_DIVISOR_LSB_MASK);
-    log("pic init - ok\n", GREEN);
+    log("pit init - ok\n", GREEN);
 }
 
 // set idt entries for the isr and irq and load them 

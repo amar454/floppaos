@@ -27,6 +27,7 @@ struct buddy_allocator_t {
     spinlock_t lock;
 };
 
+
 extern struct buddy_allocator_t buddy;
 
 void pmm_init(multiboot_info_t* mb_info);
