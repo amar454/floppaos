@@ -25,6 +25,9 @@
 #define VFS_SEEK_CUR 0x1
 #define VFS_SEEK_END 0x2
 
+#define VFS_TYPE_TMPFS 0x1
+#define VFS_TYPE_FAT 0x2
+#define VFS_TYPE_DEVFS 0x3
 
 struct vfs_mountpoint {
     struct vfs_fs *filesystem;
@@ -59,10 +62,10 @@ typedef int (*rw) (struct vfs_node*, unsigned char*, unsigned long);
 
 struct vfs_op_tbl {
     struct vfs_node* (*open) (struct vfs_node*, char*); // node, path
-    int                (*close)(struct vfs_node*);        // node
+    int              (*close)(struct vfs_node*);        // node
 
-    rw  read;
-    rw  write;
+    rw  read;  // node, buffer, size
+    rw  write; // node, buffer, size
     
     void*  (*mount)  (char*, char*, int);
     int    (*unmount)(struct vfs_mountpoint*, char*); // mp, device name
