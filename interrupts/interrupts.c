@@ -224,7 +224,7 @@ static void _idt_init() {
                         "r"(&idtp) : 
                         "memory"
                     );
-
+    __asm__ volatile ("sti");
     log("idt init - ok\n", GREEN);
 }
 

@@ -14,31 +14,42 @@ You should have received a copy of the GNU General Public License along with Flo
 
 #include "pmm.h"
 #include "../drivers/vga/vgahandler.h"
+#include "../drivers/time/floptime.h"
+#include "../multiboot/multiboot.h"
 #include "../lib/logging.h"
-
+#include "utils.h"
+#include "paging.h"
+#include "pmm.h"
+#include "alloc.h"
 #include <stdint.h>
 
 struct buddy_allocator_t buddy;
 
-// split a block into 2 blocks of half the size
 void buddy_split(uintptr_t addr, uint32_t order) {
-    // fetch addr of block to split (offset by half the current block size)
-    uintptr_t buddy_addr = addr + (1 << (order - 1)) * PAGE_SIZE;
-    
-    // fetch page info structs for both blocks
-    struct Page* page = phys_to_page_index(addr);
-    struct Page* buddy_page = phys_to_page_index(buddy_addr);
-    
+    if (order == 0) return; // nothing to split
 
-    if (page && buddy_page) {
-        page->order = order - 1;
-        buddy_page->order = order - 1;
-        
-        // Add first block to free list of lower order
-        page->next = buddy.free_list[order - 1];
-        buddy.free_list[order - 1] = page;
-    }
+    // size of the resulting smaller block
+    uintptr_t half_size = (1ULL << (order - 1)) * PAGE_SIZE;
+    uintptr_t buddy_addr = addr + half_size;
+
+    struct Page* page_a = phys_to_page_index(addr);
+    struct Page* page_b = phys_to_page_index(buddy_addr);
+
+    if (!page_a || !page_b) return;
+
+    page_a->order = order - 1;
+    page_b->order = order - 1;
+
+    page_a->is_free = 1;
+    page_b->is_free = 1;
+
+    page_b->next = buddy.free_list[order - 1];
+    buddy.free_list[order - 1] = page_b;
+
+    page_a->next = buddy.free_list[order - 1];
+    buddy.free_list[order - 1] = page_a;
 }
+
 
 // merge a block with its buddy if possible
 // recursively merges blocks until a block cannot be merged
@@ -71,6 +82,107 @@ void buddy_merge(uintptr_t addr, uint32_t order) {
         buddy.free_list[order] = page;
     }
 }
+static inline uintptr_t align_up(uintptr_t x, uintptr_t a) {
+    return (x + (a - 1)) & ~(a - 1);
+}
+
+static uintptr_t boot_reserved_top(multiboot_info_t* mb) {
+    extern char _kernel_end; // from linker
+    uintptr_t top = (uintptr_t)&_kernel_end;
+
+    if (!mb) return align_up(top, PAGE_SIZE);
+
+    // multiboot info structure itself may be placed in low memory
+    if ((uintptr_t)mb > top) top = (uintptr_t)mb;
+
+
+    if (mb->flags & MULTIBOOT_INFO_MEM_MAP) {
+        uintptr_t mmap_top = (uintptr_t)mb->mmap_addr + (uintptr_t)mb->mmap_length;
+        if (mmap_top > top) top = mmap_top;
+    }
+
+    if (mb->flags & MULTIBOOT_INFO_MODS) {
+        multiboot_module_t* mods = (multiboot_module_t*)(uintptr_t)mb->mods_addr;
+        for (uint32_t i = 0; i < mb->mods_count; i++) {
+            if ((uintptr_t)mods[i].mod_end > top) top = (uintptr_t)mods[i].mod_end;
+        }
+    }
+    return align_up(top, PAGE_SIZE);
+}
+
+static uint64_t count_usable_pages(multiboot_info_t* mb_info,
+                                   uintptr_t* out_first_avail,
+                                   uint64_t* out_total_bytes) {
+    if (!mb_info || !(mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
+        if (out_first_avail) *out_first_avail = 0;
+        if (out_total_bytes) *out_total_bytes = 0;
+        return 0;
+    }
+
+    uint8_t* mmap_ptr = (uint8_t*)(uintptr_t)mb_info->mmap_addr;
+    uint8_t* mmap_end = mmap_ptr + mb_info->mmap_length;
+
+    uint64_t total_bytes = 0;
+    uint64_t total_pages = 0;
+    uintptr_t first_avail = 0;
+
+    while (mmap_ptr < mmap_end) {
+        multiboot_memory_map_t* e = (multiboot_memory_map_t*)(void*)mmap_ptr;
+        if (e->size == 0) break; // sanity ( i have none )
+
+        if (e->type == MULTIBOOT_MEMORY_AVAILABLE && e->addr >= 0x100000ULL) {
+            total_bytes += (uint64_t)e->len;
+
+            uintptr_t rs = (uintptr_t)e->addr;
+            uintptr_t re = rs + (uintptr_t)e->len;
+
+            // align to pages
+            rs = align_up(rs, PAGE_SIZE);
+            re &= ~(PAGE_SIZE - 1);
+
+            if (re > rs) total_pages += (re - rs) / PAGE_SIZE;
+
+            if (first_avail == 0) first_avail = rs;
+        }
+
+        mmap_ptr += e->size + sizeof(e->size);
+    }
+
+    if (out_first_avail) *out_first_avail = first_avail;
+    if (out_total_bytes) *out_total_bytes = total_bytes;
+    return total_pages;
+}
+
+// Find a region (in available mmap entries) that can hold page_info after reserved_top
+static uintptr_t find_page_info_placement(multiboot_info_t* mb, uintptr_t reserved_top, size_t page_info_bytes) {
+    if (!mb || !(mb->flags & MULTIBOOT_INFO_MEM_MAP)) return 0;
+
+    uint8_t* mmap_ptr = (uint8_t*)(uintptr_t)mb->mmap_addr;
+    uint8_t* mmap_end = mmap_ptr + mb->mmap_length;
+    uintptr_t need = align_up((uintptr_t)page_info_bytes, PAGE_SIZE);
+
+    while (mmap_ptr < mmap_end) {
+        multiboot_memory_map_t* e = (multiboot_memory_map_t*)(void*)mmap_ptr;
+        if (e->size == 0) break;
+
+        if (e->type == MULTIBOOT_MEMORY_AVAILABLE && e->addr >= 0x100000ULL) {
+            uintptr_t rs = align_up((uintptr_t)e->addr, PAGE_SIZE);
+            uintptr_t re = ((uintptr_t)(e->addr + e->len)) & ~(PAGE_SIZE - 1);
+
+            // candidate start must be >= reserved_top and inside region
+            uintptr_t start = (reserved_top > rs) ? reserved_top : rs;
+            start = align_up(start, PAGE_SIZE);
+
+            if (start < re && (re - start) >= need) {
+                return start;
+            }
+        }
+
+        mmap_ptr += e->size + sizeof(e->size);
+    }
+    return 0;
+}
+
 static void _add_page_to_free_list(struct Page* page, uintptr_t address, uint32_t order) {
     page->address = address;
     page->order = order;
@@ -79,62 +191,154 @@ static void _add_page_to_free_list(struct Page* page, uintptr_t address, uint32_
     buddy.free_list[order] = page;
 }
 
-static void _create_free_list(void) {
-    for (uint32_t i = 0; i < buddy.total_pages; i++) {
-        struct Page* page = &buddy.page_info[i];
-        _add_page_to_free_list(page, buddy.memory_start + (i * PAGE_SIZE), MAX_ORDER);
-    }
-}
+static void _create_free_list(multiboot_info_t* mb_info) {
+    log("creating free list from multiboot mmap\n", GREEN);
 
-static void buddy_init(uint64_t total_memory, uintptr_t memory_start) {
-    buddy.total_pages = total_memory / PAGE_SIZE;
-    buddy.memory_start = memory_start;
-    buddy.memory_end = buddy.memory_start + buddy.total_pages * PAGE_SIZE;
-
-    buddy.page_info = (struct Page*)buddy.memory_start;
-    buddy.memory_start += buddy.total_pages * sizeof(struct Page);
-
-    _create_free_list();
-}
-
-static uint64_t iterate_mb_mmap(multiboot_info_t* mb_info) {
-    uint8_t* mmap_ptr = (uint8_t*)mb_info->mmap_addr;
-    uint8_t* mmap_end = mmap_ptr + mb_info->mmap_length;
-
-    uint64_t total_memory = 0;
-
-    while (mmap_ptr < mmap_end) {
-        multiboot_memory_map_t* mmap = (multiboot_memory_map_t*)mmap_ptr;
-        if (mmap->type == MULTIBOOT_MEMORY_AVAILABLE) {
-            total_memory += mmap->len;
-        }
-        mmap_ptr += mmap->size + sizeof(mmap->size);
-    }
-
-    return total_memory;
-}
-
-void pmm_init(multiboot_info_t* mb_info) {
     if (!mb_info || !(mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
-        log("pmm: Invalid Multiboot info!\n", RED);
+        log("no memory map present\n", RED);
         return;
     }
 
-    uint64_t total_memory = iterate_mb_mmap(mb_info);
+    uint8_t* mmap_ptr = (uint8_t*)(uintptr_t)mb_info->mmap_addr;
+    uint8_t* mmap_end = mmap_ptr + mb_info->mmap_length;
 
-    buddy_init(total_memory, (uintptr_t)mb_info->mmap_addr);
+    if (mmap_ptr < mmap_end) {
+        multiboot_memory_map_t* first = (multiboot_memory_map_t*)(void*)mmap_ptr;
+        log_uint("mmap first size: ", first->size);
+        log_uint("mmap first addr: ", first->addr);
+        log_uint("mmap first len: ", first->len);
+        log_uint("mmap first type: ", first->type);
+        if (first->size == 0) {
+            log("mmap appears corrupt (size==0)\n", RED);
+            return;
+        }
+    }
+
+    uintptr_t page_info_start = (uintptr_t)buddy.page_info;
+    uintptr_t page_info_end   = page_info_start +
+        ((buddy.total_pages * sizeof(struct Page) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1));
+
+    size_t added_pages = 0;
+    log("free list: scanning memory map\n", GREEN);
+
+    while (mmap_ptr < mmap_end) {
+        multiboot_memory_map_t* e = (multiboot_memory_map_t*)(void*)mmap_ptr;
+        if (e->size == 0) {
+            log("mmap entry size=0, aborting scan\n", RED);
+            break;
+        }
+
+        if (e->type == MULTIBOOT_MEMORY_AVAILABLE && e->addr >= 0x100000ULL) {
+            uintptr_t region_start = align_up((uintptr_t)e->addr, PAGE_SIZE);
+            uintptr_t region_end   = ((uintptr_t)(e->addr + e->len)) & ~(PAGE_SIZE - 1);
+
+            for (uintptr_t addr = region_start; addr < region_end; addr += PAGE_SIZE) {
+                // skip page_info area and below base
+                if (addr >= page_info_start && addr < page_info_end) continue;
+                if (addr < buddy.memory_base) continue;
+
+                uint32_t idx = (uint32_t)((addr - buddy.memory_base) / PAGE_SIZE);
+                if (idx >= buddy.total_pages) continue;
+
+                struct Page* page = &buddy.page_info[idx];
+                _add_page_to_free_list(page, addr, 0);
+                added_pages++;
+            }
+        }
+
+        mmap_ptr += e->size + sizeof(e->size);
+    }
+
+    log_uint("free list pages added: ", added_pages);
+    log("free list populated\n", GREEN);
+}
+
+static void buddy_init(uint64_t usable_pages,
+                       uintptr_t memory_base_first_usable,
+                       multiboot_info_t* mb_info) {
+
+    log("buddy: setting up page info array\n", GREEN);
+
+    buddy.total_pages = usable_pages;
+    buddy.memory_base = memory_base_first_usable;   // anchor for indexing
+
+    size_t page_info_bytes = buddy.total_pages * sizeof(struct Page);
+    uintptr_t reserved_top = boot_reserved_top(mb_info);
+
+    // try to find AVAILABLE region where we can place page_info after reserved_top
+    uintptr_t page_info_addr = find_page_info_placement(mb_info, reserved_top, page_info_bytes);
+    if (!page_info_addr) {
+        // fallback: place page_info at reserved_top
+        log("buddy: warning - could not find available region for page_info; using reserved_top fallback\n", YELLOW);
+        page_info_addr = reserved_top;
+    }
+
+    buddy.page_info = (struct Page*)page_info_addr;
+    size_t page_info_pages = (page_info_bytes + PAGE_SIZE - 1) / PAGE_SIZE;
+
+    // start handing out pages AFTER page_info to avoid clobber
+    buddy.memory_start = page_info_addr + page_info_pages * PAGE_SIZE;
+    buddy.memory_end   = buddy.memory_base + buddy.total_pages * PAGE_SIZE;
+
+    log_uint("buddy: total pages: ", buddy.total_pages);
+    log_uint("buddy: page_info size (pages): ", page_info_pages);
+    log_address("buddy: memory_base: ", buddy.memory_base);
+    log_address("buddy: page_info: ", (uintptr_t)buddy.page_info);
+    log_address("buddy: memory_start: ", buddy.memory_start);
+    log_address("buddy: memory_end: ", buddy.memory_end);
+
+    // build the free list from the multiboot map
+    _create_free_list(mb_info);
+
+    log("buddy init - ok\n", GREEN);
+}
+
+void pmm_init(multiboot_info_t* mb_info) {
+    log("pmm_init: start init pmm\n", GREEN);
+
+    if (!mb_info || !(mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
+        log("pmm: Invalid or missing Multiboot memory map\n", RED);
+        return;
+    }
+
+    // get counts & first usable aligned address
+    uintptr_t usable_start = 0;
+    uint64_t total_memory_bytes = 0;
+    uint64_t usable_pages = count_usable_pages(mb_info, &usable_start, &total_memory_bytes);
+
+    if (usable_pages == 0 || usable_start == 0) {
+        log("pmm: no usable pages found\n", RED);
+        return;
+    }
+
+    log_uint("pmm: usable pages: ", usable_pages);
+    log_uint("pmm: total memory bytes (from mmap): ", (uint32_t)(total_memory_bytes & 0xFFFFFFFFU));
+    log_address("pmm: first usable addr: ", usable_start);
+
+    buddy_init(usable_pages, usable_start, mb_info);
 
     static spinlock_t buddy_lock_initializer = SPINLOCK_INIT;
     buddy.lock = buddy_lock_initializer;
     spinlock_init(&buddy.lock);
 
-    log("pmm_init(): Buddy allocator initialized\n", GREEN);
-    log_uint("pmm: total pages: ", buddy.total_pages);
-    log_uint("pmm: total memory size: ", total_memory);
-    log_address("pmm: memory start: ", buddy.memory_start);
-    log_address("pmm: memory end: ", buddy.memory_end);
-    log_uint("pmm: memory available kb: ", total_memory / 1024);
-    log_uint("pmm: memory available mb: ", total_memory / 1024 / 1024);
+    // alloc test
+    void* test_page = pmm_alloc_page();
+    if (test_page != NULL) {
+        log_address("pmm: test page: ", (uintptr_t)test_page);
+        uint32_t* test_ptr = (uint32_t*)test_page;
+        for (int i = 0; i < PAGE_SIZE / sizeof(uint32_t); i++) test_ptr[i] = 0xDEADBEEF;
+        for (int i = 0; i < PAGE_SIZE / sizeof(uint32_t); i++) {
+            if (test_ptr[i] != 0xDEADBEEF) {
+                log("pmm: test page verification failed\n", RED);
+                pmm_free_page(test_page);
+                return;
+            }
+        }
+        log("pmm: test page verification passed\n", GREEN);
+        pmm_free_page(test_page);
+    }
+
+    log("pmm_init: done\n", GREEN);
 }
 
 void pmm_copy_page(void* dst, void* src) {
@@ -153,8 +357,10 @@ void* pmm_alloc_pages(uint32_t order, uint32_t count) {
 
     void* first_page = NULL;
 
+    // iterate through the count of pages requested
     for (uint32_t i = 0; i < count; i++) {
         void* page = NULL;
+
         for (uint32_t j = order; j <= MAX_ORDER; j++) {
             if (buddy.free_list[j]) {
                 struct Page* p = buddy.free_list[j];
@@ -198,16 +404,6 @@ void pmm_free_pages(void* addr, uint32_t order, uint32_t count) {
     }
     spinlock_unlock(&buddy.lock, true);
 }
-int pmm_is_valid_addr(uintptr_t addr) {
-    if (addr % PAGE_SIZE != 0) return 0;
-
-    if (addr < buddy.memory_start || addr >= buddy.memory_end) return 0;
-
-    uint32_t index = page_index(addr);
-    if (index >= buddy.total_pages) return 0;
-
-    return 1;
-}
 
 void* pmm_alloc_page(void) {
     return pmm_alloc_pages(0, 1);
@@ -249,14 +445,26 @@ uintptr_t page_to_phys_addr(struct Page* page) {
 }
 
 uint32_t page_index(uintptr_t addr) {
-    return (addr - buddy.memory_start) / PAGE_SIZE;
+    // index relative to the memory_base anchor used when building page_info
+    return (addr - buddy.memory_base) / PAGE_SIZE;
 }
 
 struct Page* phys_to_page_index(uintptr_t addr) {
+    // verify within range first
+    if (addr < buddy.memory_base || addr >= buddy.memory_end) return NULL;
     uint32_t index = page_index(addr);
     if (index >= buddy.total_pages) return NULL;
     return &buddy.page_info[index];
 }
+
+int pmm_is_valid_addr(uintptr_t addr) {
+    if (addr % PAGE_SIZE != 0) return 0;
+    if (addr < buddy.memory_base || addr >= buddy.memory_end) return 0;
+    uint32_t index = page_index(addr);
+    if (index >= buddy.total_pages) return 0;
+    return 1;
+}
+
 
 
 static size_t cm_next_pow2(size_t x) {
@@ -281,17 +489,17 @@ static int cm_init(child_map_t *m, size_t cap) {
     m->state = (uint8_t *) kmalloc(c);
     if (!m->keys || !m->vals || !m->state) {
         if (m->keys) {
-            kfree(m->keys);
+            kfree(m->keys, c);
         }
         if (m->vals) {
-            kfree(m->vals);
+            kfree(m->vals, sizeof(void *) * c);
         }
         if (m->state) {
-            kfree(m->state);
+            kfree(m->state, c);
         }
         return -1;
     }
-    memset(m->state, 0, c);
+    flop_memset(m->state, 0, c);
     m->cap = c;
     m->len = 0;
     return 0;
@@ -300,13 +508,13 @@ static int cm_init(child_map_t *m, size_t cap) {
 static void cm_free(child_map_t *m) {
     if (!m) return;
     if (m->keys) {
-        kfree(m->keys);
+        kfree(m->keys, m->cap);
     }
     if (m->vals) {
-        kfree(m->vals);
+        kfree(m->vals, sizeof(void *) * m->cap);
     }
     if (m->state) {
-        kfree(m->state);
+        kfree(m->state, m->cap);
     }
     m->keys = NULL;
     m->vals = NULL;
@@ -430,10 +638,10 @@ static void rt_free_node_recursive(radix_node_t *n) {
     }
     if (n->entry) {
         pmm_free_page((void *) n->entry->phys);
-        kfree(n->entry);
+        kfree(n->entry, sizeof(page_cache_entry_t));
     }
     cm_free(&n->map);
-    kfree(n);
+    kfree(n, sizeof(radix_node_t));
 }
 
 static inline uint8_t rt_key_part(uint64_t k, int level) {
@@ -452,7 +660,7 @@ static int radix_init(radix_tree_t **out) {
 static void radix_free(radix_tree_t *t) {
     if (!t) return;
     if (t->root) rt_free_node_recursive(t->root);
-    kfree(t);
+    kfree(t, sizeof(radix_tree_t));
 }
 
 static page_cache_entry_t *radix_get_entry(radix_tree_t *t, uint64_t key) {
@@ -486,7 +694,7 @@ static int radix_set_entry(radix_tree_t *t, uint64_t key, page_cache_entry_t *en
     }
     if (n->entry) {
         pmm_free_page((void *) n->entry->phys);
-        kfree(n->entry);
+        kfree(n->entry, sizeof(page_cache_entry_t));
     }
     n->entry = entry;
     return 0;
@@ -515,7 +723,7 @@ static void radix_del_entry(radix_tree_t *t, uint64_t key) {
     }
     if (!n->entry) return;
     pmm_free_page((void *) n->entry->phys);
-    kfree(n->entry);
+    kfree(n->entry, sizeof(page_cache_entry_t));
     n->entry = NULL;
     for (int i = depth; i > 0; --i) {
         radix_node_t *cur = stack[i];
@@ -527,12 +735,12 @@ static void radix_del_entry(radix_tree_t *t, uint64_t key) {
             radix_node_t *parent = stack[i - 1];
             cm_del(&parent->map, part_stack[i]);
             cm_free(&cur->map);
-            kfree(cur);
+            kfree(cur, sizeof(radix_node_t));
         } else break;
     }
     if (t->root && t->root->entry == NULL && t->root->map.len == 0) {
         cm_free(&t->root->map);
-        kfree(t->root);
+        kfree(t->root, sizeof(radix_node_t));
         t->root = NULL;
     }
 }
@@ -590,7 +798,7 @@ void *page_cache_get(uint64_t idx) {
     entry->refcount = 1;
     if (radix_set_entry(page_cache.tree, idx, entry) < 0) {
         pmm_free_page(page);
-        kfree(entry);
+        kfree(entry, sizeof(page_cache_entry_t));
         spinlock_unlock(&page_cache.lock, true);
         return NULL;
     }

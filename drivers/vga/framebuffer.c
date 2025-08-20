@@ -5,8 +5,9 @@
 #include "../../lib/str.h"
 #include "../../mem/utils.h"
 #include "../../multiboot/multiboot.h"
-#include "../../flanterm/flanterm.h"
-#include "../../flanterm/backends/fb.h"
+#include "../../flanterm/src/flanterm.h"
+#include "../../flanterm/src/flanterm_backends/fb.h"
+
 #include "vgahandler.h"
 
 
@@ -47,16 +48,7 @@ void init_colors() {
     c.light_gray = 0xD3D3D3;
     c.dark_gray = 0xA9A9A9;
     c.brown = 0xA52A2A;
-    c.orange = 0xFFA500;
-    c.purple = 0x800080;
-    c.teal = 0x008080;
-    c.navy = 0x000080;
-    c.maroon = 0x800000;
-    c.olive = 0x808000;
-    c.pink = 0xFFC0CB;
-    c.lime = 0x00FF00;
-    c.aqua = 0x00FFFF;
-    c.fuchsia = 0xFF00FF;
+    
 
 }
 

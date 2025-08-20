@@ -168,7 +168,7 @@ static tmpfs_inode_t* tmpfs_parent_and_leaf(tmpfs_inode_t* root, const char* pat
         const char* start = it; 
         while (*it && !tmpfs_is_sep(*it)) it++; 
         size_t seglen = (size_t)(it - start); 
-        if (seglen == flopstrlen(leaf) && strncmp(start, leaf, seglen) == 0 && !*it) 
+        if (seglen == flopstrlen(leaf) && flopstrncmp(start, leaf, seglen) == 0 && !*it) 
             break; 
         char seg[VFS_MAX_FILE_NAME]; 
         size_t m = seglen; 
@@ -225,13 +225,18 @@ static int tmpfs_unmount(struct vfs_mountpoint* mp, char* device) {
     (void)device;
     tmpfs_super_t* sb = (tmpfs_super_t*)mp->data_pointer;
     if (!sb) return -1;
+
     bool interrupt_state = spinlock(&sb->lock);
+
     if (refcount_dec_and_test(&sb->refcount)) {
         tmpfs_free_tree(sb->root);
-        spinlock_unlock(&sb->lock, interrupt_state);
-        kfree(sb, sizeof(*sb));
-        mp->data_pointer = NULL;
+        mp->data_pointer = NULL;    
+        spinlock_unlock(&sb->lock, interrupt_state); 
+        kfree(sb, sizeof(*sb));   
+        return 0;
     }
+
+    spinlock_unlock(&sb->lock, interrupt_state);
     return 0;
 }
 

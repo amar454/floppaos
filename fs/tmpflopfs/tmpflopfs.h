@@ -34,7 +34,7 @@ typedef enum {
     TMPFS_CMD_SET_SIZE,
     TMPFS_CMD_TRUNCATE,
     TMPFS_CMD_SYNC,
-}; tmpfs_ctrl_cmd_t;
+} tmpfs_ctrl_cmd_t;
 
 struct tmpfs_handle { 
     tmpfs_inode_t* inode; 
@@ -42,6 +42,7 @@ struct tmpfs_handle {
     int mode;
 };
 
-int tmpfs_register_with_vfs(int fs_type);
+int tmpfs_register_with_vfs();
+int tmpfs_init();
 
 #endif // TMPFS_H

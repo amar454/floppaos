@@ -49,7 +49,7 @@ void ctx_switch(cpu_ctx_t* old, cpu_ctx_t* new_ctx) {
         : "memory"
     );
 }
-static spinlock_t _sched_lock_init = SPINLOCK_INIT;
+ spinlock_t _sched_lock_init = SPINLOCK_INIT;
 void sched_init() {
     sched.core_count = get_cpu_core_count();
     if (sched.core_count > MAX_CORES) 
@@ -305,7 +305,7 @@ void sched_timer_tick() {
     
     for (uint32_t i = 0; i < sched.core_count; ++i) {
         if (sched.ready_queues[i].count > 0) {
-            sched_reschedule(i);
+            sched_reschedule_core(i);
         }
     }
 }

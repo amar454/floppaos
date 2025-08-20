@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stdatomic.h>
 #include "../../interrupts/interrupts.h"
-#define SPINLOCK_INIT {ATOMIC_VAR_INIT(0)}
+#define SPINLOCK_INIT ATOMIC_FLAG_INIT 
 typedef struct spinlock {
     atomic_uint state;
 } spinlock_t;

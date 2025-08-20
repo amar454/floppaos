@@ -217,7 +217,7 @@ void *get_memory_block_size(uintptr_t addr) {
     return (void *)(block->size & ~1);
 }
 
-pde_t *kernel_page_directory = NULL;
+
 
 // get memory size, calculate appropriate heap size, allocate virtual address space for heap, and create the first memory block
 void init_kernel_heap(void) {
@@ -266,7 +266,7 @@ void free_memory_block(void *ptr, size_t size) {
     if (!ptr || size == 0) return;
 
     if (size <= 4096) {
-        slab_free(ptr, size);
+        slab_free(ptr);
         return;
     }
 
@@ -344,7 +344,7 @@ void kfree(void *ptr, size_t size) {
     
     if (size <= 4096) {
         // woohoo slab dealloc is easy, just free from slab allocator
-        slab_free(ptr, size);
+        slab_free(ptr);
         return;
     }
     // otherwise, free mem block and add to free list.
@@ -660,7 +660,7 @@ bool is_heap_initialized() {
 }
 
 // zero, free, and mark the heap as uninitialized
-void destroy_kernel_heap(pde_t *kernel_page_directory) {
+void destroy_kernel_heap(uint32_t *kernel_page_directory) {
     log("alloc: Destroying kernel heap...\n", YELLOW);
     bool heap = is_heap_initialized();
     if (!heap) {
@@ -672,7 +672,7 @@ void destroy_kernel_heap(pde_t *kernel_page_directory) {
     log("alloc: Kernel heap destroyed\n", LIGHT_RED);
 }
 
-void re_init_kernel_heap() {
+void re_init_kernel_heap(uint32_t *kernel_page_directory) {
     destroy_kernel_heap(kernel_page_directory);
     init_kernel_heap();
 }

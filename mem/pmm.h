@@ -24,6 +24,7 @@ struct buddy_allocator_t {
     uint32_t total_pages;
     uintptr_t memory_start;
     uintptr_t memory_end;
+    uint32_t memory_base;
     spinlock_t lock;
 };
 
@@ -60,7 +61,8 @@ typedef struct {
     spinlock_t lock;
     uint64_t page_count;
 } page_cache_t;
-
+extern uint32_t *pg_dir;
+extern uint32_t *pg_tbls;
 extern page_cache_t page_cache;
 extern struct buddy_allocator_t buddy;
 
