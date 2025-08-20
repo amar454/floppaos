@@ -228,10 +228,10 @@ static int tmpfs_unmount(struct vfs_mountpoint* mp, char* device) {
     bool interrupt_state = spinlock(&sb->lock);
     if (refcount_dec_and_test(&sb->refcount)) {
         tmpfs_free_tree(sb->root);
+        spinlock_unlock(&sb->lock, interrupt_state);
         kfree(sb, sizeof(*sb));
         mp->data_pointer = NULL;
     }
-    spinlock_unlock(&sb->lock, interrupt_state);
     return 0;
 }
 
