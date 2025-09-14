@@ -249,12 +249,7 @@ void init_kernel_heap(void) {
     this_allocator.lock = alloc_lock_initializer;
     spinlock_init(&this_allocator.lock);
 
-    log("available memory kb: ", WHITE); log_uint("",(uint32_t)total_memory / 1024);
-    log("kernel heap size mb: ", WHITE); log_uint("",(uint32_t)kernel_heap_size / 1024 / 1024);
-    log("kernel heap size gb: ", WHITE); log_uint("",(uint32_t)kernel_heap_size / 1024 / 1024 / 1024);
-    log("kernel heap start: ", WHITE); log_uint("",(uint32_t)KERNEL_HEAP_START);
-    log("kernel heap end: ", WHITE); log_uint("",(uint32_t)KERNEL_HEAP_START + kernel_heap_size);
-    
+    log("kernel heap init - ok\n\n", YELLOW);
 
     // now that we can alloc stuff, mark the heap as initialized.
     heap_initialized = 1;

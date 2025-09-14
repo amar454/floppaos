@@ -32,6 +32,7 @@ kernel.c:
 #include "../apps/echo.h"
 #include "../drivers/time/floptime.h"
 #include "../fs/tmpflopfs/tmpflopfs.h"
+#include "../fs/vfs/vfs.h"
 #include "../drivers/keyboard/keyboard.h"
 #include "../interrupts/interrupts.h"
 #include "../lib/str.h"
@@ -143,14 +144,13 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     vmm_init(); 
     init_kernel_heap();
 
-
+    vfs_init();
 
     tmpfs_init();
 
     sched_init();
 
-  
-    sched_start();
+    echo("floppaOS kernel booted! now we do nothing.\n", GREEN);
     draw_floppaos_logo(); 
     echo ("floppaOS, The Flopperating System - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
   
@@ -161,7 +161,6 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
     return 0;
     
 }
-// bullshit placeholder bc C requires a main method but doesn't take the correct types of the magic number and info pointer in eax and ebx
 int main() {
     return 0;
 }

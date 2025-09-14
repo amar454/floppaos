@@ -115,7 +115,7 @@ void vmm_init() {
     region_insert(&kernel_region);
     // we do not need to load the kernel region because it has
     // been loaded into cr3 by the paging init function.
-    log("vmm init - ok", GREEN);
+    log("vmm init - ok\n", GREEN);
 }
 
 vmm_region_t *vmm_copy_pagemap(vmm_region_t *src) {
