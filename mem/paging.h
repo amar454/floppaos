@@ -14,10 +14,17 @@
 #define PAGE_USER    0x4
 #define PAGE_PRESENT 0x1
 
-#define KERNEL_BASE 0xC0000000
-#define KERNEL_SIZE 0x40000000  // 1 GiB
+
+#define TABLE_BYTES     0x1000
+#define PAGE_ENTRIES    1024
+#define PAGE_MASK       0xFFFFF000
+
+#define KERNEL_VIRT_BASE 0xC0000000U
 
 void paging_init(void);
-
+ void load_pd(uint32_t *pd);
+static inline void invlpg(void *va) {
+    asm volatile ("invlpg (%0)" : : "a" (va));
+}
 
 #endif

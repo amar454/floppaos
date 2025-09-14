@@ -82,7 +82,7 @@ int smp_register_cpu(uint8_t apic_id)
     int id = atomic_fetch_add(&cpu_count_atomic, 1);
     if (id >= CONFIG_MAX_CPUS) {
         atomic_fetch_sub(&cpu_count_atomic, 1);
-        log_uint("smp: too many CPUs registered, ignoring apic id \n", apic_id);
+        log_uint("smp: too many CPUs registered, ignoring apic id ", apic_id);
         return -1;
     }
     cpu_apic_id[id] = apic_id;

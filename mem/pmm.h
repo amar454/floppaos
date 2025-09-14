@@ -71,8 +71,6 @@ void* pmm_alloc_pages(uint32_t order, uint32_t count);
 void* pmm_alloc_page(void);
 void pmm_free_pages(void* addr, uint32_t order, uint32_t count) ;
 void pmm_free_page(void* addr);
-void buddy_split(uintptr_t addr, uint32_t order);
-void buddy_merge(uintptr_t addr, uint32_t order);
 uint32_t pmm_get_memory_size();
 uint32_t pmm_get_page_count();
 struct Page* phys_to_page_index(uintptr_t addr);

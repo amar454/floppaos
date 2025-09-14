@@ -26,62 +26,81 @@ You should have received a copy of the GNU General Public License along with Flo
 struct buddy_allocator_t buddy;
 
 void buddy_split(uintptr_t addr, uint32_t order) {
-    if (order == 0) return; // nothing to split
+    if (order == 0) {
+        log("buddy_split: order=0, nothing to split\n", YELLOW);
+        return;
+    }
 
-    // size of the resulting smaller block
-    uintptr_t half_size = (1ULL << (order - 1)) * PAGE_SIZE;
+    uintptr_t half_size  = ((uintptr_t)1 << (order - 1)) * PAGE_SIZE;
     uintptr_t buddy_addr = addr + half_size;
 
     struct Page* page_a = phys_to_page_index(addr);
     struct Page* page_b = phys_to_page_index(buddy_addr);
 
-    if (!page_a || !page_b) return;
+    if (!page_a || !page_b) {
+        log("buddy_split: invalid page(s)\n", RED);
+        return;
+    }
 
-    page_a->order = order - 1;
-    page_b->order = order - 1;
-
+    page_a->order   = order - 1;
+    page_b->order   = order - 1;
     page_a->is_free = 1;
     page_b->is_free = 1;
+
+    page_a->next = buddy.free_list[order - 1];
+    buddy.free_list[order - 1] = page_a;
 
     page_b->next = buddy.free_list[order - 1];
     buddy.free_list[order - 1] = page_b;
 
-    page_a->next = buddy.free_list[order - 1];
-    buddy.free_list[order - 1] = page_a;
+    log("buddy_split: split block\n", GREEN);
+    log_address(" page_a: ", page_a->address);
+    log_address(" page_b: ", page_b->address);
+    log_uint(" new order: ", order - 1);
 }
 
-
-// merge a block with its buddy if possible
-// recursively merges blocks until a block cannot be merged
 void buddy_merge(uintptr_t addr, uint32_t order) {
-    uintptr_t buddy_addr = addr ^ ((1 << order) * PAGE_SIZE);
-    
-    struct Page* page = phys_to_page_index(addr);
+    uintptr_t buddy_addr = addr ^ (((uintptr_t)1 << order) * PAGE_SIZE);
+
+    struct Page* page       = phys_to_page_index(addr);
     struct Page* buddy_page = phys_to_page_index(buddy_addr);
 
-    // check if buddy can be merged (must be free and same order)
+    if (!page) {
+        log("buddy_merge: invalid page\n", RED);
+        return;
+    }
+
     if (buddy_page && buddy_page->is_free && buddy_page->order == order) {
-        // remove buddy from its free list
+        // unlink buddy_page from its free list
         struct Page** prev = &buddy.free_list[order];
         while (*prev && *prev != buddy_page) {
             prev = &(*prev)->next;
         }
-
-        if (*prev) {
+        if (*prev == buddy_page) {
             *prev = buddy_page->next;
         }
-        
-        // fetch lower address of the two blocks
+
         uintptr_t merged_addr = (addr < buddy_addr) ? addr : buddy_addr;
-        
-        // recursively try to merge the larger block
+
+        log("buddy_merge: merged pair -> recurse\n", GREEN);
+        log_address(" addr: ", addr);
+        log_address(" buddy_addr: ", buddy_addr);
+        log_uint(" merged order: ", order + 1);
+
         buddy_merge(merged_addr, order + 1);
     } else {
-        // if can't merge, add to free list of current order
-        page->next = buddy.free_list[order];
+        // can't merge, put this block into its list
+        page->order   = order;
+        page->is_free = 1;
+        page->next    = buddy.free_list[order];
         buddy.free_list[order] = page;
+
+        log("buddy_merge: added block to free list\n", YELLOW);
+        log_address(" addr: ", addr);
+        log_uint(" order: ", order);
     }
 }
+
 static inline uintptr_t align_up(uintptr_t x, uintptr_t a) {
     return (x + (a - 1)) & ~(a - 1);
 }
@@ -140,9 +159,11 @@ static uint64_t count_usable_pages(multiboot_info_t* mb_info,
             rs = align_up(rs, PAGE_SIZE);
             re &= ~(PAGE_SIZE - 1);
 
-            if (re > rs) total_pages += (re - rs) / PAGE_SIZE;
-
-            if (first_avail == 0) first_avail = rs;
+            if (re > rs) {
+                size_t pages = (re - rs) / PAGE_SIZE;
+                total_pages += pages;
+                if (first_avail == 0) first_avail = rs;
+            }
         }
 
         mmap_ptr += e->size + sizeof(e->size);
@@ -233,9 +254,9 @@ static void _create_free_list(multiboot_info_t* mb_info) {
             uintptr_t region_end   = ((uintptr_t)(e->addr + e->len)) & ~(PAGE_SIZE - 1);
 
             for (uintptr_t addr = region_start; addr < region_end; addr += PAGE_SIZE) {
-                // skip page_info area and below base
                 if (addr >= page_info_start && addr < page_info_end) continue;
                 if (addr < buddy.memory_base) continue;
+                if (addr >= buddy.memory_end) continue;  
 
                 uint32_t idx = (uint32_t)((addr - buddy.memory_base) / PAGE_SIZE);
                 if (idx >= buddy.total_pages) continue;
@@ -243,7 +264,8 @@ static void _create_free_list(multiboot_info_t* mb_info) {
                 struct Page* page = &buddy.page_info[idx];
                 _add_page_to_free_list(page, addr, 0);
                 added_pages++;
-            }
+}
+
         }
 
         mmap_ptr += e->size + sizeof(e->size);
@@ -260,15 +282,13 @@ static void buddy_init(uint64_t usable_pages,
     log("buddy: setting up page info array\n", GREEN);
 
     buddy.total_pages = usable_pages;
-    buddy.memory_base = memory_base_first_usable;   // anchor for indexing
+    buddy.memory_base = memory_base_first_usable;  
 
     size_t page_info_bytes = buddy.total_pages * sizeof(struct Page);
     uintptr_t reserved_top = boot_reserved_top(mb_info);
 
-    // try to find AVAILABLE region where we can place page_info after reserved_top
     uintptr_t page_info_addr = find_page_info_placement(mb_info, reserved_top, page_info_bytes);
     if (!page_info_addr) {
-        // fallback: place page_info at reserved_top
         log("buddy: warning - could not find available region for page_info; using reserved_top fallback\n", YELLOW);
         page_info_addr = reserved_top;
     }
@@ -276,7 +296,6 @@ static void buddy_init(uint64_t usable_pages,
     buddy.page_info = (struct Page*)page_info_addr;
     size_t page_info_pages = (page_info_bytes + PAGE_SIZE - 1) / PAGE_SIZE;
 
-    // start handing out pages AFTER page_info to avoid clobber
     buddy.memory_start = page_info_addr + page_info_pages * PAGE_SIZE;
     buddy.memory_end   = buddy.memory_base + buddy.total_pages * PAGE_SIZE;
 
