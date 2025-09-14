@@ -53,10 +53,6 @@ void buddy_split(uintptr_t addr, uint32_t order) {
     page_b->next = buddy.free_list[order - 1];
     buddy.free_list[order - 1] = page_b;
 
-    log("buddy_split: split block\n", GREEN);
-    log_address(" page_a: ", page_a->address);
-    log_address(" page_b: ", page_b->address);
-    log_uint(" new order: ", order - 1);
 }
 
 void buddy_merge(uintptr_t addr, uint32_t order) {
@@ -82,11 +78,6 @@ void buddy_merge(uintptr_t addr, uint32_t order) {
 
         uintptr_t merged_addr = (addr < buddy_addr) ? addr : buddy_addr;
 
-        log("buddy_merge: merged pair -> recurse\n", GREEN);
-        log_address(" addr: ", addr);
-        log_address(" buddy_addr: ", buddy_addr);
-        log_uint(" merged order: ", order + 1);
-
         buddy_merge(merged_addr, order + 1);
     } else {
         // can't merge, put this block into its list
@@ -95,9 +86,6 @@ void buddy_merge(uintptr_t addr, uint32_t order) {
         page->next    = buddy.free_list[order];
         buddy.free_list[order] = page;
 
-        log("buddy_merge: added block to free list\n", YELLOW);
-        log_address(" addr: ", addr);
-        log_uint(" order: ", order);
     }
 }
 
@@ -264,13 +252,10 @@ static void _create_free_list(multiboot_info_t* mb_info) {
                 struct Page* page = &buddy.page_info[idx];
                 _add_page_to_free_list(page, addr, 0);
                 added_pages++;
-}
-
+            }
         }
-
         mmap_ptr += e->size + sizeof(e->size);
     }
-
     log_uint("free list pages added: ", added_pages);
     log("free list populated\n", GREEN);
 }
@@ -484,8 +469,6 @@ int pmm_is_valid_addr(uintptr_t addr) {
     return 1;
 }
 
-
-
 static size_t cm_next_pow2(size_t x) {
     if (x <= 4) return 4;
     x--;
@@ -494,6 +477,7 @@ static size_t cm_next_pow2(size_t x) {
     }
     return x + 1;
 }
+
 static uint32_t cm_hash(uint8_t k){
     uint32_t x = k;
     x ^= x << 13;

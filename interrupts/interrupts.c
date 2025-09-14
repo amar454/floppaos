@@ -167,7 +167,6 @@ void set_idt_entry(int n, uint32_t base, uint16_t sel, uint8_t flags) {
     idt[n].flags = flags;
 }
 
-
 static void _pic_init() {
 
     outb(PIC1_COMMAND, ICW1_INIT | ICW1_ICW4); 
@@ -187,8 +186,6 @@ static void _pic_init() {
 
     log("pic init - ok\n", GREEN);
 }
-
-
 
 static void _pit_init() {
     uint16_t divisor = PIT_BASE_FREQUENCY / PIT_FREQUENCY;
@@ -228,11 +225,11 @@ static void _idt_init() {
     log("idt init - ok\n", GREEN);
 }
 
-
 static void disable_interrupts() {
     __asm__ volatile ("cli");
 
 }
+
 static void enable_interrupts() {
     __asm__ volatile ("sti");
 }

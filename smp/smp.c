@@ -56,8 +56,7 @@ static void send_ipi_to_apic(uint8_t apic_id, uint8_t vector)
     }
 }
 
-void smp_init_bsp(void)
-{
+void smp_init_bsp(void) {
     if (atomic_exchange(&smp_initialized, 1) != 0) {
         return;
     }
@@ -77,8 +76,7 @@ void smp_init_bsp(void)
     log_uint("smp: BSP initialized, apic id: \n", apicid);
 }
 
-int smp_register_cpu(uint8_t apic_id)
-{
+int smp_register_cpu(uint8_t apic_id) {
     int id = atomic_fetch_add(&cpu_count_atomic, 1);
     if (id >= CONFIG_MAX_CPUS) {
         atomic_fetch_sub(&cpu_count_atomic, 1);
@@ -97,9 +95,8 @@ int smp_register_cpu(uint8_t apic_id)
 }
 
 
-void smp_handle_ipi(void)
-{
-    int me = smp_my_cpu();
+void smp_handle_ipi(void) {
+    int me = smp_fetch_cpu();
     if (me < 0 || me >= CONFIG_MAX_CPUS) return;
 
     if (!atomic_load(&remote_pending[me])) {
@@ -120,8 +117,7 @@ void smp_handle_ipi(void)
 }
 
 
-void smp_tell_other_cpus_to_do_fn(void (*fn)(void *), void *arg)
-{
+void smp_tell_other_cpus_to_do_fn(void (*fn)(void *), void *arg) {
     if (!fn) return;
     int me = smp_fetch_cpu();
     int num_cpus = smp_cpu_count();

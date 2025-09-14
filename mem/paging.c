@@ -87,7 +87,6 @@ void paging_init(void) {
 
     pd[0] = (uint32_t)(pt0_phys & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
     for (uint32_t i = 0; i < PAGE_ENTRIES; ++i) {
-        /* map physical frames 0, 4K, 8K, ... */
         pt0[i] = (uint32_t)(((uintptr_t)i * TABLE_BYTES) & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
     }
 
