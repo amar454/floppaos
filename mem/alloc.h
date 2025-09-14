@@ -12,7 +12,7 @@
 #define KERNEL_HEAP_START   0xC8000000  
 #define MAX_HEAP_SIZE       (128 * 1024 * 1024) 
 #define MIN_HEAP_SIZE       (4 * 1024 * 1024)   
-#define HEAP_PERCENTAGE     10                 
+#define HEAP_PERCENTAGE     80               
 
 void* kmalloc(size_t size);
 void kfree(void* ptr, size_t size);

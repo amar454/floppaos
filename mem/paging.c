@@ -28,6 +28,7 @@ uint32_t* current_pg_dir = NULL;
 static inline uint32_t page_dir_index_from_va(uint32_t va) {
     return (va >> 22) & 0x3FF;
 }
+
 static inline uint32_t virtual_page_index(uint32_t va) {
     return (va >> 12) & 0x3FF;
 }

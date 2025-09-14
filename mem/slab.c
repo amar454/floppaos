@@ -27,8 +27,6 @@ slab.c
 
     - slab_free() will find the slab at the addr specified `ptr`, and add it to the free list.
 
-    I'll document the other stuff here later but thats all you need to know for the outward facing interface.
-
 */
 #include "slab.h"
 #include "pmm.h"
@@ -55,7 +53,6 @@ static size_t get_order(size_t size) {
     }
     return order;
 }
-
 
 static bool initialize_slab(slab_t *slab, slab_cache_t *cache, size_t order) {
     log_f("Initializing slab at slab=%p, cache=%p, order=%zu", slab, cache, order);
@@ -90,6 +87,7 @@ static bool initialize_slab_cache(slab_cache_t *cache, size_t size, size_t order
     cache->slab_list = NULL;
     return true;
 }
+
 static slab_cache_t *create_slab_cache(size_t size) {
     if (size == 0) return NULL;
     
@@ -105,9 +103,6 @@ static slab_cache_t *create_slab_cache(size_t size) {
     return cache;
 }
 
-
-
-// Slab management functions
 static slab_t *create_slab(slab_cache_t *cache, size_t order) {
     if (!cache) return NULL;
 
@@ -149,7 +144,6 @@ static void log_slab_info(slab_cache_t *cache) {
     log("\n", LIGHT_GRAY);
 }
 
-// Memory allocation functions
 static void* allocate_from_free_list(slab_cache_t *cache) {
     if (cache->free_count > 0 && cache->free_list) {
         void *ptr = cache->free_list;
@@ -189,7 +183,6 @@ static void remove_slab_from_cache(slab_cache_t *cache, slab_t *slab) {
     }
 }
 
-
 static bool find_slab_in_cache(slab_cache_t *cache, slab_t *target_slab) {
     for (slab_t *slab = cache->slab_list; slab; slab = slab->next) {
         if (slab == target_slab) return true;
@@ -215,7 +208,6 @@ static void add_to_free_list(slab_cache_t *cache, void *ptr) {
     cache->free_count++;
 }
 
-// Memory management helper functions
 static void destroy_slab(slab_t *slab, size_t order) {
     pmm_free_pages(slab, order, 1);
 }
@@ -233,6 +225,7 @@ static bool is_ptr_valid(void *ptr, uintptr_t page_addr) {
     uintptr_t ptr_addr = (uintptr_t)ptr;
     return (slab_t *)(ptr_addr & ~(SLAB_PAGE_SIZE - 1));
 }
+
 static void initialize_slab_cache_for_order(size_t order) {
     size_t size = SLAB_MIN_SIZE << order;
     if (size == 0) return;  // Prevent overflow
@@ -244,7 +237,6 @@ static void initialize_slab_cache_for_order(size_t order) {
     }
 }
 
-
 void slab_init(void) {
     log("Initializing slab allocator...\n", LIGHT_GRAY);
 
@@ -255,7 +247,8 @@ void slab_init(void) {
 }
 
 
-
+// not thread safe
+// use through a wrapper or kmalloc()
 void *slab_alloc(size_t size) {
     size_t order;
     slab_cache_t *cache = validate_allocation(size, &order);
@@ -264,6 +257,7 @@ void *slab_alloc(size_t size) {
     void *ptr = allocate_from_free_list(cache);
     return ptr ? ptr : create_and_allocate(cache, order);
 }
+
 static void handle_slab_free(void *ptr, slab_t *containing_slab, slab_cache_t *cache, size_t order) {
     add_to_free_list(cache, ptr);
     containing_slab->free_count++;
@@ -273,6 +267,9 @@ static void handle_slab_free(void *ptr, slab_t *containing_slab, slab_cache_t *c
         destroy_slab(containing_slab, order);
     }
 }
+
+// not thread safe
+// use through a wrapper or kmalloc()
 void slab_free(void *ptr) {
     if (!ptr) return;
 
@@ -302,7 +299,6 @@ static void* handle_reallocation(void *ptr, size_t new_size) {
     return new_ptr;
 }
 
-
 void* slab_realloc(void *ptr, size_t new_size) {
     if (!ptr) return slab_alloc(new_size);
     if (!new_size) {
@@ -313,20 +309,22 @@ void* slab_realloc(void *ptr, size_t new_size) {
     return handle_reallocation(ptr, new_size);
 }
 
-
 void* slab_calloc(size_t num, size_t size) {
     size_t total = num * size;
     void *ptr = slab_alloc(total);
     if (ptr) flop_memset(ptr, 0, total);
     return ptr;
 }
+
 static void* align_pointer(void *ptr, size_t alignment) {
     uintptr_t addr = (uintptr_t)ptr;
     return (void*)((addr + alignment - 1) & ~(alignment - 1));
 }
+
 static bool is_valid_alignment(size_t alignment) {
     return alignment && !(alignment & (alignment - 1));
 }
+
 void* slab_aligned_alloc(size_t alignment, size_t size) {
     if (!is_valid_alignment(alignment)) {
         log("slab: invalid alignment\n", RED);
@@ -339,7 +337,6 @@ void* slab_aligned_alloc(size_t alignment, size_t size) {
     return align_pointer(ptr, alignment);
 }
 
-
 size_t slab_get_allocated_size(void *ptr) {
     if (!ptr) return 0;
     
@@ -349,6 +346,7 @@ size_t slab_get_allocated_size(void *ptr) {
     
     return cache ? cache->object_size : 0;
 }
+
 static void* handle_resize(void *ptr, size_t new_size) {
     slab_t *slab = get_containing_slab(ptr);
     size_t order;
@@ -362,6 +360,7 @@ static void* handle_resize(void *ptr, size_t new_size) {
     }
     return new_ptr;
 }
+
 void *slab_resize(void *ptr, size_t new_size) {
     if (!ptr) return slab_alloc(new_size);
     if (!new_size) {
@@ -371,7 +370,6 @@ void *slab_resize(void *ptr, size_t new_size) {
 
     return handle_resize(ptr, new_size);
 }
-
 
 static void print_slab_cache_info(slab_cache_t *cache) {
     if (!cache) return;
