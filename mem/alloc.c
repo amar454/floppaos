@@ -474,7 +474,6 @@ void *kmalloc_guarded(size_t size) {
     return (void *)user_ptr;
 }
 
-
 // free a guarded allocation of size plus two pages
 // NOTE: DO NOT BE STUPID, PLEASE FREE ALL GUARDED MEMORY BLOCKS WITH THIS FUNCTION
 void kfree_guarded(void *ptr, size_t size) {
@@ -486,6 +485,7 @@ void kfree_guarded(void *ptr, size_t size) {
     pmm_free_pages((void *)user_ptr, pages, 1);
     free_memory_block((void *)user_ptr, (pages - 2) * PAGE_SIZE);
 }
+
 void* krealloc_guarded(void *ptr, size_t old_size, size_t new_size) {
     if (!ptr) return kmalloc_guarded(new_size);
     if (new_size == 0) {
@@ -502,6 +502,7 @@ void* krealloc_guarded(void *ptr, size_t old_size, size_t new_size) {
     kfree_guarded((void *)((uintptr_t)ptr - PAGE_SIZE), old_size);
     return new_ptr;
 }
+
 void* kcalloc_guarded(size_t num, size_t size) {
     size_t total_size = num * size;
     void *ptr = kmalloc_guarded(total_size);
@@ -526,6 +527,7 @@ void expand_kernel_heap(size_t additional_size) {
     add_memory_block(new_start, new_end - new_start, 1);
     log("Kernel heap expanded.\n", GREEN);
 }
+
 void shrink_kernel_heap(size_t reduce_size) {
     if (reduce_size == 0 || reduce_size > (kernel_regions.end - kernel_regions.start)) {
         log("Invalid size for shrinking kernel heap!\n", RED);
