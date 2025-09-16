@@ -43,14 +43,12 @@ int vmm_map(vmm_region_t *region, uintptr_t va, uintptr_t pa, uint32_t flags) {
     uint32_t pdi = pd_index(va);
     uint32_t pti = pt_index(va);
 
-    // ensure PDE exists
     if (vmm_alloc_pde(region->pg_dir, pdi, flags) < 0)
         return -1;
 
-    // resolve PT virtual address using recursive mapping trick
     uint32_t *pt = (uint32_t *)(
         (RECURSIVE_PDE << 22)        // recursive PDE points to page dir
-        | (pdi << 12)                // this selects our PT
+        | (pdi << 12)               
     );
 
     pt[pti] = (pa & PAGE_MASK) | flags | PAGE_PRESENT;
