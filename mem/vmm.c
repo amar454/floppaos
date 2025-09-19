@@ -101,7 +101,7 @@ vmm_region_t *vmm_region_create() {
 
     vmm_region_t *region = (vmm_region_t *)kmalloc(sizeof(vmm_region_t));
     if (!region) {
-        pmm_free_page(dir_phys);
+        pmm_free_page((void*)dir_phys);
         return NULL;
     }
 
@@ -128,7 +128,7 @@ void vmm_region_destroy(vmm_region_t *region) {
         region->random_capacity = 0;
     }
 
-    pmm_free_page((uintptr_t)region->pg_dir);
+    pmm_free_page((void*)region->pg_dir);
     kfree(region, sizeof(vmm_region_t));
 }
 
@@ -427,7 +427,6 @@ uintptr_t vmm_aslr_alloc(vmm_region_t *region, size_t pages, size_t align, uint3
         return candidate;
     }
 
-    /* fallback: linear search */
     uintptr_t found = vmm_find_free_range(region, pages);
     if (!found) return 0;
 

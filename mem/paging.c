@@ -67,8 +67,6 @@ static void zero_area(void *area) {
 }
 
 void paging_init(void) {
-    log("creating page directory\n", YELLOW);
-
     uintptr_t pd_phys = (uintptr_t)pmm_alloc_page();
     if (!pd_phys) {
         log("pmm_alloc_page failed for pd\n", RED);
@@ -90,7 +88,6 @@ void paging_init(void) {
         pt0[i] = (uint32_t)(((uintptr_t)i * TABLE_BYTES) & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
     }
 
-    log("creating second-last table (index 1022)\n", YELLOW);
     uintptr_t pt1022_phys = (uintptr_t)pmm_alloc_page();
     if (!pt1022_phys) {
         log("pmm_alloc_page failed for pt1022\n", RED);
@@ -128,5 +125,5 @@ void paging_init(void) {
     invlpg((void *)KERNEL_STACK_PAGING_ADDR);
 
     current_pg_dir = (uint32_t *)pg_dir;
-    log("paging init... ok\n", YELLOW);
+    log("paging init - ok\n", YELLOW);
 }

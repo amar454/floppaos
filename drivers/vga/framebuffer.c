@@ -5,8 +5,8 @@
 #include "../../lib/str.h"
 #include "../../mem/utils.h"
 #include "../../multiboot/multiboot.h"
-#include "../../flanterm/src/flanterm.h"
-#include "../../flanterm/src/flanterm_backends/fb.h"
+#include "../../flanterm/flanterm.h"
+#include "../../flanterm/flanterm_backends/fb.h"
 
 #include "vgahandler.h"
 
