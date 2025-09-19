@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "sync/spinlock.h"
+#include "../mem/alloc.h"
+#include "../mem/pmm.h"
+#include "../mem/vmm.h"
 typedef struct cpu_ctx {
     uint32_t edi, esi, ebp, esp;
     uint32_t ebx, edx, ecx, eax;
@@ -33,11 +36,14 @@ typedef struct thread {
     struct thread* next;
     uint32_t id;
     uint32_t core_id;
-    uint32_t priority;
+    uint32_t base_priority;
+    uint32_t effective_prio;
+    uint64_t ready_since;
+    uint32_t run_count;
     uint32_t time_slice;
-    uint32_t cpu_usage;
     uint64_t last_run;
     uint64_t wake_time;
+    vmm_region_t* region;   
 } thread_t;
 
 typedef struct thread_list {
@@ -56,22 +62,24 @@ typedef struct scheduler {
     uint32_t next_tid;
     spinlock_t sched_lock;
 } scheduler_t;
-
+typedef struct core_sched {
+    thread_list_t *ready_queues;  /* priority 0 = highest */
+    thread_t* current;
+    thread_t* idle;
+} core_sched_t;
 extern scheduler_t sched;
-
-void sched_init(void);
+extern thread_list_t ready_queue[MAX_CORES];
+extern thread_t* current_thread[MAX_CORES];
+extern thread_t* idle_thread[MAX_CORES];
+void sched_init(uint32_t core_count);
 thread_t* sched_create_thread(void (*entry)(void), uint32_t priority);
 void sched_add_thread(thread_t* t);
 void sched_remove_thread(thread_t* t);
-void sched_yield(void);
-void sched_exit(void);
-thread_t* sched_get_current(void);
-void sched_start(void);
+
 void sched_sleep(uint64_t ms);
 void sched_wake(thread_t* t);
-uint32_t sched_get_core_id(void);
+
 void sched_reschedule(uint32_t core_id);
-void sched_balance_load(void);
 void sched_timer_tick(void);
 
 #endif

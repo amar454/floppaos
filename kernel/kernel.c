@@ -148,7 +148,7 @@ int kmain(uint32_t magic, multiboot_info_t *mb_info) {
 
     tmpfs_init();
 
-    sched_init();
+    sched_init(1);
 
     echo("floppaOS kernel booted! now we do nothing.\n", GREEN);
     draw_floppaos_logo(); 
