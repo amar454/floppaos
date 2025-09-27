@@ -8,109 +8,122 @@
 #include "../drivers/vga/vgahandler.h"
 #include "../lib/logging.h"
 
-#define PAGE_DIRECTORY_SIZE 1024
-#define PAGE_TABLE_SIZE 1024
-#define PAGE_SIZE 4096
-
-pde_t pd[PAGE_DIRECTORY_SIZE] __attribute__((aligned(PAGE_SIZE)));
-pte_t first_pt[PAGE_TABLE_SIZE] __attribute__((aligned(PAGE_SIZE)));
- 
-static void load_pd(void* pd_addr) {
-    __asm__ volatile ("mov %0, %%cr3" :: "r" (pd_addr) : "memory");
+static inline uintptr_t virt_to_phys(void *v) {
+    uintptr_t va = (uintptr_t)v;
+    if (KERNEL_VIRT_BASE == 0) return va;
+    if (va >= KERNEL_VIRT_BASE) return va - KERNEL_VIRT_BASE;
+    return va; 
+}
+static inline void *phys_to_virt(uintptr_t p) {
+    if (KERNEL_VIRT_BASE == 0) return (void *)p;
+    return (void *)(p + KERNEL_VIRT_BASE);
 }
 
-static void enable_paging(void) {
+uint32_t *pg_dir  = (uint32_t *)0xFFFFF000;
+uint32_t *pg_tbls = (uint32_t *)0xFFC00000;
+uint32_t* current_pg_dir = NULL;
+
+#define KERNEL_STACK_PAGING_ADDR 0xFF000000
+
+static inline uint32_t page_dir_index_from_va(uint32_t va) {
+    return (va >> 22) & 0x3FF;
+}
+
+static inline uint32_t virtual_page_index(uint32_t va) {
+    return (va >> 12) & 0x3FF;
+}
+
+ void load_pd(uint32_t *pd) {
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(pd));
+}
+
+static void enable_paging(uint8_t enable_wp, uint8_t enable_pse) {
     uint32_t cr0;
-    __asm__ volatile (
-        "mov %%cr0, %0" : "=r"(cr0)
+    uint32_t cr4;
+
+    __asm__ volatile(
+        "mov %%cr0, %0\n"
+        "or %1, %0\n"
+        "mov %0, %%cr0"
+        : "=r"(cr0) 
+        : "r"(enable_wp ? 0x80010000 : 0x80000000) // 0x80010000 -> PG + WP
     );
-    cr0 |= CR0_PG_BIT;
-    __asm__ (
-        "mov %0, %%cr0" 
-        :: "r"(cr0)
-    );
+
+    if (enable_pse) {
+        __asm__ volatile(
+            "mov %%cr0, %0\n"
+            "or %1, %0\n"
+            "mov %0, %%cr0"
+            : "=r"(cr0)
+            : "r"(enable_wp ? 0x80010000 : 0x80000000)
+            : "memory"
+        );
+        
+    }
 }
 
-pde_t *current_page_directory = NULL;
+static void zero_area(void *area) {
+    flop_memset(area, 0, TABLE_BYTES);
+}
 
 void paging_init(void) {
-    void *pd_page = pmm_alloc_page();
-    void *pt_page = pmm_alloc_page();
-
-    if (!pd_page || !pt_page) {
-        log("paging_init: pmm_alloc_page failed\n", RED);
+    uintptr_t pd_phys = (uintptr_t)pmm_alloc_page();
+    if (!pd_phys) {
+        log("pmm_alloc_page failed for pd\n", RED);
         return;
     }
-    
-    pde_t *pd = (pde_t *)pd_page;
-    pte_t *first_pt = (pte_t *)pt_page;
+    uint32_t *pd = (uint32_t *)phys_to_virt(pd_phys);
+    zero_area(pd);
 
-    flop_memset(pd, 0, PAGE_SIZE);
-    flop_memset(first_pt, 0, PAGE_SIZE);
+    uintptr_t pt0_phys = (uintptr_t)pmm_alloc_page();
+    if (!pt0_phys) {
+        log("pmm_alloc_page failed for pt0\n", RED);
+        return;
+    }
+    uint32_t *pt0 = (uint32_t *)phys_to_virt(pt0_phys);
+    zero_area(pt0);
 
-    // Identity map first 4 MiB (4KiB pages)
-    for (uint32_t i = 0; i < PAGE_TABLE_SIZE; ++i) {
-        pte_attrs_t a = {0};
-        a.present    = 1;
-        a.rw         = 1;
-        a.frame_addr = i;
-        SET_PF(&first_pt[i], a);
+    pd[0] = (uint32_t)(pt0_phys & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
+    for (uint32_t i = 0; i < PAGE_ENTRIES; ++i) {
+        pt0[i] = (uint32_t)(((uintptr_t)i * TABLE_BYTES) & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
     }
 
-    pde_attrs_t pd0 = {0};
-    pd0.present    = 1;
-    pd0.rw         = 1;
-    pd0.table_addr = ((uint32_t)first_pt) >> PAGE_SIZE_SHIFT;
-    SET_PD(&pd[0], pd0);
+    uintptr_t pt1022_phys = (uintptr_t)pmm_alloc_page();
+    if (!pt1022_phys) {
+        log("pmm_alloc_page failed for pt1022\n", RED);
+        return;
+    }
+    pd[1022] = (uint32_t)(pt1022_phys & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
+    uint32_t *pt1022 = (uint32_t *)phys_to_virt(pt1022_phys);
+    zero_area(pt1022);
 
-    /* 
-    * Recursive mapping:
-    *
-    * PDE 1023 points to the Page Directory itself:
-    *
-    *   +-------------------------+ 0xFFFFF000
-    *   | Page Directory (PD)     | <--- PDE[1023] points here 
-    *   +-------------------------+
-    *              ^
-    *              ^
-    *   +-------------------------+ 0xFFC00000
-    *   | Page Tables (PTs) area  |  Covers PDE[0..1022]
-    *   | +---------------------+ |
-    *   | | PT 0                | | <-- PDE[0]
-    *   | +---------------------+ |
-    *   | | PT 1                | | <-- PDE[1]
-    *   | +---------------------+ |
-    *   | |        ...          | | <-- PDE[...]
-    *   | +---------------------+ |
-    *   | | PT 1022             | | <-- PDE[1022]
-    *   | +---------------------+ |
-    *   +-------------------------+
-    *
-    * virt address bit layout (32 bits):
-    *
-    *   [10 bits PDE][10 bits PT][12 bits offset]
-    *
-    * get pt:
-    *
-    *   0xFFC00000 + (PDE_index << 12) + (PT_index * 4)
-    *
-    * get pd:
-    *
-    *   0xFFFFF000 + (PDE_index * 4)
-    */
+    pd[1023] = (uint32_t)(pd_phys & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
 
-    pde_attrs_t rec = {0};
-    rec.present    = 1;
-    rec.rw         = 1; 
-    rec.table_addr = ((uint32_t)pd) >> PAGE_SIZE_SHIFT;
-    SET_PD(&pd[1023], rec);
+    pt1022[1023] = (uint32_t)(pd_phys & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
 
-    load_pd(pd);
+    current_pg_dir = pd;
 
-    current_page_directory = pd;
+    __asm__ volatile("mov %0, %%cr3" : : "r"(pd));
 
-    log("enabling paging\n", GREEN);
-    enable_paging();
-    log("paging init - ok\n", GREEN);
+    enable_paging(0,0);
+    log("paging enabled\n", YELLOW);
 
+
+    uint32_t pt_idx = page_dir_index_from_va(KERNEL_STACK_PAGING_ADDR);
+
+    uintptr_t new_pt_phys = (uintptr_t)pmm_alloc_page();
+    if (!new_pt_phys) {
+        log("pmm_alloc_page failed for new_pt\n", RED);
+        return;
+    }
+
+    pg_dir[pt_idx] = (uint32_t)(new_pt_phys & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
+
+    uint32_t *new_pt_virt = &pg_tbls[pt_idx * PAGE_ENTRIES];
+    zero_area(new_pt_virt);
+
+    invlpg((void *)KERNEL_STACK_PAGING_ADDR);
+
+    current_pg_dir = (uint32_t *)pg_dir;
+    log("paging init - ok\n", YELLOW);
 }

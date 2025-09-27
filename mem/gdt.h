@@ -11,3 +11,4 @@ typedef struct __attribute__((packed)) {
 void gdt_init(void);
 
 #endif
+

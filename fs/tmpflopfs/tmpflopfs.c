@@ -168,7 +168,7 @@ static tmpfs_inode_t* tmpfs_parent_and_leaf(tmpfs_inode_t* root, const char* pat
         const char* start = it; 
         while (*it && !tmpfs_is_sep(*it)) it++; 
         size_t seglen = (size_t)(it - start); 
-        if (seglen == flopstrlen(leaf) && strncmp(start, leaf, seglen) == 0 && !*it) 
+        if (seglen == flopstrlen(leaf) && flopstrncmp(start, leaf, seglen) == 0 && !*it) 
             break; 
         char seg[VFS_MAX_FILE_NAME]; 
         size_t m = seglen; 

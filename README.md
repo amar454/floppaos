@@ -1,13 +1,7 @@
+
 # **floppaOS**  
 
-```
-  __ _                          ___  ____  
- / _| | ___  _ __  _ __   __ _ / _ \/ ___| 
-| |_| |/ _ \| '_ \| '_ \ / _` | | | \___ \ 
-|  _| | (_) | |_) | |_) | (_| | |_| |___) |
-|_| |_|\___/| .__/| .__/ \__,_|\___/|____/ 
-            |_|   |_|                             
-```  
+<img width="1011" height="145" alt="image" src="https://github.com/user-attachments/assets/7b9eacfb-147e-490f-ab99-579e631d7ba6" />
 
 ### **Copyright © Amar Djulovic 2024, 2025**  
 
@@ -69,3 +63,4 @@ make cleanobj
 - [ ] if youre wondering if i have a gdt, you're in the wrong place
 
 ---
+

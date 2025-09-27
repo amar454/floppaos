@@ -30,7 +30,8 @@ CWARNINGS = -Werror \
             -Wno-format-extra-args \
             -Wno-format-zero-length \
             -Wno-maybe-uninitialized \
-            -Wno-implicit-fallthrough
+            -Wno-implicit-fallthrough \
+			-Wno-pointer-to-int-cast
 INTERRUPT_FLAGS = $(CFLAGS) -mgeneral-regs-only
 LD_FLAGS = -m elf_i386 -T kernel/linker.ld
 
@@ -44,7 +45,7 @@ LIB_SRC = lib/str.c lib/flopmath.c lib/logging.c
 APP_SRC = apps/echo.c apps/dsp/dsp.c
 OTHER_SRC = kernel/kernel.c multiboot/multiboot.c 
 ASM_SRC = kernel/entry.asm interrupts/interrupts_asm.asm
-FLANTERM_SRC = flanterm/flanterm.c flanterm/backends/fb.c
+FLANTERM_SRC = flanterm/src/flanterm.c flanterm/src/flanterm_backends/fb.c
 
 C_SRC = $(SCHED_SRC) $(MEM_SRC) $(DRIVER_SRC) $(FS_SRC) $(LIB_SRC) $(APP_SRC) $(OTHER_SRC) $(FLANTERM_SRC)
 OBJ_SRC = $(addprefix $(BUILD_PATH)/, $(ASM_SRC:.asm=.o) $(C_SRC:.c=.o) interrupts.o)
@@ -93,8 +94,8 @@ interrupts: interrupts/interrupts.c  | $(BUILD_PATH)
 
 flanterm: $(addprefix $(BUILD_PATH)/, $(FLANTERM_SRC:.c=.o))
 	@mkdir -p $(BUILD_PATH)/flanterm
-	$(CC) $(CFLAGS) $(CWARNINGS) -c flanterm/flanterm.c -o $(BUILD_PATH)/flanterm.o
-	$(CC) $(CFLAGS) $(CWARNINGS) -c flanterm/backends/fb.c -o $(BUILD_PATH)/fb.o
+	$(CC) $(CFLAGS) $(CWARNINGS) -c flanterm/src/flanterm.c -o $(BUILD_PATH)/flanterm.o
+	$(CC) $(CFLAGS) $(CWARNINGS) -c flanterm/src/flanterm_backends/fb.c -o $(BUILD_PATH)/fb.o
 
 linker: $(OBJ_SRC)
 	$(LD) $(LD_FLAGS) -o $(BIN) $(OBJ_SRC)

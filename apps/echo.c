@@ -1,8 +1,8 @@
 #include "echo.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../drivers/vga/framebuffer.h"
-#include "../flanterm/flanterm.h"
-#include "../flanterm/backends/fb.h"
+#include "../flanterm/src/flanterm.h"
+#include "../flanterm/src/flanterm_backends/fb.h"
 #include "../lib/str.h"
 #include <stdint.h>
 #include <stddef.h>

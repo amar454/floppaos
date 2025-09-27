@@ -217,7 +217,7 @@ void *get_memory_block_size(uintptr_t addr) {
     return (void *)(block->size & ~1);
 }
 
-pde_t *kernel_page_directory = NULL;
+
 
 // get memory size, calculate appropriate heap size, allocate virtual address space for heap, and create the first memory block
 void init_kernel_heap(void) {
@@ -249,12 +249,7 @@ void init_kernel_heap(void) {
     this_allocator.lock = alloc_lock_initializer;
     spinlock_init(&this_allocator.lock);
 
-    log("available memory kb: ", WHITE); log_uint("",(uint32_t)total_memory / 1024);
-    log("kernel heap size mb: ", WHITE); log_uint("",(uint32_t)kernel_heap_size / 1024 / 1024);
-    log("kernel heap size gb: ", WHITE); log_uint("",(uint32_t)kernel_heap_size / 1024 / 1024 / 1024);
-    log("kernel heap start: ", WHITE); log_uint("",(uint32_t)KERNEL_HEAP_START);
-    log("kernel heap end: ", WHITE); log_uint("",(uint32_t)KERNEL_HEAP_START + kernel_heap_size);
-    
+    log("kernel heap init - ok\n\n", YELLOW);
 
     // now that we can alloc stuff, mark the heap as initialized.
     heap_initialized = 1;
@@ -266,7 +261,7 @@ void free_memory_block(void *ptr, size_t size) {
     if (!ptr || size == 0) return;
 
     if (size <= 4096) {
-        slab_free(ptr, size);
+        slab_free(ptr);
         return;
     }
 
@@ -344,7 +339,7 @@ void kfree(void *ptr, size_t size) {
     
     if (size <= 4096) {
         // woohoo slab dealloc is easy, just free from slab allocator
-        slab_free(ptr, size);
+        slab_free(ptr);
         return;
     }
     // otherwise, free mem block and add to free list.
@@ -479,7 +474,6 @@ void *kmalloc_guarded(size_t size) {
     return (void *)user_ptr;
 }
 
-
 // free a guarded allocation of size plus two pages
 // NOTE: DO NOT BE STUPID, PLEASE FREE ALL GUARDED MEMORY BLOCKS WITH THIS FUNCTION
 void kfree_guarded(void *ptr, size_t size) {
@@ -491,6 +485,7 @@ void kfree_guarded(void *ptr, size_t size) {
     pmm_free_pages((void *)user_ptr, pages, 1);
     free_memory_block((void *)user_ptr, (pages - 2) * PAGE_SIZE);
 }
+
 void* krealloc_guarded(void *ptr, size_t old_size, size_t new_size) {
     if (!ptr) return kmalloc_guarded(new_size);
     if (new_size == 0) {
@@ -507,6 +502,7 @@ void* krealloc_guarded(void *ptr, size_t old_size, size_t new_size) {
     kfree_guarded((void *)((uintptr_t)ptr - PAGE_SIZE), old_size);
     return new_ptr;
 }
+
 void* kcalloc_guarded(size_t num, size_t size) {
     size_t total_size = num * size;
     void *ptr = kmalloc_guarded(total_size);
@@ -531,6 +527,7 @@ void expand_kernel_heap(size_t additional_size) {
     add_memory_block(new_start, new_end - new_start, 1);
     log("Kernel heap expanded.\n", GREEN);
 }
+
 void shrink_kernel_heap(size_t reduce_size) {
     if (reduce_size == 0 || reduce_size > (kernel_regions.end - kernel_regions.start)) {
         log("Invalid size for shrinking kernel heap!\n", RED);
@@ -660,7 +657,7 @@ bool is_heap_initialized() {
 }
 
 // zero, free, and mark the heap as uninitialized
-void destroy_kernel_heap(pde_t *kernel_page_directory) {
+void destroy_kernel_heap(uint32_t *kernel_page_directory) {
     log("alloc: Destroying kernel heap...\n", YELLOW);
     bool heap = is_heap_initialized();
     if (!heap) {
@@ -672,7 +669,7 @@ void destroy_kernel_heap(pde_t *kernel_page_directory) {
     log("alloc: Kernel heap destroyed\n", LIGHT_RED);
 }
 
-void re_init_kernel_heap() {
+void re_init_kernel_heap(uint32_t *kernel_page_directory) {
     destroy_kernel_heap(kernel_page_directory);
     init_kernel_heap();
 }

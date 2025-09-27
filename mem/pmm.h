@@ -24,6 +24,7 @@ struct buddy_allocator_t {
     uint32_t total_pages;
     uintptr_t memory_start;
     uintptr_t memory_end;
+    uint32_t memory_base;
     spinlock_t lock;
 };
 
@@ -60,7 +61,8 @@ typedef struct {
     spinlock_t lock;
     uint64_t page_count;
 } page_cache_t;
-
+extern uint32_t *pg_dir;
+extern uint32_t *pg_tbls;
 extern page_cache_t page_cache;
 extern struct buddy_allocator_t buddy;
 
@@ -69,8 +71,6 @@ void* pmm_alloc_pages(uint32_t order, uint32_t count);
 void* pmm_alloc_page(void);
 void pmm_free_pages(void* addr, uint32_t order, uint32_t count) ;
 void pmm_free_page(void* addr);
-void buddy_split(uintptr_t addr, uint32_t order);
-void buddy_merge(uintptr_t addr, uint32_t order);
 uint32_t pmm_get_memory_size();
 uint32_t pmm_get_page_count();
 struct Page* phys_to_page_index(uintptr_t addr);

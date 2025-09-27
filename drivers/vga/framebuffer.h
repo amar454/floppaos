@@ -17,16 +17,6 @@ typedef struct colors {
     uint32_t light_gray;
     uint32_t dark_gray;
     uint32_t brown;
-    uint32_t orange;
-    uint32_t purple;
-    uint32_t teal;
-    uint32_t navy;
-    uint32_t maroon;
-    uint32_t olive;
-    uint32_t pink;
-    uint32_t lime;
-    uint32_t aqua;
-    uint32_t fuchsia;
 
 } colors_t;
 

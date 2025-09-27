@@ -3,8 +3,8 @@ section .multiboot
     FLAGS equ 7
     CHECKSUM equ -(MAGIC + FLAGS)
     MODE_TYPE equ 0
-    W equ 1280
-    H equ 720
+    W equ 1920
+    H equ 1080
     D equ 32
 
     dd MAGIC                
