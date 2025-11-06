@@ -11,38 +11,27 @@
 #include <stdint.h>
 
 struct vfs_fs_list {
-    struct vfs_fs *head;
+    struct vfs_fs* head;
 };
 
 struct vfs_mp_list {
-    struct vfs_mountpoint *head;
-    struct vfs_mountpoint *tail;
+    struct vfs_mountpoint* head;
+    struct vfs_mountpoint* tail;
     spinlock_t lock;
 };
-struct vfs_fs_list fs_list = { 
-    .head = NULL 
-};
+struct vfs_fs_list fs_list = {.head = NULL};
 
-struct vfs_mp_list mp_list = { 
-    .head = NULL, 
-    .tail = NULL,
-    .lock = SPINLOCK_INIT
-};
-
-
+struct vfs_mp_list mp_list = {.head = NULL, .tail = NULL, .lock = SPINLOCK_INIT};
 
 int vfs_init(void) {
     static spinlock_t initializer = SPINLOCK_INIT;
     mp_list.lock = initializer;
     spinlock_init(&mp_list.lock);
-
-
+    log("vfs init - ok\n", GREEN);
     return 0;
 }
 
-int vfs_acknowledge_fs(struct vfs_fs *fs) {
-
-
+int vfs_acknowledge_fs(struct vfs_fs* fs) {
     if (!fs) {
         log("vfs_acknowledge_fs: fs is NULL\n", RED);
         return -1;
@@ -54,13 +43,12 @@ int vfs_acknowledge_fs(struct vfs_fs *fs) {
     return 0;
 }
 
-
-int vfs_unacknowledge_fs(struct vfs_fs *fs) {
-    return 0; 
+int vfs_unacknowledge_fs(struct vfs_fs* fs) {
+    return 0;
 }
 
-struct vfs_fs *vfs_find_fs(int type) {
-    struct vfs_fs *fs_to_find;
+struct vfs_fs* vfs_find_fs(int type) {
+    struct vfs_fs* fs_to_find;
     for (fs_to_find = fs_list.head; fs_to_find != NULL; fs_to_find = fs_to_find->previous) {
         if (fs_to_find->filesystem_type == type) {
             break;
@@ -69,9 +57,8 @@ struct vfs_fs *vfs_find_fs(int type) {
     return fs_to_find;
 }
 
-struct vfs_mountpoint *vfs_file_to_mountpoint(char* name) {
-    struct vfs_mountpoint *mp;
-
+struct vfs_mountpoint* vfs_file_to_mountpoint(char* name) {
+    struct vfs_mountpoint* mp;
 
     for (mp = mp_list.tail; mp != NULL; mp = mp->next_mountpoint) {
         if (flopstrncmp(mp->mount_point, name, flopstrlen(mp->mount_point)) == 0) {
@@ -81,10 +68,8 @@ struct vfs_mountpoint *vfs_file_to_mountpoint(char* name) {
     return mp;
 }
 
-
-
 static struct vfs_mountpoint* vfs_mp_struc_alloc(void) {
-    struct vfs_mountpoint* mp = (struct vfs_mountpoint*)kmalloc(sizeof(struct vfs_mountpoint));
+    struct vfs_mountpoint* mp = (struct vfs_mountpoint*) kmalloc(sizeof(struct vfs_mountpoint));
     if (!mp) {
         log("vfs_mp_path_alloc: Failed to allocate memory for mountpoint\n", RED);
         return NULL;
@@ -109,7 +94,7 @@ static int vfs_assign_mp_fs(struct vfs_mountpoint* mp, int type) {
 }
 
 static int vfs_mp_path_alloc(struct vfs_mountpoint* mp, char* mount_point) {
-    mp->mount_point = (char*)kmalloc(flopstrlen(mount_point) + 1);
+    mp->mount_point = (char*) kmalloc(flopstrlen(mount_point) + 1);
     if (!mp->mount_point) {
         log("vfs_mp_path_alloc: Failed to allocate memory for mountpoint\n", RED);
         return -1;
@@ -119,7 +104,7 @@ static int vfs_mp_path_alloc(struct vfs_mountpoint* mp, char* mount_point) {
 }
 
 static int vfs_mp_dev_alloc(struct vfs_mountpoint* mp, char* device) {
-    mp->device_name = (char*)kmalloc(flopstrlen(device) + 1);
+    mp->device_name = (char*) kmalloc(flopstrlen(device) + 1);
     if (!mp->device_name) {
         log("vfs_mp_dev_alloc: Failed to allocate memory for device name\n", RED);
         return -1;
@@ -202,11 +187,8 @@ static void vfs_remove_mountpoint(struct vfs_mountpoint* mp) {
     spinlock_unlock(&mp_list.lock, true);
 }
 
-
-
-
-static int vfs_node_alloc(struct vfs_node **node, struct vfs_mountpoint *mp, int mode) {
-    *node = (struct vfs_node *)kmalloc(sizeof(struct vfs_node));
+static int vfs_node_alloc(struct vfs_node** node, struct vfs_mountpoint* mp, int mode) {
+    *node = (struct vfs_node*) kmalloc(sizeof(struct vfs_node));
     if (!*node) {
         log("vfs_node_alloc: Failed to allocate node\n", RED);
         return -1;
@@ -220,7 +202,7 @@ static int vfs_node_alloc(struct vfs_node **node, struct vfs_mountpoint *mp, int
     return 0;
 }
 
-static int vfs_create_file_if_needed(struct vfs_mountpoint *mp, char *path, int mode) {
+static int vfs_create_file_if_needed(struct vfs_mountpoint* mp, char* path, int mode) {
     if ((mode & VFS_MODE_CREATE) != VFS_MODE_CREATE)
         return 0;
     if (mp->filesystem->op_table.create == NULL) {
@@ -230,21 +212,23 @@ static int vfs_create_file_if_needed(struct vfs_mountpoint *mp, char *path, int 
     return mp->filesystem->op_table.create(mp, path);
 }
 
-int vfs_seek(struct vfs_node *node, unsigned long offset, unsigned char whence);
-static int vfs_seek_if_append(struct vfs_node *n) {
+int vfs_seek(struct vfs_node* node, unsigned long offset, unsigned char whence);
+
+static int vfs_seek_if_append(struct vfs_node* n) {
     if ((n->vfs_mode & VFS_MODE_APPEND) == VFS_MODE_APPEND) {
         return vfs_seek(n, 0, VFS_SEEK_END);
     }
     return 0;
 }
 
-static struct vfs_mountpoint* vfs_resolve_mountpoint_and_path(char* name, char **relative_path) {
+static struct vfs_mountpoint* vfs_resolve_mountpoint_and_path(char* name, char** relative_path) {
     size_t len = flopstrlen(name) + 1;
-    char *filename = kmalloc(len);
-    if (!filename) return NULL;
+    char* filename = kmalloc(len);
+    if (!filename)
+        return NULL;
 
     flopstrcopy(filename, name, len);
-    struct vfs_mountpoint *mp = vfs_file_to_mountpoint(filename);
+    struct vfs_mountpoint* mp = vfs_file_to_mountpoint(filename);
     if (!mp) {
         kfree(filename, sizeof(filename));
         return NULL;
@@ -254,8 +238,7 @@ static struct vfs_mountpoint* vfs_resolve_mountpoint_and_path(char* name, char *
     return mp;
 }
 
-
-static int vfs_try_open(struct vfs_node *h, struct vfs_mountpoint *mp, char *path) {
+static int vfs_try_open(struct vfs_node* h, struct vfs_mountpoint* mp, char* path) {
     if (mp->filesystem->op_table.open == NULL) {
         log("vfs_try_open: Filesystem type does not support opening\n", RED);
         return -1;
@@ -263,12 +246,10 @@ static int vfs_try_open(struct vfs_node *h, struct vfs_mountpoint *mp, char *pat
     return mp->filesystem->op_table.open(h, path) != NULL ? 0 : -1;
 }
 
-
-
-static struct vfs_mountpoint* vfs_get_mountpoint_for_create(char* name, char **relative_path) {
+static struct vfs_mountpoint* vfs_get_mountpoint_for_create(char* name, char** relative_path) {
     char filename[256];
     flopstrcopy(filename, name, flopstrlen(name) + 1);
-    struct vfs_mountpoint *mp = vfs_file_to_mountpoint(filename);
+    struct vfs_mountpoint* mp = vfs_file_to_mountpoint(filename);
     if (!mp) {
         log("vfs_create: Mountpoint not found\n", RED);
         return NULL;
@@ -278,7 +259,7 @@ static struct vfs_mountpoint* vfs_get_mountpoint_for_create(char* name, char **r
     return mp;
 }
 
-static int vfs_internal_create(struct vfs_mountpoint *mp, char *relative_path) {
+static int vfs_internal_create(struct vfs_mountpoint* mp, char* relative_path) {
     if (mp->filesystem->op_table.create != NULL) {
         return mp->filesystem->op_table.create(mp, relative_path);
     } else {
@@ -286,8 +267,6 @@ static int vfs_internal_create(struct vfs_mountpoint *mp, char *relative_path) {
         return -1;
     }
 }
-
-
 
 int vfs_free_node(struct vfs_node* node) {
     int errcode = 0;
@@ -302,7 +281,6 @@ int vfs_free_node(struct vfs_node* node) {
     kfree(node, sizeof(struct vfs_node));
     return errcode ? errcode : -1;
 }
-
 
 static int vfs_check_write_permissions(struct vfs_node* node) {
     if (node == NULL) {
@@ -336,9 +314,8 @@ static void vfs_seek_if_append_after_write(struct vfs_node* node) {
     }
 }
 
-
 struct vfs_directory_list* vfs_directory_list_create(void) {
-    struct vfs_directory_list* list = (struct vfs_directory_list*)kmalloc(sizeof(struct vfs_directory_list));
+    struct vfs_directory_list* list = (struct vfs_directory_list*) kmalloc(sizeof(struct vfs_directory_list));
     if (!list)
         return NULL;
     list->head = NULL;
@@ -347,7 +324,7 @@ struct vfs_directory_list* vfs_directory_list_create(void) {
 }
 
 void vfs_directory_list_add(struct vfs_directory_list* list, const char* name, int type) {
-    struct vfs_directory_entry* entry = (struct vfs_directory_entry*)kmalloc(sizeof(struct vfs_directory_entry));
+    struct vfs_directory_entry* entry = (struct vfs_directory_entry*) kmalloc(sizeof(struct vfs_directory_entry));
     if (!entry)
         return;
     flopstrcopy(entry->name, name, flopstrlen(name) + 1);
@@ -373,7 +350,7 @@ void vfs_directory_list_free(struct vfs_directory_list* list) {
 }
 
 // op table functions
-int vfs_mount(char* device, char *mount_point, int type) {
+int vfs_mount(char* device, char* mount_point, int type) {
     struct vfs_mountpoint* mp = vfs_create_mountpoint(device, mount_point, type);
     if (!mp)
         return -1;
@@ -383,7 +360,7 @@ int vfs_mount(char* device, char *mount_point, int type) {
     if (mp->filesystem->op_table.mount == NULL) {
         log_uint("vfs_mount: fs type doesnt support mounting, type: ", type);
         vfs_remove_mountpoint(mp);
-        return -1;  
+        return -1;
     }
     mp->data_pointer = mp->filesystem->op_table.mount(device, mount_point, type);
     if (!mp->data_pointer) {
@@ -394,10 +371,10 @@ int vfs_mount(char* device, char *mount_point, int type) {
     return 0;
 }
 
-int vfs_unmount(char *mount_point) {
-    struct vfs_mountpoint *mp;
+int vfs_unmount(char* mount_point) {
+    struct vfs_mountpoint* mp;
     char filename[256], *nptr;
-    nptr = (char *)&filename;
+    nptr = (char*) &filename;
     flopstrcopy(nptr, mount_point, flopstrlen(mount_point) + 1);
 
     for (mp = mp_list.tail; mp != NULL; mp = mp->next_mountpoint) {
@@ -422,7 +399,7 @@ int vfs_unmount(char *mount_point) {
     return 0;
 }
 
-struct vfs_directory_list* vfs_listdir(struct vfs_mountpoint *mp, char *path) {
+struct vfs_directory_list* vfs_listdir(struct vfs_mountpoint* mp, char* path) {
     if (mp == NULL || path == NULL) {
         log("vfs_listdir: Mountpoint or path is NULL\n", RED);
         return NULL;
@@ -463,8 +440,8 @@ int vfs_read(struct vfs_node* node, unsigned char* buffer, unsigned long size) {
 }
 
 int vfs_create(char* name) {
-    struct vfs_mountpoint *mp;
-    char *relative_path = NULL;
+    struct vfs_mountpoint* mp;
+    char* relative_path = NULL;
 
     mp = vfs_get_mountpoint_for_create(name, &relative_path);
     if (!mp)
@@ -495,9 +472,9 @@ int vfs_write(struct vfs_node* node, unsigned char* buffer, unsigned long size) 
 }
 
 struct vfs_node* vfs_open(char* name, int mode) {
-    struct vfs_node *n = NULL;
-    char *relative_path = NULL;
-    struct vfs_mountpoint *mp = vfs_resolve_mountpoint_and_path(name, &relative_path);
+    struct vfs_node* n = NULL;
+    char* relative_path = NULL;
+    struct vfs_mountpoint* mp = vfs_resolve_mountpoint_and_path(name, &relative_path);
 
     if (!mp) {
         log("vfs_open: Mountpoint not found\n", RED);
@@ -538,7 +515,6 @@ int vfs_seek(struct vfs_node* node, unsigned long offset, unsigned char whence) 
     log("vfs_seek: Filesystem type does not support seeking\n", RED);
     return -1;
 }
-
 
 int vfs_ctrl(struct vfs_node* node, unsigned long command, unsigned long arg) {
     if (node == NULL) {

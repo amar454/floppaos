@@ -36,7 +36,7 @@ INTERRUPT_FLAGS = $(CFLAGS) -mgeneral-regs-only
 LD_FLAGS = -m elf_i386 -T kernel/linker.ld
 
 # Source files
-SCHED_SRC = task/sched.c task/thread.c task/pid.c task/sync/mutex.c task/sync/spinlock.c
+SCHED_SRC = task/sched.c task/thread.c task/pid.c task/sync/mutex.c task/sync/spinlock.c task/tss.c
 MEM_SRC = mem/vmm.c mem/pmm.c mem/paging.c mem/utils.c mem/gdt.c mem/alloc.c mem/slab.c
 DRIVER_SRC = drivers/vga/vgahandler.c drivers/keyboard/keyboard.c drivers/time/floptime.c \
              drivers/io/io.c drivers/vga/framebuffer.c drivers/acpi/acpi.c drivers/mouse/ps2ms.c
@@ -44,7 +44,7 @@ FS_SRC = fs/tmpflopfs/tmpflopfs.c fs/vfs/vfs.c
 LIB_SRC = lib/str.c lib/flopmath.c lib/logging.c
 APP_SRC = apps/echo.c apps/dsp/dsp.c
 OTHER_SRC = kernel/kernel.c multiboot/multiboot.c 
-ASM_SRC = kernel/entry.asm interrupts/interrupts_asm.asm
+ASM_SRC = kernel/entry.asm task/usermode_entry.asm task/ctx.asm interrupts/interrupts_asm.asm
 FLANTERM_SRC = flanterm/src/flanterm.c flanterm/src/flanterm_backends/fb.c
 
 C_SRC = $(SCHED_SRC) $(MEM_SRC) $(DRIVER_SRC) $(FS_SRC) $(LIB_SRC) $(APP_SRC) $(OTHER_SRC) $(FLANTERM_SRC)
@@ -60,7 +60,7 @@ cleanobj:
 	$(RM) $(BUILD_PATH)
 
 # Main build targets
-all: $(BUILD_PATH) entry kernel flanterm interrupts linker iso
+all: $(BUILD_PATH) entry kernel interrupts flanterm linker iso
 	@echo "Build completed successfully."
 
 $(BUILD_PATH):
@@ -70,7 +70,7 @@ entry: kernel/entry.asm | $(BUILD_PATH)
 	@mkdir -p $(BUILD_PATH)/kernel
 	$(NASM) -f elf32 kernel/entry.asm -o $(BUILD_PATH)/kernel/entry.o
 
-kernel: sched mem drivers fs lib apps other | $(BUILD_PATH)
+kernel:  sched mem drivers fs lib apps other asm  | $(BUILD_PATH)
 
 # Object file compilation
 $(BUILD_PATH)/%.o: %.c
@@ -86,6 +86,12 @@ lib:     $(addprefix $(BUILD_PATH)/, $(LIB_SRC:.c=.o))
 apps:    $(addprefix $(BUILD_PATH)/, $(APP_SRC:.c=.o))
 other:   $(addprefix $(BUILD_PATH)/, $(OTHER_SRC:.c=.o))
 
+asm: $(ASM_SRC)
+	@for file in $(ASM_SRC); do \
+		out=$(BUILD_PATH)/$${file%.asm}.o; \
+		mkdir -p $$(dirname $$out); \
+		$(NASM) -f elf32 $$file -o $$out; \
+	done
 
 interrupts: interrupts/interrupts.c  | $(BUILD_PATH)
 	@mkdir -p $(BUILD_PATH)/interrupts

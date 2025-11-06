@@ -3,83 +3,120 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #include "sync/spinlock.h"
 #include "../mem/alloc.h"
 #include "../mem/pmm.h"
 #include "../mem/vmm.h"
+#include "../fs/vfs/vfs.h"
+#include "process.h"
+
+// state of the cpu upon a context switch
+// this will be used as the parameters old and new
+// within our context switch function
 typedef struct cpu_ctx {
-    uint32_t edi, esi, ebp, esp;
-    uint32_t ebx, edx, ecx, eax;
-    uint32_t es;
-    uint32_t int_no, err;
-    uint32_t eip, cs, gs, ds, fs;
-    uint32_t eflags, user_esp, ss;
+    uint32_t edi;
+    // we dont need the stack pointer here.
+    // we have it at thread->kernel_stack
+    uint32_t esi;
+    uint32_t ebx;
+    uint32_t ebp;
+    uint32_t eip;
 } cpu_ctx_t;
 
 typedef enum thread_state {
     THREAD_READY,
     THREAD_RUNNING,
+    THREAD_SLEEPING,
     THREAD_EXITED,
     THREAD_DEAD,
-    THREAD_SLEEPING
 } thread_state_t;
 
-#define THREAD_STACK_SIZE 4096
-#define MAX_CORES 8
-#define MAX_THREADS 256
+typedef struct thread thread_t;
 
-typedef struct thread {
-    cpu_ctx_t ctx;
-    thread_state_t state;
-    uint8_t* stack;
-    struct thread* prev;
-    struct thread* next;
-    uint32_t id;
-    uint32_t core_id;
-    uint32_t base_priority;
-    uint32_t effective_prio;
-    uint64_t ready_since;
-    uint32_t run_count;
-    uint32_t time_slice;
-    uint64_t last_run;
-    uint64_t wake_time;
-    vmm_region_t* region;   
-} thread_t;
+typedef struct thread_priority {
+    unsigned base;
+    unsigned effective;
+} thread_priority_t;
+
+#define STARVATION_THRESHOLD 1000
+#define BOOST_AMOUNT 5
+#define MAX_PRIORITY 255
 
 typedef struct thread_list {
     thread_t* head;
     thread_t* tail;
     uint32_t count;
+    char* name;
+    spinlock_t lock;
 } thread_list_t;
 
+// data structure representing a thread
+// a thread is a user thread when it has a process
+// upon thread creation, if the thread is a kernel thread
+// it will have no process and will inherit the kernel address space
+// if the thread is a user thread, it will have a process
+// and will inherit the process address space
+typedef struct thread {
+    thread_t* next;
+    thread_t* previous;
+    void* kernel_stack;
+    int user;
+    cpu_ctx_t context;
+
+    // priority is the base priority assigned when the thread is created
+    // if the thread is starved a priority boost will be added to the effective priority
+    // if the effective priority is higher than the base priority
+    // the scheduler will treat the effective priority of the thread to be the priority
+    // within sched_schedule()
+    thread_priority_t priority;
+
+    // if a thread is a kernel thread, it has no process.
+    // the thread will inherit the kernel address space.
+    process_t* process;
+
+    // identification
+    uint32_t id;
+
+    // NOTE: allocate for name.
+    char* name;
+
+    // time info
+    // time since last run is important
+    // because we can tell if its being starved
+    // if its significantly high, we can boost its priority
+    uint32_t uptime;
+    uint32_t time_since_last_run;
+    uint32_t time_slice;
+
+    // TODO: add file descriptor table pointer
+} thread_t;
+
 typedef struct scheduler {
-    thread_list_t ready_queues[MAX_CORES];
-    thread_list_t sleep_queue;
-    thread_t* current_threads[MAX_CORES];
-    thread_t* idle_threads[MAX_CORES];
-    uint32_t core_count;
-    uint32_t thread_count;
+    thread_list_t* ready_queue;
+    thread_list_t* sleep_queue;
+    thread_list_t* kernel_threads;
+    thread_list_t* user_threads;
+    spinlock_t ready_queue_lock;
     uint32_t next_tid;
-    spinlock_t sched_lock;
+    thread_t* idle_thread;
+    thread_t* reaper_thread;
+    thread_t* stealer_thread;
 } scheduler_t;
-typedef struct core_sched {
-    thread_list_t *ready_queues;  /* priority 0 = highest */
-    thread_t* current;
-    thread_t* idle;
-} core_sched_t;
+
 extern scheduler_t sched;
-extern thread_list_t ready_queue[MAX_CORES];
-extern thread_t* current_thread[MAX_CORES];
-extern thread_t* idle_thread[MAX_CORES];
-void sched_init(uint32_t core_count);
-thread_t* sched_create_thread(void (*entry)(void), uint32_t priority);
-void sched_add_thread(thread_t* t);
-void sched_remove_thread(thread_t* t);
 
-void sched_sleep(uint64_t ms);
-void sched_wake(thread_t* t);
+thread_t* sched_create_kernel_thread(void (*entry)(void), unsigned priority, char* name);
 
-void sched_reschedule(uint32_t core_id);
-void sched_timer_tick(void);
+// use this for everything but the ready queue.
+void sched_thread_list_add(thread_t* thread, thread_list_t* list);
+thread_t* sched_create_user_thread(void (*entry)(void), unsigned priority, char* name, process_t* process);
+void sched_init(void);
+void sched_enqueue(thread_list_t* list, thread_t* thread);
+thread_t* sched_dequeue(thread_list_t* list);
+thread_t* sched_remove(thread_list_t* list, thread_t* target);
+void sched_schedule(void);
+void sched_yield(void);
 
-#endif
+extern void sched_tick(void);
+#endif // SCHED_H

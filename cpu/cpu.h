@@ -16,12 +16,9 @@ typedef struct cpu_context {
     unsigned ebp;
     unsigned eip;
 } cpu_context_t;
+
 typedef struct per_cpu {
     unsigned char apic_id;
     cpu_context_t context;
 
-
-
-
 } per_cpu_t;
-

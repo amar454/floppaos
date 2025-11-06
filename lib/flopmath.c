@@ -9,14 +9,14 @@ FloppaOS is free software: you can redistribute it and/or modify it under the te
 
 FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https:
 */
 
 #include "flopmath.h"
 
-// Factorial function for Taylor series
 double factorial(int n) {
-    if (n < 0) return NAN; // Factorial is not defined for negative numbers
+    if (n < 0)
+        return NAN;
     double result = 1.0;
     for (int i = 1; i <= n; i++) {
         result *= i;
@@ -24,9 +24,9 @@ double factorial(int n) {
     return result;
 }
 
-// Power function (base^exp)
 double power(double base, int exp) {
-    if (exp == 0) return 1.0;
+    if (exp == 0)
+        return 1.0;
     double result = 1.0;
     int positive_exp = exp < 0 ? -exp : exp;
     for (int i = 0; i < positive_exp; i++) {
@@ -35,10 +35,9 @@ double power(double base, int exp) {
     return exp < 0 ? 1.0 / result : result;
 }
 
-// Exponentiation function (e^x)
 double exp(double x) {
-    double term = 1.0; // Current term in series
-    double sum = 1.0;  // Initialize with the first term
+    double term = 1.0;
+    double sum = 1.0;
     for (int n = 1; n <= 20; n++) {
         term *= x / n;
         sum += term;
@@ -46,9 +45,9 @@ double exp(double x) {
     return sum;
 }
 
-// Natural logarithm (ln(x))
 double ln(double x) {
-    if (x <= 0) return NAN; // Log is undefined for x <= 0
+    if (x <= 0)
+        return NAN;
     double sum = 0.0;
     double term = (x - 1) / (x + 1);
     double term_squared = term * term;
@@ -58,14 +57,14 @@ double ln(double x) {
     return 2 * sum;
 }
 
-// Adjust angle to range [0, 2*PI]
 double normalize_angle(double x) {
-    while (x < 0) x += 2 * PI;
-    while (x >= 2 * PI) x -= 2 * PI;
+    while (x < 0)
+        x += 2 * PI;
+    while (x >= 2 * PI)
+        x -= 2 * PI;
     return x;
 }
 
-// Sine function using Taylor series
 double sin(double x) {
     x = normalize_angle(x);
     double term = x;
@@ -77,7 +76,6 @@ double sin(double x) {
     return sum;
 }
 
-// Cosine function using Taylor series
 double cos(double x) {
     x = normalize_angle(x);
     double term = 1.0;
@@ -89,26 +87,23 @@ double cos(double x) {
     return sum;
 }
 
-// Tangent function using sine and cosine
 double tan(double x) {
     double s = sin(x);
     double c = cos(x);
     return (c == 0) ? NAN : s / c;
 }
 
-// Absolute value for floating-point numbers
 double fabs(double x) {
     return x < 0 ? -x : x;
 }
 
-// Absolute value for integers
 int abs(int x) {
     return x < 0 ? -x : x;
 }
 
-// Square root function using Newton's method
 double sqrt(double x) {
-    if (x < 0) return NAN;
+    if (x < 0)
+        return NAN;
     double guess = x / 2.0, prev;
     do {
         prev = guess;
@@ -117,18 +112,16 @@ double sqrt(double x) {
     return guess;
 }
 
-// Logarithm base 10 function using natural logarithm
 double log10(double x) {
     return ln(x) / ln(10.0);
 }
 
-// Power function (x^y) using the relationship a^b = e^(b*ln(a))
 double pow(double base, double exp) {
-    if (base <= 0) return NAN; // Undefined for base <= 0
+    if (base <= 0)
+        return NAN;
     return exp * ln(base);
 }
 
-// Hyperbolic sine (sinh) function using Taylor series
 double sinh(double x) {
     double term = x, sum = x;
     for (int n = 1; n <= 10; n++) {
@@ -138,7 +131,6 @@ double sinh(double x) {
     return sum;
 }
 
-// Hyperbolic cosine (cosh) function using Taylor series
 double cosh(double x) {
     double term = 1.0, sum = 1.0;
     for (int n = 1; n <= 10; n++) {
@@ -148,15 +140,14 @@ double cosh(double x) {
     return sum;
 }
 
-// Hyperbolic tangent (tanh) function using sinh and cosh
 double tanh(double x) {
     double sh = sinh(x), ch = cosh(x);
     return sh / ch;
 }
 
-// Arcsine function (asin) using Newton's method approximation
 double asin(double x) {
-    if (x < -1 || x > 1) return NAN; // Undefined for |x| > 1
+    if (x < -1 || x > 1)
+        return NAN;
     double guess = x, prev;
     do {
         prev = guess;
@@ -165,13 +156,12 @@ double asin(double x) {
     return guess;
 }
 
-// Arccosine function (acos) using numerical method
 double acos(double x) {
-    if (x < -1 || x > 1) return NAN; // Undefined for |x| > 1
+    if (x < -1 || x > 1)
+        return NAN;
     return PI / 2 - asin(x);
 }
 
-// Arctangent function (atan) using numerical method
 double atan(double x) {
     double sum = 0.0, term = x;
     for (int n = 0; n < 10; n++) {
@@ -181,60 +171,56 @@ double atan(double x) {
     return sum;
 }
 
-// Arctangent of y/x (atan2) using atan
 double atan2(double y, double x) {
-    if (x > 0) return atan(y / x);
-    if (x < 0 && y >= 0) return atan(y / x) + PI;
-    if (x < 0 && y < 0) return atan(y / x) - PI;
-    if (x == 0 && y > 0) return PI / 2;
-    if (x == 0 && y < 0) return -PI / 2;
-    return NAN; // Undefined for x = 0 and y = 0
+    if (x > 0)
+        return atan(y / x);
+    if (x < 0 && y >= 0)
+        return atan(y / x) + PI;
+    if (x < 0 && y < 0)
+        return atan(y / x) - PI;
+    if (x == 0 && y > 0)
+        return PI / 2;
+    if (x == 0 && y < 0)
+        return -PI / 2;
+    return NAN;
 }
 
-// Rounding function (round)
 double round(double x) {
     return (x >= 0) ? floor(x + 0.5) : ceil(x - 0.5);
 }
 
-// Floor function (largest integer less than or equal to x)
 double floor(double x) {
-    int xi = (int)x;
+    int xi = (int) x;
     return (x < xi) ? xi - 1 : xi;
 }
 
-// Ceil function (smallest integer greater than or equal to x)
 double ceil(double x) {
-    int xi = (int)x;
+    int xi = (int) x;
     return (x > xi) ? xi + 1 : xi;
 }
 
-// Min function
 double min(double a, double b) {
     return (a < b) ? a : b;
 }
 
-// Max function
 double max(double a, double b) {
     return (a > b) ? a : b;
 }
 
-// Absolute value function (for integer types)
 int abs_int(int x) {
     return x < 0 ? -x : x;
 }
 
-// Logarithm base 2 (log2)
 double log2(double x) {
     return ln(x) / ln(2.0);
 }
 
-// Cube root function (cbrt)
 double cbrt(double x) {
-    if (x < 0) return -pow(-x, 1.0/3.0);
-    return pow(x, 1.0/3.0);
+    if (x < 0)
+        return -pow(-x, 1.0 / 3.0);
+    return pow(x, 1.0 / 3.0);
 }
 
-// Greatest common divisor (gcd) of two integers
 int gcd(int a, int b) {
     while (b != 0) {
         int temp = b;
@@ -244,67 +230,56 @@ int gcd(int a, int b) {
     return a;
 }
 
-// Least common multiple (lcm) of two integers
 int lcm(int a, int b) {
     return (a * b) / gcd(a, b);
 }
 
-// Hyperbolic secant (sech)
 double sech(double x) {
     return 1.0 / cosh(x);
 }
 
-// Hyperbolic cosecant (csch)
 double csch(double x) {
     return 1.0 / sinh(x);
 }
 
-// Hyperbolic cotangent (coth)
 double coth(double x) {
     return cosh(x) / sinh(x);
 }
 
-// Computes the sine of an angle in degrees (uses sin function for radians)
 double sind(double x) {
-    return sin(x * (PI / 180.0)); // Convert degrees to radians
+    return sin(x * (PI / 180.0));
 }
 
-// Computes the cosine of an angle in degrees (uses cos function for radians)
 double cosd(double x) {
-    return cos(x * (PI / 180.0)); // Convert degrees to radians
+    return cos(x * (PI / 180.0));
 }
 
-// Computes the tangent of an angle in degrees (uses tan function for radians)
 double tand(double x) {
-    return tan(x * (PI / 180.0)); // Convert degrees to radians
+    return tan(x * (PI / 180.0));
 }
 
-// Computes the cotangent of an angle (1/tan(x))
 double cot(double x) {
     double t = tan(x);
     return (t == 0) ? NAN : 1.0 / t;
 }
 
-// Computes the secant of an angle (1/cos(x))
 double sec(double x) {
     double c = cos(x);
     return (c == 0) ? NAN : 1.0 / c;
 }
 
-// Computes the cosecant of an angle (1/sin(x))
 double csc(double x) {
     double s = sin(x);
     return (s == 0) ? NAN : 1.0 / s;
 }
 
-// Computes the exponential of a base raised to the power of an exponent (a^b)
 double exp_base(double a, double b) {
-    return power(a, (int)b);  // Use previously defined power function
+    return power(a, (int) b);
 }
 
-// Finds the nth Fibonacci number using an iterative approach
 long long fib(int n) {
-    if (n < 0) return -1; // Invalid input
+    if (n < 0)
+        return -1;
     long long a = 0, b = 1, temp;
     for (int i = 0; i < n; i++) {
         temp = a;
@@ -314,10 +289,9 @@ long long fib(int n) {
     return a;
 }
 
-
-// Computes the mean of an array of numbers
 double mean(double arr[], int size) {
-    if (size == 0) return NAN;
+    if (size == 0)
+        return NAN;
     double sum = 0.0;
     for (int i = 0; i < size; i++) {
         sum += arr[i];
@@ -325,7 +299,6 @@ double mean(double arr[], int size) {
     return sum / size;
 }
 
-// Computes the variance of an array of numbers
 double variance(double arr[], int size) {
     double m = mean(arr, size);
     double var = 0.0;
@@ -335,20 +308,18 @@ double variance(double arr[], int size) {
     return var / size;
 }
 
-// Computes the standard deviation of an array of numbers
 double stddev(double arr[], int size) {
     return sqrt(variance(arr, size));
 }
 
-// Computes the factorial of a number (int) recursively
 long long factorial_recursive(int n) {
-    if (n < 0) return -1; // Undefined for negative numbers
-    if (n == 0) return 1;
+    if (n < 0)
+        return -1;
+    if (n == 0)
+        return 1;
     return n * factorial_recursive(n - 1);
 }
 
-
-// Vector operations
 Vector3 vector_add(Vector3 a, Vector3 b) {
     return (Vector3){a.x + b.x, a.y + b.y, a.z + b.z};
 }
@@ -366,11 +337,7 @@ double vector_dot(Vector3 a, Vector3 b) {
 }
 
 Vector3 vector_cross(Vector3 a, Vector3 b) {
-    return (Vector3){
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    };
+    return (Vector3){a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 }
 
 double vector_magnitude(Vector3 v) {
@@ -395,13 +362,11 @@ Vector3 vector_project(Vector3 a, Vector3 b) {
     return vector_scalar_multiply(b, dot / mag_b_squared);
 }
 
-// Identity matrix
 Matrix4x4 matrix_identity() {
     Matrix4x4 result = {{{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1}}};
     return result;
 }
 
-// Matrix multiplication
 Matrix4x4 matrix_multiply(Matrix4x4 a, Matrix4x4 b) {
     Matrix4x4 result = {{{0}}};
     for (int i = 0; i < 4; i++) {
@@ -414,8 +379,6 @@ Matrix4x4 matrix_multiply(Matrix4x4 a, Matrix4x4 b) {
     return result;
 }
 
-
-// Matrix translation
 Matrix4x4 matrix_translation(double tx, double ty, double tz) {
     Matrix4x4 result = matrix_identity();
     result.m[3][0] = tx;
@@ -424,7 +387,6 @@ Matrix4x4 matrix_translation(double tx, double ty, double tz) {
     return result;
 }
 
-// Matrix scaling
 Matrix4x4 matrix_scaling(double sx, double sy, double sz) {
     Matrix4x4 result = matrix_identity();
     result.m[0][0] = sx;
@@ -433,7 +395,6 @@ Matrix4x4 matrix_scaling(double sx, double sy, double sz) {
     return result;
 }
 
-// Matrix rotation around X-axis
 Matrix4x4 matrix_rotate_x(double angle) {
     Matrix4x4 result = matrix_identity();
     result.m[1][1] = cos(angle);
@@ -443,7 +404,6 @@ Matrix4x4 matrix_rotate_x(double angle) {
     return result;
 }
 
-// Matrix rotation around Y-axis
 Matrix4x4 matrix_rotate_y(double angle) {
     Matrix4x4 result = matrix_identity();
     result.m[0][0] = cos(angle);
@@ -453,7 +413,6 @@ Matrix4x4 matrix_rotate_y(double angle) {
     return result;
 }
 
-// Matrix rotation around Z-axis
 Matrix4x4 matrix_rotate_z(double angle) {
     Matrix4x4 result = matrix_identity();
     result.m[0][0] = cos(angle);
@@ -463,7 +422,6 @@ Matrix4x4 matrix_rotate_z(double angle) {
     return result;
 }
 
-// Perspective projection matrix
 Matrix4x4 matrix_perspective(double fov, double aspect, double near, double far) {
     double tan_half_fov = tan(fov / 2.0);
     Matrix4x4 result = {{{0}}};
@@ -475,11 +433,10 @@ Matrix4x4 matrix_perspective(double fov, double aspect, double near, double far)
     return result;
 }
 
-// LookAt view matrix
 Matrix4x4 matrix_look_at(Vector3 eye, Vector3 target, Vector3 up) {
-    Vector3 zaxis = vector_normalize(vector_subtract(eye, target)); // Camera forward
-    Vector3 xaxis = vector_normalize(vector_cross(up, zaxis)); // Right
-    Vector3 yaxis = vector_cross(zaxis, xaxis); // Up
+    Vector3 zaxis = vector_normalize(vector_subtract(eye, target));
+    Vector3 xaxis = vector_normalize(vector_cross(up, zaxis));
+    Vector3 yaxis = vector_cross(zaxis, xaxis);
 
     Matrix4x4 result = matrix_identity();
     result.m[0][0] = xaxis.x;
@@ -497,55 +454,48 @@ Matrix4x4 matrix_look_at(Vector3 eye, Vector3 target, Vector3 up) {
     return result;
 }
 
-
-// Smoothstep (easing function)
 double smoothstep(double edge0, double edge1, double x) {
     double t = (x - edge0) / (edge1 - edge0);
     t = (t < 0) ? 0 : (t > 1) ? 1 : t;
     return t * t * (3.0 - 2.0 * t);
 }
 
-// Quadratic equation solver: ax^2 + bx + c = 0
-int solve_quadratic(double a, double b, double c, double *root1, double *root2) {
+int solve_quadratic(double a, double b, double c, double* root1, double* root2) {
     if (a == 0) {
-        if (b == 0) return 0; // No solution
+        if (b == 0)
+            return 0;
         *root1 = -c / b;
-        return 1; // One solution
+        return 1;
     }
     double discriminant = b * b - 4 * a * c;
-    if (discriminant < 0) return 0; // No real roots
+    if (discriminant < 0)
+        return 0;
     *root1 = (-b + sqrt(discriminant)) / (2 * a);
     *root2 = (-b - sqrt(discriminant)) / (2 * a);
-    return (discriminant == 0) ? 1 : 2; // Return number of roots
+    return (discriminant == 0) ? 1 : 2;
 }
 
-// Linear interpolation for a vector (lerp)
 Vector3 vector_lerp(Vector3 a, Vector3 b, double t) {
     return vector_add(vector_scalar_multiply(a, 1 - t), vector_scalar_multiply(b, t));
 }
 
-
-// Matrix determinant (2x2 matrix)
 double determinant_2x2(double a, double b, double c, double d) {
     return a * d - b * c;
 }
 
-// Matrix determinant (3x3 matrix)
 double determinant_3x3(double m[3][3]) {
-    return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
-           m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
-           m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+        m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
 }
 
 double compute_lighting(Vector3 normal, Vector3 light_dir) {
     normal = vector_normalize(normal);
     light_dir = vector_normalize(light_dir);
     double intensity = vector_dot(normal, light_dir);
-    return max(0.0, intensity); // Clamp to [0, 1]
+    return max(0.0, intensity);
 }
 int solve_linear_system(int n, double matrix[][n + 1], double results[]) {
     for (int i = 0; i < n; i++) {
-        // Find the pivot row
         int pivotRow = i;
         for (int k = i + 1; k < n; k++) {
             if (fabs(matrix[k][i]) > fabs(matrix[pivotRow][i])) {
@@ -553,7 +503,6 @@ int solve_linear_system(int n, double matrix[][n + 1], double results[]) {
             }
         }
 
-        // Swap rows if needed
         if (pivotRow != i) {
             for (int j = 0; j <= n; j++) {
                 double temp = matrix[i][j];
@@ -562,16 +511,14 @@ int solve_linear_system(int n, double matrix[][n + 1], double results[]) {
             }
         }
 
-        // Check for singularity
         double diag = matrix[i][i];
-        if (fabs(diag) < 1e-9) return 0; // Singular matrix
+        if (fabs(diag) < 1e-9)
+            return 0;
 
-        // Normalize the pivot row
         for (int j = 0; j <= n; j++) {
             matrix[i][j] /= diag;
         }
 
-        // Eliminate all other rows
         for (int k = 0; k < n; k++) {
             if (k != i) {
                 double factor = matrix[k][i];
@@ -582,14 +529,12 @@ int solve_linear_system(int n, double matrix[][n + 1], double results[]) {
         }
     }
 
-    // Extract results
     for (int i = 0; i < n; i++) {
         results[i] = matrix[i][n];
     }
-    return 1; // Solution exists
+    return 1;
 }
 
-// Polynomial evaluation using Horner's Method
 double evaluate_polynomial(double coefficients[], int degree, double x) {
     double result = coefficients[0];
     for (int i = 1; i <= degree; i++) {
@@ -598,12 +543,10 @@ double evaluate_polynomial(double coefficients[], int degree, double x) {
     return result;
 }
 
-// Numerical differentiation (central difference method)
 double numerical_differentiation(double (*f)(double), double x, double h) {
     return (f(x + h) - f(x - h)) / (2 * h);
 }
 
-// Trapezoidal rule
 double trapezoidal_integration(double (*f)(double), double a, double b, int n) {
     double h = (b - a) / n;
     double sum = (f(a) + f(b)) / 2.0;
@@ -616,7 +559,6 @@ double trapezoidal_integration(double (*f)(double), double a, double b, int n) {
     return sum * h;
 }
 
-// Midpoint rule
 double midpoint_integration(double (*f)(double), double a, double b, int n) {
     double h = (b - a) / n;
     double sum = 0.0;
@@ -629,9 +571,9 @@ double midpoint_integration(double (*f)(double), double a, double b, int n) {
     return sum * h;
 }
 
-// Simpson's rule
 double simpsons_integration(double (*f)(double), double a, double b, int n) {
-    if (n % 2 != 0) n++; // Ensure n is even for Simpson's rule
+    if (n % 2 != 0)
+        n++;
     double h = (b - a) / n;
     double sum = f(a) + f(b);
 
@@ -643,21 +585,18 @@ double simpsons_integration(double (*f)(double), double a, double b, int n) {
     return sum * h / 3.0;
 }
 
-// Definite integral of a polynomial
 double polynomial_integral(double coefficients[], int degree, double a, double b) {
     double integral_coefficients[degree + 2];
     for (int i = 0; i <= degree; i++) {
         integral_coefficients[i] = coefficients[i] / (degree - i + 1);
     }
-    integral_coefficients[degree + 1] = 0; // Constant of integration
+    integral_coefficients[degree + 1] = 0;
 
-    // Evaluate the polynomial integral at b and a
     double result_b = evaluate_polynomial(integral_coefficients, degree + 1, b);
     double result_a = evaluate_polynomial(integral_coefficients, degree + 1, a);
     return result_b - result_a;
 }
 
-// Symbolic derivative of a polynomial
 void polynomial_derivative(double coefficients[], int degree, double derivative_coefficients[]) {
     for (int i = 0; i < degree; i++) {
         derivative_coefficients[i] = coefficients[i] * (degree - i);
@@ -666,27 +605,22 @@ void polynomial_derivative(double coefficients[], int degree, double derivative_
 
 double nrt(double x, double n) {
     if (n == 0) {
-        // If n is 0, the n-th root is undefined; handle as an error
-        return NAN; // Returns Not-a-Number
+        return NAN;
     }
-    if (x < 0 && ((int)n) % 2 == 0) {
-        // Even roots of negative numbers are undefined in real numbers
+    if (x < 0 && ((int) n) % 2 == 0) {
         return NAN;
     }
     return pow(x, 1.0 / n);
 }
 
-// Linear interpolation (lerp)
 double lerp(double a, double b, double t) {
     return a + (b - a) * t;
 }
 
-// Struct for a 3D point
 typedef struct {
     double x, y, z;
 } Point3D;
 
-// Helper function to calculate the cross product of two vectors
 Point3D cross_product(Point3D u, Point3D v) {
     Point3D result;
     result.x = u.y * v.z - u.z * v.y;
@@ -695,12 +629,10 @@ Point3D cross_product(Point3D u, Point3D v) {
     return result;
 }
 
-// Helper function to calculate the dot product of two vectors
 double dot_product(Point3D u, Point3D v) {
     return u.x * v.x + u.y * v.y + u.z * v.z;
 }
 
-// Function to compute the volume of a tetrahedron
 double tetrahedron_volume(Point3D A, Point3D B, Point3D C, Point3D D) {
     Point3D AB = {B.x - A.x, B.y - A.y, B.z - A.z};
     Point3D AC = {C.x - A.x, C.y - A.y, C.z - A.z};
@@ -711,73 +643,59 @@ double tetrahedron_volume(Point3D A, Point3D B, Point3D C, Point3D D) {
     return volume;
 }
 
-// Function to compute the volume of a cube
 double cube_volume(double side_length) {
     return side_length * side_length * side_length;
 }
 
-// Function to compute the surface area of a cube
 double cube_surface_area(double side_length) {
     return 6 * side_length * side_length;
 }
 
-// Function to compute the volume of a sphere
 double sphere_volume(double radius) {
     return (4.0 / 3.0) * PI * radius * radius * radius;
 }
 
-// Function to compute the surface area of a sphere
 double sphere_surface_area(double radius) {
     return 4 * PI * radius * radius;
 }
 
-// Function to compute the volume of a cylinder
 double cylinder_volume(double radius, double height) {
     return PI * radius * radius * height;
 }
 
-// Function to compute the surface area of a cylinder
 double cylinder_surface_area(double radius, double height) {
     return 2 * PI * radius * (radius + height);
 }
 
-// Function to compute the volume of a cone
 double cone_volume(double radius, double height) {
     return (1.0 / 3.0) * PI * radius * radius * height;
 }
 
-// Function to compute the surface area of a cone
 double cone_surface_area(double radius, double height) {
     double slant_height = sqrt(radius * radius + height * height);
     return PI * radius * (radius + slant_height);
 }
 
-// Function to compute the volume of a rectangular prism
 double rectangular_prism_volume(double length, double width, double height) {
     return length * width * height;
 }
 
-// Function to compute the surface area of a rectangular prism
 double rectangular_prism_surface_area(double length, double width, double height) {
     return 2 * (length * width + width * height + height * length);
 }
 
-// Function to compute the volume of a pyramid
 double pyramid_volume(double base_area, double height) {
     return (1.0 / 3.0) * base_area * height;
 }
 
-// Function to compute the volume of a torus
 double torus_volume(double major_radius, double minor_radius) {
     return 2 * PI * PI * major_radius * minor_radius * minor_radius;
 }
 
-// Function to compute the surface area of a torus
 double torus_surface_area(double major_radius, double minor_radius) {
     return 4 * PI * PI * major_radius * minor_radius;
 }
 
-// Basic mathematical utilities
 double deg_to_rad(double degrees) {
     return degrees * (PI / 180.0);
 }
@@ -786,7 +704,6 @@ double rad_to_deg(double radians) {
     return radians * (180.0 / PI);
 }
 
-// 2D transformations
 void translate_2d(double* x, double* y, double dx, double dy) {
     *x += dx;
     *y += dy;
@@ -807,7 +724,6 @@ void rotate_2d(double* x, double* y, double angle) {
     *y = new_y;
 }
 
-// 3D transformations
 void translate_3d(double* x, double* y, double* z, double dx, double dy, double dz) {
     *x += dx;
     *y += dy;
@@ -850,7 +766,6 @@ void rotate_3d_z(double* x, double* y, double angle) {
     *y = new_y;
 }
 
-// Distance calculations
 double distance_2d(double x1, double y1, double x2, double y2) {
     return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
 }
@@ -859,7 +774,6 @@ double distance_3d(double x1, double y1, double z1, double x2, double y2, double
     return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) + pow(z2 - z1, 2));
 }
 
-// Graphing utilities
 double linear(double x, double m, double c) {
     return m * x + c;
 }
@@ -884,14 +798,12 @@ double plane(double x, double y, double z0) {
     return z0;
 }
 
-// Polar to Cartesian conversion
 void polar_to_cartesian_2d(double r, double theta, double* x, double* y) {
     double radians = deg_to_rad(theta);
     *x = r * cos(radians);
     *y = r * sin(radians);
 }
 
-// Spherical to Cartesian conversion
 void spherical_to_cartesian(double r, double theta, double phi, double* x, double* y, double* z) {
     double theta_rad = deg_to_rad(theta);
     double phi_rad = deg_to_rad(phi);
@@ -900,32 +812,37 @@ void spherical_to_cartesian(double r, double theta, double phi, double* x, doubl
     *z = r * cos(phi_rad);
 }
 
-// Bezier curve calculation (2D)
 void bezier_curve_2d(double t, double x0, double y0, double x1, double y1, double x2, double y2, double* x, double* y) {
     double u = 1 - t;
     *x = u * u * x0 + 2 * u * t * x1 + t * t * x2;
     *y = u * u * y0 + 2 * u * t * y1 + t * t * y2;
 }
 
-// Bezier curve calculation (3D)
-void bezier_curve_3d(double t, double x0, double y0, double z0, double x1, double y1, double z1, double x2, double y2, double z2, double* x, double* y, double* z) {
+void bezier_curve_3d(double t,
+                     double x0,
+                     double y0,
+                     double z0,
+                     double x1,
+                     double y1,
+                     double z1,
+                     double x2,
+                     double y2,
+                     double z2,
+                     double* x,
+                     double* y,
+                     double* z) {
     double u = 1 - t;
     *x = u * u * x0 + 2 * u * t * x1 + t * t * x2;
     *y = u * u * y0 + 2 * u * t * y1 + t * t * y2;
     *z = u * u * z0 + 2 * u * t * z1 + t * t * z2;
 }
 
-
-
-// 4D to 3D projection function (ignores the w component)
 void project_4d_to_3d(double x, double y, double z, double w, double* x_out, double* y_out, double* z_out) {
-    // Simple projection: Ignore the 'w' component and keep (x, y, z)
-    *x_out = x / (1 + w);  // Perspective divide for 'x'
-    *y_out = y / (1 + w);  // Perspective divide for 'y'
-    *z_out = z / (1 + w);  // Perspective divide for 'z'
+    *x_out = x / (1 + w);
+    *y_out = y / (1 + w);
+    *z_out = z / (1 + w);
 }
 
-// 4D translation (move a 4D point by a vector)
 void translate_4d(double* x, double* y, double* z, double* w, double dx, double dy, double dz, double dw) {
     *x += dx;
     *y += dy;
@@ -933,7 +850,6 @@ void translate_4d(double* x, double* y, double* z, double* w, double dx, double 
     *w += dw;
 }
 
-// 4D scaling function
 void scale_4d(double* x, double* y, double* z, double* w, double sx, double sy, double sz, double sw) {
     *x *= sx;
     *y *= sy;
@@ -941,46 +857,42 @@ void scale_4d(double* x, double* y, double* z, double* w, double sx, double sy, 
     *w *= sw;
 }
 
-// 4D rotation matrix around the X axis
 void rotate_4d_x(double* y, double* z, double* w, double angle) {
     double radians = deg_to_rad(angle);
     double cos_a = cos(radians);
     double sin_a = sin(radians);
     double new_y = *y * cos_a - *z * sin_a;
     double new_z = *y * sin_a + *z * cos_a;
-    double new_w = *w * cos_a;  // Keep 'w' component unaffected in this rotation.
+    double new_w = *w * cos_a;
     *y = new_y;
     *z = new_z;
     *w = new_w;
 }
 
-// 4D rotation matrix around the Y axis
 void rotate_4d_y(double* x, double* z, double* w, double angle) {
     double radians = deg_to_rad(angle);
     double cos_a = cos(radians);
     double sin_a = sin(radians);
     double new_x = *x * cos_a + *z * sin_a;
     double new_z = -(*x) * sin_a + *z * cos_a;
-    double new_w = *w * cos_a;  // Keep 'w' component unaffected in this rotation.
+    double new_w = *w * cos_a;
     *x = new_x;
     *z = new_z;
     *w = new_w;
 }
 
-// 4D rotation matrix around the Z axis
 void rotate_4d_z(double* x, double* y, double* w, double angle) {
     double radians = deg_to_rad(angle);
     double cos_a = cos(radians);
     double sin_a = sin(radians);
     double new_x = *x * cos_a - *y * sin_a;
     double new_y = *x * sin_a + *y * cos_a;
-    double new_w = *w * cos_a;  // Keep 'w' component unaffected in this rotation.
+    double new_w = *w * cos_a;
     *x = new_x;
     *y = new_y;
     *w = new_w;
 }
 
-// 4D rotation matrix around the W axis (a different dimension of rotation)
 void rotate_4d_w(double* x, double* y, double* z, double* w, double angle) {
     double radians = deg_to_rad(angle);
     double cos_a = cos(radians);
@@ -995,30 +907,25 @@ void rotate_4d_w(double* x, double* y, double* z, double* w, double angle) {
     *w = new_w;
 }
 
-// Function to calculate the distance between two 4D points
 double distance_4d(double x1, double y1, double z1, double w1, double x2, double y2, double z2, double w2) {
     return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) + pow(z2 - z1, 2) + pow(w2 - w1, 2));
 }
 
-// 4D to 3D projection with a specific matrix (homogeneous coordinates)
 void project_4d_to_3d_matrix(double x, double y, double z, double w, double* x_out, double* y_out, double* z_out) {
-    // For a more complex projection (can be extended with perspective projection)
-    double factor = 1.0 / (1.0 + w);  // Simple perspective projection
+    double factor = 1.0 / (1.0 + w);
     *x_out = x * factor;
     *y_out = y * factor;
     *z_out = z * factor;
 }
 
-// Example function to project a 4D hypercube into 3D
 void project_hypercube_4d(double* vertices, int num_vertices, double* projected_vertices) {
     for (int i = 0; i < num_vertices; i++) {
-        // Each vertex has 4 components (x, y, z, w), thus process them in a loop
         double x = vertices[i * 4];
         double y = vertices[i * 4 + 1];
         double z = vertices[i * 4 + 2];
         double w = vertices[i * 4 + 3];
-        
-        // Project the 4D point onto 3D space
-        project_4d_to_3d(x, y, z, w, &projected_vertices[i * 3], &projected_vertices[i * 3 + 1], &projected_vertices[i * 3 + 2]);
+
+        project_4d_to_3d(
+            x, y, z, w, &projected_vertices[i * 3], &projected_vertices[i * 3 + 1], &projected_vertices[i * 3 + 2]);
     }
 }

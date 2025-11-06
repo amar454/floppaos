@@ -20,11 +20,11 @@
 #define LOCAL_APIC_CURRENT_COUNT_REG 0x390
 #define LOCAL_APIC_ERR_LVT_REG 0x370
 #define LOCAL_APIC_DCR_REG 0x3e0
-#define IO_APIC_IND     0x0
-#define IO_APIC_DATA    0x10
-#define APIC_IND_ID     0x0
-#define APIC_IND_VER    0x1
-#define APIC_IND_REDIR  0x10
+#define IO_APIC_IND 0x0
+#define IO_APIC_DATA 0x10
+#define APIC_IND_ID 0x0
+#define APIC_IND_VER 0x1
+#define APIC_IND_REDIR 0x10
 #define APIC_LVT_MASK (1 << 16)
 #define APIC_LVT_VECTOR 0x1
 #define APIC_LVT_DELIVERY_MODE_FIXED 0
@@ -37,9 +37,10 @@
 #define IPI_INIT 0x5
 #define IPI_STARTUP 0x6
 #define APIC_CALIBRATE_TICKS 10
+
 typedef struct io_apic {
     uint8_t apic_id;
-    uint32_t virt_base_address;          
+    uint32_t virt_base_address;
     uint32_t phys_base_address;
     struct io_apic* next;
     struct io_apic* prev;

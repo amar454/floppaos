@@ -36,52 +36,51 @@ acpi.c
 #include "../../mem/utils.h"
 #include "../io/io.h"
 #include "../time/floptime.h"
-static unsigned int *SMI_CMD;
+static unsigned int* SMI_CMD;
 static unsigned char ACPI_ENABLE;
 static unsigned char ACPI_DISABLE;
-static unsigned int *PM1a_CNT;
-static unsigned int *PM1b_CNT;
+static unsigned int* PM1a_CNT;
+static unsigned int* PM1b_CNT;
 static unsigned short SLP_TYPa;
 static unsigned short SLP_TYPb;
 static unsigned short SLP_EN;
 static unsigned short SCI_EN;
 static unsigned char PM1_CNT_LEN;
 
-
-static unsigned int *acpi_check_rsdp(unsigned int *ptr) {
-    struct RSDPtr *rsdp = (struct RSDPtr *)ptr;
-    const char *sig = "RSD PTR ";
-    unsigned char *bptr;
+static unsigned int* acpi_check_rsdp(unsigned int* ptr) {
+    struct RSDPtr* rsdp = (struct RSDPtr*) ptr;
+    const char* sig = "RSD PTR ";
+    unsigned char* bptr;
     unsigned char check = 0;
     int i;
 
     if (flop_memcmp(sig, rsdp, 8) == 0) {
-        bptr = (unsigned char *)ptr;
+        bptr = (unsigned char*) ptr;
         for (i = 0; i < sizeof(struct RSDPtr); i++) {
             check += *bptr;
             bptr++;
         }
         if (check == 0) {
-            return (unsigned int *)rsdp->RsdtAddress;
+            return (unsigned int*) rsdp->RsdtAddress;
         }
     }
     return NULL;
 }
 
-static unsigned int *acpi_get_rsdp(void) {
-    unsigned int *addr;
-    unsigned int *rsdp;
+static unsigned int* acpi_get_rsdp(void) {
+    unsigned int* addr;
+    unsigned int* rsdp;
 
-    for (addr = (unsigned int *)0x000E0000; (int)addr < 0x00100000; addr += 4) {
+    for (addr = (unsigned int*) 0x000E0000; (int) addr < 0x00100000; addr += 4) {
         rsdp = acpi_check_rsdp(addr);
         if (rsdp != NULL)
             return rsdp;
     }
 
-    int ebda = *((short *)0x40E);
+    int ebda = *((short*) 0x40E);
     ebda = ebda * 0x10 & 0x000FFFFF;
 
-    for (addr = (unsigned int *)ebda; (int)addr < ebda + 1024; addr += 4) {
+    for (addr = (unsigned int*) ebda; (int) addr < ebda + 1024; addr += 4) {
         rsdp = acpi_check_rsdp(addr);
         if (rsdp != NULL)
             return rsdp;
@@ -90,9 +89,9 @@ static unsigned int *acpi_get_rsdp(void) {
     return NULL;
 }
 
-static int acpi_check_header(unsigned int *ptr, const char *sig) {
+static int acpi_check_header(unsigned int* ptr, const char* sig) {
     if (flop_memcmp(ptr, sig, 4) == 0) {
-        char *check_ptr = (char *)ptr;
+        char* check_ptr = (char*) ptr;
         int len = *(ptr + 1);
         char check = 0;
         while (len-- > 0) {
@@ -105,16 +104,16 @@ static int acpi_check_header(unsigned int *ptr, const char *sig) {
 }
 
 static int acpi_enable(void) {
-    if ((inw((unsigned int)PM1a_CNT) & SCI_EN) == 0) {
+    if ((inw((unsigned int) PM1a_CNT) & SCI_EN) == 0) {
         if (SMI_CMD && ACPI_ENABLE) {
-            outb((unsigned int)SMI_CMD, ACPI_ENABLE);
+            outb((unsigned int) SMI_CMD, ACPI_ENABLE);
             for (int i = 0; i < 300; i++) {
-                if ((inw((unsigned int)PM1a_CNT) & SCI_EN) == 1)
+                if ((inw((unsigned int) PM1a_CNT) & SCI_EN) == 1)
                     break;
             }
             if (PM1b_CNT) {
                 for (int i = 0; i < 300; i++) {
-                    if ((inw((unsigned int)PM1b_CNT) & SCI_EN) == 1)
+                    if ((inw((unsigned int) PM1b_CNT) & SCI_EN) == 1)
                         break;
                 }
             }
@@ -129,7 +128,7 @@ static int acpi_enable(void) {
 }
 
 int init_acpi(void) {
-    unsigned int *ptr = acpi_get_rsdp();
+    unsigned int* ptr = acpi_get_rsdp();
 
     if (ptr && acpi_check_header(ptr, "RSDT") == 0) {
         int entries = *(ptr + 1);
@@ -137,10 +136,10 @@ int init_acpi(void) {
         ptr += 9;
 
         while (entries-- > 0) {
-            if (acpi_check_header((unsigned int *)*ptr, "FACP") == 0) {
-                struct FACP *facp = (struct FACP *)*ptr;
-                if (acpi_check_header((unsigned int *)facp->DSDT, "DSDT") == 0) {
-                    char *S5Addr = (char *)facp->DSDT + 36;
+            if (acpi_check_header((unsigned int*) *ptr, "FACP") == 0) {
+                struct FACP* facp = (struct FACP*) *ptr;
+                if (acpi_check_header((unsigned int*) facp->DSDT, "DSDT") == 0) {
+                    char* S5Addr = (char*) facp->DSDT + 36;
                     int dsdt_length = *(facp->DSDT + 1) - 36;
 
                     while (dsdt_length-- > 0) {
@@ -150,15 +149,18 @@ int init_acpi(void) {
                     }
 
                     if (dsdt_length > 0) {
-                        if ((*(S5Addr - 1) == 0x08 || (*(S5Addr - 2) == 0x08 && *(S5Addr - 1) == '\\')) && *(S5Addr + 4) == 0x12) {
+                        if ((*(S5Addr - 1) == 0x08 || (*(S5Addr - 2) == 0x08 && *(S5Addr - 1) == '\\')) &&
+                            *(S5Addr + 4) == 0x12) {
                             S5Addr += 5;
                             S5Addr += ((*S5Addr & 0xC0) >> 6) + 2;
 
-                            if (*S5Addr == 0x0A) S5Addr++;
+                            if (*S5Addr == 0x0A)
+                                S5Addr++;
                             SLP_TYPa = *(S5Addr) << 10;
                             S5Addr++;
 
-                            if (*S5Addr == 0x0A) S5Addr++;
+                            if (*S5Addr == 0x0A)
+                                S5Addr++;
                             SLP_TYPb = *(S5Addr) << 10;
 
                             SMI_CMD = facp->SMI_CMD;
@@ -198,13 +200,12 @@ void acpi_power_off(void) {
 
     acpi_enable();
 
-    outw((unsigned int)PM1a_CNT, SLP_TYPa | SLP_EN);
+    outw((unsigned int) PM1a_CNT, SLP_TYPa | SLP_EN);
     if (PM1b_CNT)
-        outw((unsigned int)PM1b_CNT, SLP_TYPb | SLP_EN);
+        outw((unsigned int) PM1b_CNT, SLP_TYPb | SLP_EN);
 
     log("ACPI power-off failed.", RED);
 }
-
 
 void qemu_legacy_power_off() {
     outw(0xB004, 0x2000);

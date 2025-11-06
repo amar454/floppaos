@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "../../multiboot/multiboot.h"
 #include "vgahandler.h"
+
 typedef struct colors {
     uint32_t black;
     uint32_t white;
@@ -23,7 +24,7 @@ typedef struct colors {
 extern colors_t c;
 void init_colors(void);
 // Function declarations
-void framebuffer_init(multiboot_info_t *mbi);
+void framebuffer_init(multiboot_info_t* mbi);
 void framebuffer_put_pixel(int x, int y, uint32_t color);
 void framebuffer_draw_line(int x1, int y1, int x2, int y2, uint32_t color);
 void framebuffer_draw_rectangle(int x, int y, int width, int height, uint32_t color);
@@ -34,8 +35,8 @@ void framebuffer_test_circle();
 void framebuffer_test_pattern();
 
 void framebuffer_draw_char(int x, int y, char c, uint32_t color);
-void framebuffer_print_string(int x, int y, const char *str, uint32_t color);
+void framebuffer_print_string(int x, int y, const char* str, uint32_t color);
 
 void init_console();
-void console_write(const char *str) ;
+void console_write(const char* str);
 #endif // FRAMEBUFFER_H

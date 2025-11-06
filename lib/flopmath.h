@@ -1,10 +1,9 @@
 #ifndef FLOPMATH_H
 #define FLOPMATH_H
 
-
 // Constants
 #define PI 3.14159265358979323846
-#define NAN 1.0/1.0
+#define NAN 1.0 / 1.0
 
 // Factorial function for Taylor series
 double factorial(int n);
@@ -203,7 +202,7 @@ double lerp(double a, double b, double t);
 // Smoothstep (easing function)
 double smoothstep(double edge0, double edge1, double x);
 
-int solve_quadratic(double a, double b, double c, double *root1, double *root2);
+int solve_quadratic(double a, double b, double c, double* root1, double* root2);
 
 double determinant_2x2(double a, double b, double c, double d);
 
@@ -299,7 +298,19 @@ void spherical_to_cartesian(double r, double theta, double phi, double* x, doubl
 
 void bezier_curve_2d(double t, double x0, double y0, double x1, double y1, double x2, double y2, double* x, double* y);
 
-void bezier_curve_3d(double t, double x0, double y0, double z0, double x1, double y1, double z1, double x2, double y2, double z2, double* x, double* y, double* z);
+void bezier_curve_3d(double t,
+                     double x0,
+                     double y0,
+                     double z0,
+                     double x1,
+                     double y1,
+                     double z1,
+                     double x2,
+                     double y2,
+                     double z2,
+                     double* x,
+                     double* y,
+                     double* z);
 
 void project_4d_to_3d(double x, double y, double z, double w, double* x_out, double* y_out, double* z_out);
 

@@ -54,26 +54,22 @@ kernel.c:
 #include "../flanterm/src/flanterm.h"
 #include "../flanterm/src/flanterm_backends/fb.h"
 
-
- void halt() { 
+void halt() {
     while (1) {
         continue;
     }
 }
 
- void cpuhalt() {
+void cpuhalt() {
     __asm__ volatile("hlt");
 }
 
 void panic(uint32_t address, const char* msg, const char* err) {
-
-    
     halt();
-
 }
 
 void mem_dump(uint32_t address, uint32_t length) {
-    uint32_t *ptr = (uint32_t *)(uintptr_t)address;    
+    uint32_t* ptr = (uint32_t*) (uintptr_t) address;
     for (uint32_t i = 0; i < length; i++) {
         if (i % 16 == 0) {
             echo("\n", WHITE);
@@ -84,83 +80,78 @@ void mem_dump(uint32_t address, uint32_t length) {
 }
 
 void draw_floppaos_logo() {
-    const char *ascii_art = 
-    "  __ _                          ___  ____   \n"
-    " / _| | ___  _ __  _ __   __ _ / _ \\/ ___|  \n"
-    "| |_| |/ _ \\| '_ \\| '_ \\ / _` | | | \\___ \\  \n"
-    "|  _| | (_) | |_) | |_) | (_| | |_| |___) | \n"
-    "|_| |_|\\___/| .__/| .__/ \\__,_|\\___/|____/ v0.1.1-alpha \n"
-    "            |_|   |_|                      \n";
+    const char* ascii_art = "  __ _                          ___  ____   \n"
+                            " / _| | ___  _ __  _ __   __ _ / _ \\/ ___|  \n"
+                            "| |_| |/ _ \\| '_ \\| '_ \\ / _` | | | \\___ \\  \n"
+                            "|  _| | (_) | |_) | |_) | (_| | |_| |___) | \n"
+                            "|_| |_|\\___/| .__/| .__/ \\__,_|\\___/|____/ v0.1.1-alpha \n"
+                            "            |_|   |_|                      \n";
     echo(ascii_art, YELLOW);
     sleep_seconds(1);
 }
 
 static void check_multiboot_magic(uint32_t magic) {
     if (magic != MULTIBOOT_BOOTLOADER_MAGIC) {
-        vga_place_string(0, 0,"Multiboot magic number incorrect!", RED);
+        vga_place_string(0, 0, "Multiboot magic number incorrect!", RED);
         halt();
     }
-    vga_place_string(0, 0,"Multiboot magic number correct!", GREEN);
+    vga_place_string(0, 0, "Multiboot magic number correct!", GREEN);
 }
-void fshell_task(void *arg);
-static void check_multiboot_info(multiboot_info_t *mb_info) {
-    if (!mb_info) {
-        vga_place_string(0, 0,"Multiboot info pointer is NULL!", RED);
-        halt();
-    }
-    vga_place_string(0, 0,"Multiboot info pointer is correct!", GREEN);
-    if (mb_info->flags & MULTIBOOT_INFO_MEMORY) {
-        vga_place_string(0, 0,"Multiboot info pointer has memory information!", GREEN);
-    } else {
-        vga_place_string(0, 0,"Multiboot info pointer does not have memory information!", RED);
-        halt();
-        
-    }
 
+void fshell_task(void* arg);
+
+static void check_multiboot_info(multiboot_info_t* mb_info) {
+    if (!mb_info) {
+        vga_place_string(0, 0, "Multiboot info pointer is NULL!", RED);
+        halt();
+    }
+    vga_place_string(0, 0, "Multiboot info pointer is correct!", GREEN);
+    if (mb_info->flags & MULTIBOOT_INFO_MEMORY) {
+        vga_place_string(0, 0, "Multiboot info pointer has memory information!", GREEN);
+    } else {
+        vga_place_string(0, 0, "Multiboot info pointer does not have memory information!", RED);
+        halt();
+    }
 }
 
 #define VERSION "0.1.3-alpha"
-int kmain(uint32_t magic, multiboot_info_t *mb_info) {
-    framebuffer_init(mb_info); 
+
+int kmain(uint32_t magic, multiboot_info_t* mb_info) {
+    framebuffer_init(mb_info);
     init_console();
     log("floppaOS kernel framebuffer init - ok\n", GREEN);
     log("floppaOS - The Floperrating system, a free and open-source 32-bit hobby operating system\n", YELLOW);
-    
+
     log("Kernel compilation time: " __DATE__ " at " __TIME__ "\n", YELLOW);
     log("License: GPLv3\n", YELLOW);
     log("Date created: October 2024\n", YELLOW);
     log("Author: Amar Djulovic <aaamargml@gmail.com>\n", YELLOW);
     log("Kernel version: " VERSION "\n", YELLOW);
     log("Starting floppaOS kernel...\n", YELLOW);
-    gdt_init(); 
-    init_interrupts(); 
 
-    pmm_init(mb_info);
-    paging_init(); 
+    gdt_init();
+    interrupts_init(); // idt, irq's, and isr's are set up here
+    pmm_init(mb_info); // dependency for paging, slab, vmm, and heap.
 
-    slab_init(); 
+    paging_init(); // dependency for slab and vmm.
 
-   
-    vmm_init(); 
+    slab_init();
+    vmm_init();
     init_kernel_heap();
-
     vfs_init();
-
-    tmpfs_init();
-
-    sched_init(1);
+    sched_init();
 
     echo("floppaOS kernel booted! now we do nothing.\n", GREEN);
-    draw_floppaos_logo(); 
-    echo ("floppaOS, The Flopperating System - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n", YELLOW); // copyright notice
-  
-    
+
+    draw_floppaos_logo();
+    echo("floppaOS, The Flopperating System - Copyright (C) 2024, 2025 Amar Djulovic <aaamargml@gmail.com>\n",
+         YELLOW); // copyright notice
 
     while (1) {
     }
     return 0;
-    
 }
+
 int main() {
     return 0;
 }
