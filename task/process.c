@@ -461,3 +461,22 @@ pid_t proc_fork(process_t* parent) {
 
     return child->pid;
 }
+
+int proc_init() {
+    static proc_info_t proc_info_instance;
+    static proc_table_t proc_table_instance;
+
+    proc_info_local = &proc_info_instance;
+    proc_tbl = &proc_table_instance;
+
+    proc_info_init();
+    proc_table_init();
+
+    if (proc_create_init_process() < 0) {
+        log("proc_init: failed to create init process\n", RED);
+        return -1;
+    }
+
+    log("proc init - ok\n", GREEN);
+    return 0;
+}
