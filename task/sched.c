@@ -66,6 +66,7 @@ int sched_spinlocks_init(void) {
     spinlock_init(&sched.sleep_queue->lock);
     spinlock_init(&sched.kernel_threads->lock);
     spinlock_init(&sched.user_threads->lock);
+    return 0;
 }
 
 int sched_scheduler_lists_init(void) {
@@ -113,11 +114,6 @@ void sched_init(void) {
 
     if (sched_scheduler_lists_name_init() < 0) {
         log("sched: failed to init scheduler list names\n", RED);
-        return;
-    }
-
-    if (sched_init_worker_threads() < 0) {
-        log("sched: failed to init worker threads\n", RED);
         return;
     }
 
@@ -750,7 +746,7 @@ void sched_worker_thread_print(void) {
     spinlock(&sched.kernel_threads->lock);
     for (thread_t* t = sched.kernel_threads->head; t; t = t->next) {
         char buffer[128];
-        flop_snprintf(buffer, sizeof(buffer), " - %s (priority: %u)\n", t->name, t->priority.base);
+        flopsnprintf(buffer, sizeof(buffer), " - %s (priority: %u)\n", t->name, t->priority.base);
         log(buffer, YELLOW);
     }
     spinlock_unlock(&sched.kernel_threads->lock, true);
@@ -759,7 +755,7 @@ void sched_worker_thread_print(void) {
     spinlock(&sched.user_threads->lock);
     for (thread_t* t = sched.user_threads->head; t; t = t->next) {
         char ubuffer[128];
-        flop_snprintf(ubuffer, sizeof(ubuffer), " - %s (priority: %u)\n", t->name, t->priority.base);
+        flopsnprintf(ubuffer, sizeof(ubuffer), " - %s (priority: %u)\n", t->name, t->priority.base);
         log(ubuffer, YELLOW);
     }
     spinlock_unlock(&sched.user_threads->lock, true);
@@ -767,11 +763,11 @@ void sched_worker_thread_print(void) {
 
 void sched_worker_thread_count_print(void) {
     char buffer[128];
-    flop_snprintf(buffer,
-                  sizeof(buffer),
-                  "Kernel Worker Threads: %u\nUser Threads: %u\n",
-                  sched.kernel_threads->count,
-                  sched.user_threads->count);
+    flopsnprintf(buffer,
+                 sizeof(buffer),
+                 "Kernel Worker Threads: %u\nUser Threads: %u\n",
+                 sched.kernel_threads->count,
+                 sched.user_threads->count);
     log(buffer, YELLOW);
 }
 
@@ -789,7 +785,7 @@ void sched_worker_pool_print(worker_thread** pool, size_t count) {
             continue;
         }
         char buffer[128];
-        flop_snprintf(buffer, sizeof(buffer), " - %s (priority: %u)\n", w->thread->name, w->thread->priority.base);
+        flopsnprintf(buffer, sizeof(buffer), " - %s (priority: %u)\n", w->thread->name, w->thread->priority.base);
         log(buffer, YELLOW);
     }
 }

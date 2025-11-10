@@ -283,7 +283,7 @@ void* kmalloc(size_t size) {
     void* ptr = NULL;
 
     // allocate to slab if under 4kb
-    if (size <= 4096) {
+    if (size < 4096) {
         spinlock(&this_allocator.lock);
         void* ptr = slab_alloc(size);
         if (ptr)
