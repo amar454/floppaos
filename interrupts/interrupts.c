@@ -1,6 +1,5 @@
 #include "interrupts.h"
 #include "../task/sched.h"
-#include "../task/pid.h"
 #include "../drivers/io/io.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../lib/logging.h"
@@ -25,6 +24,7 @@ extern void irq1();
 uint32_t global_tick_count = 0;
 idt_entry_t idt[IDT_SIZE];
 idt_ptr_t idtp;
+
 void init_stack() {
     uint32_t stack_top = (uint32_t) (interrupt_stack + ISR_STACK_SIZE);
     __asm__ volatile("mov %0, %%esp" ::"r"(stack_top));
@@ -36,6 +36,7 @@ void init_stack() {
 void scheduler_tick() {
     return;
 }
+
 extern void isr0();
 extern void isr6();
 extern void isr13();
@@ -43,16 +44,19 @@ extern void isr14();
 
 extern void irq0();
 extern void irq1();
+
 /* interupt service routines */
 
 void c_isr0(void) {
     log("isr0: divide by zero error, get fucked\n", RED);
     __asm__("hlt");
 }
+
 void c_isr6(void) {
     log("isr6: invalid opcode error, get fucked\n", RED);
     __asm__("hlt");
 }
+
 void c_isr13(void) {
     log("isr13: general protection fault, get fucked\n", RED);
     __asm__("hlt");

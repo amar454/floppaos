@@ -28,6 +28,12 @@ You should have received a copy of the GNU General Public License along with Flo
 #include <stddef.h>
 #include <stdbool.h>
 
+uint64_t sched_ticks_counter;
+
+typedef struct signal {
+    atomic_int state;
+} signal_t;
+
 typedef struct reaper_descriptor {
     thread_list_t dead_threads;
     spinlock_t lock;
@@ -43,17 +49,50 @@ static void idle_thread_loop() {
     }
 }
 
-typedef struct signal {
-    atomic_int state;
-} signal_t;
+void sched_wake_reaper(void) {
+    if (!sched.reaper_thread)
+        return;
 
-static inline void signal_init(signal_t* s) {
-    atomic_store(&s->state, 0);
-}
+    thread_t* reaper = sched.reaper_thread;
 
-static inline void signal_send(signal_t* s) {
-    atomic_store(&s->state, 1);
-    sched_wake_reaper();
+    atomic_store(&thread_reaper.wake_signal.state, 1);
+
+    if (reaper->thread_state == THREAD_RUNNING || reaper->thread_state == THREAD_READY) {
+        return;
+    }
+
+    if (reaper->thread_state == THREAD_SLEEPING) {
+        spinlock(&sched.sleep_queue->lock);
+
+        thread_t* prev = NULL;
+        thread_t* curr = sched.sleep_queue->head;
+
+        while (curr) {
+            if (curr == reaper) {
+                if (prev) {
+                    prev->next = curr->next;
+                } else {
+                    sched.sleep_queue->head = curr->next;
+                }
+
+                if (curr == sched.sleep_queue->tail) {
+                    sched.sleep_queue->tail = prev;
+                }
+
+                sched.sleep_queue->count--;
+                curr->next = NULL;
+                break;
+            }
+            prev = curr;
+            curr = curr->next;
+        }
+
+        spinlock_unlock(&sched.sleep_queue->lock, true);
+
+        // requeue in ready list
+        reaper->thread_state = THREAD_READY;
+        sched_enqueue(sched.ready_queue, reaper);
+    }
 }
 
 static inline void signal_wait(signal_t* s) {
@@ -67,11 +106,16 @@ static inline void signal_init(signal_t* s) {
     atomic_store(&s->state, 0);
 }
 
+static inline void signal_send(signal_t* s) {
+    atomic_store(&s->state, 1);
+    sched_wake_reaper();
+}
+
 static void reaper_thread_entry(void) {
     log("reaper: thread started", GREEN);
 
     while (thread_reaper.running) {
-        reaper_signal_wait();
+        signal_wait(&thread_reaper.wake_signal);
 
         while (1) {
             spinlock(&thread_reaper.lock);
@@ -97,8 +141,11 @@ static void reaper_thread_entry(void) {
     log("reaper: exiting", YELLOW);
 }
 
+static thread_t*
+sched_internal_init_thread(void (*entry)(void), unsigned int priority, char* name, int user, process_t* process);
+
 void reaper_init(void) {
-    memset(&thread_reaper, 0, sizeof(thread_reaper));
+    flop_memset(&thread_reaper, 0, sizeof(thread_reaper));
     spinlock_init(&thread_reaper.lock);
     signal_init(&thread_reaper.wake_signal);
     thread_reaper.running = 1;
@@ -523,6 +570,10 @@ void sched_schedule(void) {
     context_switch(&prev->context, &next->context);
 }
 
+thread_t* sched_current_thread(void) {
+    return current_thread;
+}
+
 void sched_thread_exit(void) {
     thread_t* current = sched_current_thread();
     reaper_enqueue(current);
@@ -539,8 +590,6 @@ void sched_yield(void) {
 
     sched_schedule();
 }
-
-extern volatile uint64_t sched_ticks_counter;
 
 void sched_thread_sleep(uint32_t ms) {
     thread_t* current = sched_current_thread();
@@ -1092,15 +1141,16 @@ int sched_init_kernel_worker_pool(void) {
 
     if (sched_create_worker_pool(&kernel_worker_pool_desc, kernel_worker_pool_desc.min_count) < 0) {
         log("sched: failed to create kernel worker pool\n", RED);
-        return;
+        return -1;
     }
 
     if (sched_start_worker_pool_manager(&kernel_worker_pool_desc) < 0) {
         log("sched: failed to start kernel worker pool manager\n", RED);
-        return;
+        return -1;
     }
 
     log("sched: kernel worker pool initialized\n", GREEN);
+    return 0;
 }
 
 int sched_create_process_worker_pool(process_t* process, worker_pool_descriptor_t* desc, size_t count) {
