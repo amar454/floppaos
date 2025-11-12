@@ -71,6 +71,7 @@ typedef struct thread {
     // within sched_schedule()
     thread_priority_t priority;
 
+    thread_state_t thread_state;
     // if a thread is a kernel thread, it has no process.
     // the thread will inherit the kernel address space.
     process_t* process;
@@ -89,7 +90,10 @@ typedef struct thread {
     uint32_t time_since_last_run;
     uint32_t time_slice;
 
+    uint64_t wake_time;
+
     // TODO: add file descriptor table pointer
+    struct vfs_file_descriptor* fds[MAX_PROC_FDS];
 } thread_t;
 
 typedef struct scheduler {
