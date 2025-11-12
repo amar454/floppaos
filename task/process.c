@@ -1,3 +1,17 @@
+/*
+
+Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
+
+This file is part of FloppaOS.
+
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
 #include "sched.h"
 #include "thread.h"
 #include "../mem/alloc.h"
@@ -104,25 +118,6 @@ int proc_cwd_assign(process_t* process, struct vfs_node* cwd) {
 
     process->cwd = cwd;
     refcount_inc_not_zero(&cwd->refcount);
-    return 0;
-}
-
-int proc_alloc_proc_mem(process_t* process, size_t size) {
-    if (!process || size == 0) {
-        return -1;
-    }
-
-    size_t pages = size / PAGE_SIZE;
-    if (size % PAGE_SIZE != 0) {
-        pages += 1;
-    }
-    for (size_t i = 0; i < pages; ++i) {
-        if (vmm_alloc(process->region, 1, PAGE_USER | PAGE_RW) == 0) {
-            return -1;
-        } else {
-            process->mem_usage += PAGE_SIZE;
-        }
-    }
     return 0;
 }
 
@@ -479,4 +474,157 @@ int proc_init() {
 
     log("proc init - ok\n", GREEN);
     return 0;
+}
+
+void* proc_alloc_within_process(process_t* process, size_t size) {
+    if (!process || size == 0) {
+        return NULL;
+    }
+
+    size_t pages = size / PAGE_SIZE;
+    if (size % PAGE_SIZE != 0) {
+        pages += 1;
+    }
+
+    uintptr_t alloc_addr = vmm_alloc(process->region, pages, PAGE_USER | PAGE_RW);
+    if (alloc_addr == 0) {
+        return NULL;
+    }
+
+    process->mem_usage += pages * PAGE_SIZE;
+    return (void*) alloc_addr;
+}
+
+void proc_free_within_process(process_t* process, uintptr_t addr, size_t size) {
+    if (!process || addr == 0 || size == 0) {
+        return;
+    }
+
+    size_t pages = size / PAGE_SIZE;
+    if (size % PAGE_SIZE != 0) {
+        pages += 1;
+    }
+
+    vmm_unmap(process->region, addr);
+    process->mem_usage -= pages * PAGE_SIZE;
+}
+
+void* proc_zero_process_memory(process_t* process, size_t size) {
+    if (!process || size == 0) {
+        return NULL;
+    }
+
+    void* addr = proc_alloc_within_process(process, size);
+    if (!addr) {
+        return NULL;
+    }
+
+    flop_memset(addr, 0, size);
+    return addr;
+}
+
+process_t* proc_get_init_process() {
+    return init_process;
+}
+
+proc_info_t* proc_get_proc_info() {
+    return proc_info_local;
+}
+
+proc_table_t* proc_get_proc_table() {
+    return proc_tbl;
+}
+
+void proc_debug_dump_process_info(process_t* process) {
+    if (!process) {
+        log("proc_debug_dump_process_info: process is NULL\n", RED);
+        return;
+    }
+
+    char buffer[256];
+    int len = flopsnprintf(buffer,
+                           sizeof(buffer),
+                           "process info:\n"
+                           "pid: %d\n"
+                           "name: %s\n"
+                           "state: %d\n"
+                           "memory usage: %u bytes\n"
+                           "cwd: %p\n",
+                           process->pid,
+                           process->name ? process->name : "NULL",
+                           process->state,
+                           process->mem_usage,
+                           (void*) process->cwd);
+    log(buffer, GREEN);
+}
+
+void proc_debug_dump_all_processes() {
+    spinlock(&proc_tbl->proc_table_lock);
+
+    process_t* current = proc_tbl->processes;
+    while (current) {
+        proc_debug_dump_process_info(current);
+        current = current->siblings;
+    }
+
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+}
+
+void proc_fetch_mem_usage_all_processes() {
+    uint32_t total_mem_usage = 0;
+
+    spinlock(&proc_tbl->proc_table_lock);
+
+    process_t* current = proc_tbl->processes;
+    while (current) {
+        total_mem_usage += current->mem_usage;
+        current = current->siblings;
+    }
+
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+
+    char buffer[128];
+    flopsnprintf(buffer, sizeof(buffer), "Total memory usage by all processes: %u bytes\n", total_mem_usage);
+    log(buffer, YELLOW);
+}
+
+void proc_print_process_thread_id(process_t* process) {
+    char buffer[256];
+    flopsnprintf(buffer, sizeof(buffer), "process pid: %d, threads:\n", process->pid);
+    log(buffer, CYAN);
+
+    spinlock(&process->threads->lock);
+    for (thread_t* t = process->threads->head; t; t = t->next) {
+        char tbuffer[128];
+        flopsnprintf(tbuffer, sizeof(tbuffer), " - thread id: %d, name: %s\n", t->id, t->name);
+        log(tbuffer, CYAN);
+    }
+    spinlock_unlock(&process->threads->lock, true);
+}
+
+void proc_print_all_process_thread_ids() {
+    spinlock(&proc_tbl->proc_table_lock);
+
+    process_t* current = proc_tbl->processes;
+    while (current) {
+        proc_print_process_thread_id(current);
+        current = current->siblings;
+    }
+
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+}
+
+void proc_print_process_manager_stats() {
+    char buffer[128];
+    flopsnprintf(buffer,
+                 sizeof(buffer),
+                 "Process Manager Stats:\nTotal Processes: %d\n",
+                 proc_info_local ? proc_info_local->process_count : 0);
+    log(buffer, YELLOW);
+
+    proc_debug_dump_all_processes();
+
+    proc_fetch_mem_usage_all_processes();
+
+    proc_print_all_process_thread_ids();
 }

@@ -1,3 +1,17 @@
+/*
+
+Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
+
+This file is part of FloppaOS.
+
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
 #include "sched.h"
 #include "thread.h"
 #include "../mem/alloc.h"
@@ -93,7 +107,7 @@ int sched_scheduler_lists_init(void) {
     return 0;
 }
 
-int sched_scheduler_lists_name_init(void) {
+int sched_assign_list_names(void) {
     sched.ready_queue->name = "ready_queue";
     sched.sleep_queue->name = "sleep_queue";
     sched.kernel_threads->name = "kernel_threads";
@@ -112,7 +126,7 @@ void sched_init(void) {
         return;
     }
 
-    if (sched_scheduler_lists_name_init() < 0) {
+    if (sched_assign_list_names() < 0) {
         log("sched: failed to init scheduler list names\n", RED);
         return;
     }
@@ -439,305 +453,339 @@ void sched_yield(void) {
     sched_schedule();
 }
 
-typedef enum worker_pref {
-    SUBSYSTEM_MEM,
-    SUBSYSTEM_IO,
-    SUBSYSTEM_PROC,
-    SUBSYSTEM_FS,
-    SUBSYSTEM_NONE
-} worker_pref_t;
-
 typedef struct sched_worker_thread {
     thread_t* thread;
     void (*entry)(void*);
     void* arg;
-    worker_pref_t subsystem_pref;
+
 } worker_thread;
 
-static worker_thread* sched_internal_init_worker(
-    void (*entry)(void*), void* arg, unsigned priority, char* name, worker_pref_t subsystem_pref) {
-    worker_thread* worker_thread = kmalloc(sizeof(worker_thread));
-    if (!worker_thread) {
-        return NULL;
-    }
-
-    thread_t* thread = sched_internal_init_thread((void*) entry, priority, name, 0, NULL);
-    if (!thread) {
-        kfree(worker_thread, sizeof(worker_thread));
-        return NULL;
-    }
-
-    worker_thread->thread = thread;
-    worker_thread->entry = entry;
-    worker_thread->arg = arg;
-    worker_thread->subsystem_pref = subsystem_pref;
-
-    return worker_thread;
-}
-
-static worker_thread* sched_create_worker_thread(
-    void (*entry)(void*), void* arg, unsigned priority, char* name, worker_pref_t subsystem_pref) {
-    worker_thread* worker_thread = sched_internal_init_worker(entry, arg, priority, name, subsystem_pref);
-    if (!worker_thread) {
-        return NULL;
-    }
-
-    sched_thread_list_add(worker_thread->thread, sched.kernel_threads);
-    return worker_thread;
-}
-
-worker_thread** sched_create_worker_pool(
-    size_t count, void (*entry)(void*), void** args, unsigned priority, char* name, worker_pref_t subsystem_pref) {
-    if (count == 0 || !entry)
-        return NULL;
-
-    worker_thread** pool = kmalloc(sizeof(worker_thread*) * count);
-    if (!pool)
-        return NULL;
-
-    size_t created = 0;
-    for (size_t i = 0; i < count; ++i) {
-        void* arg = args ? args[i] : NULL;
-        worker_thread* w = sched_create_worker_thread(entry, arg, priority, name, subsystem_pref);
-        if (!w) {
-            for (size_t j = 0; j < created; ++j) {
-                worker_thread* cw = pool[j];
-                if (!cw)
-                    continue;
-
-                if (cw->thread) {
-                    sched_remove(sched.kernel_threads, cw->thread);
-
-                    if (cw->thread->kernel_stack) {
-                        kfree(cw->thread->kernel_stack, 4096);
-                    }
-                    kfree(cw->thread, sizeof(thread_t));
-                }
-
-                kfree(cw, sizeof(worker_thread));
-            }
-            kfree(pool, sizeof(worker_thread*) * count);
-            return NULL;
-        }
-
-        sched_enqueue(sched.ready_queue, w->thread);
-
-        pool[created++] = w;
-    }
-
-    return pool;
-}
-
-// Expand worker pool to target_count. Returns 0 on success, -1 on failure.
-int sched_expand_worker_pool(worker_thread*** pool_ptr,
-                             size_t* count_ptr,
-                             size_t target_count,
-                             void (*entry)(void*),
-                             void** args,
-                             unsigned priority,
-                             char* name,
-                             worker_pref_t subsystem_pref) {
-    if (!pool_ptr || !count_ptr || target_count == 0)
-        return -1;
-
-    size_t old_count = *count_ptr;
-    if (old_count >= target_count)
-        return 0;
-
-    worker_thread** old_pool = *pool_ptr;
-    worker_thread** new_pool = kmalloc(sizeof(worker_thread*) * target_count);
-    if (!new_pool)
-        return -1;
-
-    for (size_t i = 0; i < old_count; ++i) {
-        new_pool[i] = old_pool ? old_pool[i] : NULL;
-    }
-
-    size_t created = 0;
-    for (size_t i = old_count; i < target_count; ++i) {
-        void* arg = args ? args[i] : NULL;
-        worker_thread* w = sched_create_worker_thread(entry, arg, priority, name, subsystem_pref);
-        if (!w) {
-            for (size_t j = old_count; j < old_count + created; ++j) {
-                worker_thread* cw = new_pool[j];
-                if (!cw)
-                    continue;
-
-                if (cw->thread) {
-                    sched_remove(sched.kernel_threads, cw->thread);
-                    if (cw->thread->kernel_stack) {
-                        kfree(cw->thread->kernel_stack, 4096);
-                    }
-                    kfree(cw->thread, sizeof(thread_t));
-                }
-                kfree(cw, sizeof(worker_thread));
-            }
-            kfree(new_pool, sizeof(worker_thread*) * target_count);
-            return -1;
-        }
-
-        sched_enqueue(sched.ready_queue, w->thread);
-        new_pool[i] = w;
-        created++;
-    }
-
-    // replace pool pointer
-    if (old_pool) {
-        kfree(old_pool, sizeof(worker_thread*) * old_count);
-    }
-    *pool_ptr = new_pool;
-    *count_ptr = target_count;
-    return 0;
-}
-
 typedef struct worker_pool_descriptor {
-    worker_thread*** pool_ptr;
-    size_t* count_ptr;
+    worker_thread** pool;
+    size_t count;
     size_t min_count;
     size_t grow_by;
     void (*entry)(void*);
     void** args;
     unsigned priority;
     char* name;
-    worker_pref_t pref;
 } worker_pool_descriptor_t;
 
-static void worker_pool_manager_entry(void* _arg) {
-    worker_pool_descriptor_t* a = (worker_pool_descriptor_t*) _arg;
-    if (!a) {
-        return;
+static worker_thread* sched_internal_init_worker(void (*entry)(void*), void* arg, unsigned priority, char* name) {
+    worker_thread* worker = kmalloc(sizeof(worker_thread));
+    if (!worker)
+        return NULL;
+
+    thread_t* thread = sched_internal_init_thread((void*) entry, priority, name, 0, NULL);
+    if (!thread) {
+        kfree(worker, sizeof(worker_thread));
+        return NULL;
     }
 
-    for (;;) {
-        size_t cur = a->count_ptr ? *a->count_ptr : 0;
-        if (cur < a->min_count) {
-            size_t target = cur + (a->grow_by ? a->grow_by : a->min_count - cur);
-            if (target < a->min_count)
-                target = a->min_count;
-            sched_expand_worker_pool(
-                a->pool_ptr, a->count_ptr, target, a->entry, a->args, a->priority, a->name, a->pref);
-        }
+    worker->thread = thread;
+    worker->entry = entry;
+    worker->arg = arg;
+    return worker;
+}
 
+static worker_thread* sched_create_worker_thread(void (*entry)(void*), void* arg, unsigned priority, char* name) {
+    worker_thread* worker = sched_internal_init_worker(entry, arg, priority, name);
+    if (!worker)
+        return NULL;
+    sched_thread_list_add(worker->thread, sched.kernel_threads);
+    return worker;
+}
+
+int sched_create_worker_pool(worker_pool_descriptor_t* desc, size_t count) {
+    if (!desc || count == 0 || !desc->entry)
+        return -1;
+
+    worker_thread** pool = kmalloc(sizeof(worker_thread*) * count);
+    if (!pool)
+        return -1;
+
+    size_t created = 0;
+    for (size_t i = 0; i < count; ++i) {
+        void* arg = desc->args ? desc->args[i] : NULL;
+        worker_thread* w = sched_create_worker_thread(desc->entry, arg, desc->priority, desc->name);
+        if (!w)
+            break;
+
+        sched_enqueue(sched.ready_queue, w->thread);
+        pool[created++] = w;
+    }
+
+    if (created < count) {
+        for (size_t j = 0; j < created; ++j) {
+            worker_thread* cw = pool[j];
+            if (!cw)
+                continue;
+            sched_remove(sched.kernel_threads, cw->thread);
+            if (cw->thread->kernel_stack)
+                kfree(cw->thread->kernel_stack, 4096);
+            kfree(cw->thread, sizeof(thread_t));
+            kfree(cw, sizeof(worker_thread));
+        }
+        kfree(pool, sizeof(worker_thread*) * count);
+        return -1;
+    }
+
+    desc->pool = pool;
+    desc->count = count;
+    return 0;
+}
+
+int sched_expand_worker_pool(worker_pool_descriptor_t* desc, size_t target_count) {
+    if (!desc || target_count == 0)
+        return -1;
+
+    if (desc->count >= target_count)
+        return 0;
+
+    worker_thread** new_pool = kmalloc(sizeof(worker_thread*) * target_count);
+    if (!new_pool)
+        return -1;
+
+    for (size_t i = 0; i < desc->count; ++i)
+        new_pool[i] = desc->pool[i];
+
+    size_t created = 0;
+    for (size_t i = desc->count; i < target_count; ++i) {
+        void* arg = desc->args ? desc->args[i] : NULL;
+        worker_thread* w = sched_create_worker_thread(desc->entry, arg, desc->priority, desc->name);
+        if (!w)
+            break;
+        sched_enqueue(sched.ready_queue, w->thread);
+        new_pool[i] = w;
+        created++;
+    }
+
+    if (desc->pool)
+        kfree(desc->pool, sizeof(worker_thread*) * desc->count);
+
+    desc->pool = new_pool;
+    desc->count = desc->count + created;
+    return (desc->count < target_count) ? -1 : 0;
+}
+
+static void worker_pool_manager_entry(void* _arg) {
+    worker_pool_descriptor_t* desc = (worker_pool_descriptor_t*) _arg;
+    if (!desc)
+        return;
+
+    for (;;) {
+        if (desc->count < desc->min_count) {
+            size_t target = desc->count + (desc->grow_by ? desc->grow_by : desc->min_count - desc->count);
+            if (target < desc->min_count)
+                target = desc->min_count;
+            sched_expand_worker_pool(desc, target);
+        }
         sched_yield();
     }
 }
 
-int sched_start_worker_pool_manager(worker_thread*** pool_ptr,
-                                    size_t* count_ptr,
-                                    size_t min_count,
-                                    size_t grow_by,
-                                    void (*entry)(void*),
-                                    void** args,
-                                    unsigned priority,
-                                    char* name,
-                                    worker_pref_t pref) {
-    if (!pool_ptr || !count_ptr || !entry || min_count == 0)
+int sched_start_worker_pool_manager(worker_pool_descriptor_t* desc) {
+    if (!desc || !desc->entry || desc->min_count == 0)
         return -1;
 
-    worker_pool_descriptor_t* mgr_arg = kmalloc(sizeof(worker_pool_descriptor_t));
-    if (!mgr_arg)
+    worker_thread* mgr = sched_create_worker_thread(worker_pool_manager_entry, desc, desc->priority, "worker_pool_mgr");
+    if (!mgr)
         return -1;
-
-    mgr_arg->pool_ptr = pool_ptr;
-    mgr_arg->count_ptr = count_ptr;
-    mgr_arg->min_count = min_count;
-    mgr_arg->grow_by = grow_by;
-    mgr_arg->entry = entry;
-    mgr_arg->args = args;
-    mgr_arg->priority = priority;
-    mgr_arg->name = name;
-    mgr_arg->pref = pref;
-
-    worker_thread* mgr =
-        sched_create_worker_thread(worker_pool_manager_entry, mgr_arg, priority, "worker_pool_mgr", SUBSYSTEM_NONE);
-    if (!mgr) {
-        kfree(mgr_arg, sizeof(worker_pool_descriptor_t));
-        return -1;
-    }
 
     sched_enqueue(sched.ready_queue, mgr->thread);
     return 0;
 }
 
-int sched_remove_worker_pool(worker_thread*** pool_ptr, size_t* count_ptr) {
-    if (!pool_ptr || !count_ptr)
+int sched_remove_worker_pool(worker_pool_descriptor_t* desc) {
+    if (!desc || !desc->pool)
         return -1;
 
-    worker_thread** pool = *pool_ptr;
-    size_t count = *count_ptr;
-
-    for (size_t i = 0; i < count; ++i) {
-        worker_thread* w = pool[i];
+    for (size_t i = 0; i < desc->count; ++i) {
+        worker_thread* w = desc->pool[i];
         if (!w)
             continue;
-
         sched_remove(sched.kernel_threads, w->thread);
-
-        if (w->thread->kernel_stack) {
+        if (w->thread->kernel_stack)
             kfree(w->thread->kernel_stack, 4096);
-        }
         kfree(w->thread, sizeof(thread_t));
         kfree(w, sizeof(worker_thread));
     }
 
-    kfree(pool, sizeof(worker_thread*) * count);
-    *pool_ptr = NULL;
-    *count_ptr = 0;
+    kfree(desc->pool, sizeof(worker_thread*) * desc->count);
+    desc->pool = NULL;
+    desc->count = 0;
     return 0;
 }
 
-int sched_copy_worker_pool(worker_thread*** dest_pool_ptr,
-                           size_t* dest_count_ptr,
-                           worker_thread** src_pool,
-                           size_t src_count) {
-    if (!dest_pool_ptr || !dest_count_ptr || !src_pool || src_count == 0)
+int sched_copy_worker_pool(worker_pool_descriptor_t* dest, const worker_pool_descriptor_t* src) {
+    if (!dest || !src || !src->pool || src->count == 0)
         return -1;
 
-    worker_thread** dest_pool = kmalloc(sizeof(worker_thread*) * src_count);
-    if (!dest_pool)
+    worker_thread** new_pool = kmalloc(sizeof(worker_thread*) * src->count);
+    if (!new_pool)
         return -1;
 
     size_t copied = 0;
-    for (size_t i = 0; i < src_count; ++i) {
-        worker_thread* src = src_pool[i];
-        if (!src) {
-            dest_pool[i] = NULL;
+    for (size_t i = 0; i < src->count; ++i) {
+        worker_thread* sw = src->pool[i];
+        if (!sw) {
+            new_pool[i] = NULL;
             continue;
         }
 
-        worker_thread* dest = sched_internal_init_worker(
-            src->entry, src->arg, src->thread->priority.base, src->thread->name, src->subsystem_pref);
-        if (!dest) {
-            for (size_t j = 0; j < copied; ++j) {
-                worker_thread* cdest = dest_pool[j];
-                if (!cdest)
-                    continue;
+        worker_thread* dw = sched_internal_init_worker(sw->entry, sw->arg, sw->thread->priority.base, sw->thread->name);
+        if (!dw)
+            break;
 
-                sched_remove(sched.kernel_threads, cdest->thread);
-
-                if (cdest->thread->kernel_stack) {
-                    kfree(cdest->thread->kernel_stack, 4096);
-                }
-                kfree(cdest->thread, sizeof(thread_t));
-                kfree(cdest, sizeof(worker_thread));
-            }
-            kfree(dest_pool, sizeof(worker_thread*) * src_count);
-            return -1;
-        }
-
-        sched_thread_list_add(dest->thread, sched.kernel_threads);
-        dest_pool[i] = dest;
+        sched_thread_list_add(dw->thread, sched.kernel_threads);
+        new_pool[i] = dw;
         copied++;
     }
 
-    // replace dest pool pointer
-    worker_thread** old_dest_pool = *dest_pool_ptr;
-    size_t old_dest_count = *dest_count_ptr;
-    if (old_dest_pool) {
-        kfree(old_dest_pool, sizeof(worker_thread*) * old_dest_count);
+    if (copied < src->count) {
+        for (size_t j = 0; j < copied; ++j) {
+            worker_thread* w = new_pool[j];
+            if (!w)
+                continue;
+            sched_remove(sched.kernel_threads, w->thread);
+            if (w->thread->kernel_stack)
+                kfree(w->thread->kernel_stack, 4096);
+            kfree(w->thread, sizeof(thread_t));
+            kfree(w, sizeof(worker_thread));
+        }
+        kfree(new_pool, sizeof(worker_thread*) * src->count);
+        return -1;
     }
-    *dest_pool_ptr = dest_pool;
-    *dest_count_ptr = src_count;
+
+    if (dest->pool)
+        kfree(dest->pool, sizeof(worker_thread*) * dest->count);
+
+    dest->pool = new_pool;
+    dest->count = src->count;
+    dest->entry = src->entry;
+    dest->args = src->args;
+    dest->priority = src->priority;
+    dest->name = src->name;
+
+    return 0;
+}
+
+int sched_copy_selected_workers(worker_pool_descriptor_t* dest,
+                                const worker_pool_descriptor_t* src,
+                                const size_t* indices,
+                                size_t indices_count) {
+    if (!dest || !src || !src->pool || !indices || indices_count == 0)
+        return -1;
+
+    worker_thread** new_pool = kmalloc(sizeof(worker_thread*) * indices_count);
+    if (!new_pool)
+        return -1;
+
+    size_t copied = 0;
+    for (size_t i = 0; i < indices_count; ++i) {
+        size_t idx = indices[i];
+        if (idx >= src->count) {
+            new_pool[i] = NULL;
+            continue;
+        }
+
+        worker_thread* sw = src->pool[idx];
+        if (!sw) {
+            new_pool[i] = NULL;
+            continue;
+        }
+
+        worker_thread* dw = sched_internal_init_worker(sw->entry, sw->arg, sw->thread->priority.base, sw->thread->name);
+        if (!dw)
+            break;
+
+        sched_thread_list_add(dw->thread, sched.kernel_threads);
+        new_pool[i] = dw;
+        copied++;
+    }
+
+    if (copied < indices_count) {
+        for (size_t j = 0; j < copied; ++j) {
+            worker_thread* w = new_pool[j];
+            if (!w)
+                continue;
+            sched_remove(sched.kernel_threads, w->thread);
+            if (w->thread->kernel_stack)
+                kfree(w->thread->kernel_stack, 4096);
+            kfree(w->thread, sizeof(thread_t));
+            kfree(w, sizeof(worker_thread));
+        }
+        kfree(new_pool, sizeof(worker_thread*) * indices_count);
+        return -1;
+    }
+
+    if (dest->pool)
+        kfree(dest->pool, sizeof(worker_thread*) * dest->count);
+
+    dest->pool = new_pool;
+    dest->count = indices_count;
+    dest->entry = src->entry;
+    dest->args = src->args;
+    dest->priority = src->priority;
+    dest->name = src->name;
+
+    return 0;
+}
+
+int sched_delete_specified_workers_from_pool(worker_pool_descriptor_t* desc,
+                                             const size_t* indices,
+                                             size_t indices_count) {
+    if (!desc || !desc->pool || !indices || indices_count == 0)
+        return -1;
+
+    for (size_t i = 0; i < indices_count; ++i) {
+        size_t idx = indices[i];
+        if (idx >= desc->count)
+            continue;
+
+        worker_thread* w = desc->pool[idx];
+        if (!w)
+            continue;
+
+        sched_remove(sched.kernel_threads, w->thread);
+        if (w->thread->kernel_stack)
+            kfree(w->thread->kernel_stack, 4096);
+        kfree(w->thread, sizeof(thread_t));
+        kfree(w, sizeof(worker_thread));
+
+        desc->pool[idx] = NULL;
+    }
+
+    return 0;
+}
+
+int sched_add_workers_to_pool(worker_pool_descriptor_t* desc, worker_thread** new_workers, size_t new_count) {
+    if (!desc || !new_workers || new_count == 0)
+        return -1;
+
+    size_t target_count = desc->count + new_count;
+    worker_thread** new_pool = kmalloc(sizeof(worker_thread*) * target_count);
+    if (!new_pool)
+        return -1;
+
+    for (size_t i = 0; i < desc->count; ++i)
+        new_pool[i] = desc->pool[i];
+
+    for (size_t i = 0; i < new_count; ++i) {
+        worker_thread* w = new_workers[i];
+        if (!w) {
+            new_pool[desc->count + i] = NULL;
+            continue;
+        }
+        sched_thread_list_add(w->thread, sched.kernel_threads);
+        new_pool[desc->count + i] = w;
+    }
+
+    if (desc->pool)
+        kfree(desc->pool, sizeof(worker_thread*) * desc->count);
+
+    desc->pool = new_pool;
+    desc->count = target_count;
     return 0;
 }
 
@@ -754,9 +802,9 @@ void sched_worker_thread_print(void) {
     log("User Threads:\n", YELLOW);
     spinlock(&sched.user_threads->lock);
     for (thread_t* t = sched.user_threads->head; t; t = t->next) {
-        char ubuffer[128];
-        flopsnprintf(ubuffer, sizeof(ubuffer), " - %s (priority: %u)\n", t->name, t->priority.base);
-        log(ubuffer, YELLOW);
+        char buffer[128];
+        flopsnprintf(buffer, sizeof(buffer), " - %s (priority: %u)\n", t->name, t->priority.base);
+        log(buffer, YELLOW);
     }
     spinlock_unlock(&sched.user_threads->lock, true);
 }
@@ -771,34 +819,136 @@ void sched_worker_thread_count_print(void) {
     log(buffer, YELLOW);
 }
 
-void sched_worker_pool_print(worker_thread** pool, size_t count) {
-    if (!pool || count == 0) {
+void sched_worker_pool_print(worker_pool_descriptor_t* desc) {
+    if (!desc || !desc->pool || desc->count == 0) {
         log("Worker pool is empty\n", YELLOW);
         return;
     }
 
+    log("Worker Pool Descriptor Info:\n", CYAN);
+    char header[256];
+    flopsnprintf(header,
+                 sizeof(header),
+                 " - Name: %s\n - Priority: %u\n - Threads: %zu\n - Min: %zu\n - GrowBy: %zu\n\n",
+                 desc->name ? desc->name : "(unnamed)",
+                 desc->priority,
+                 desc->count,
+                 desc->min_count,
+                 desc->grow_by);
+    log(header, CYAN);
+
     log("Worker Pool Threads:\n", YELLOW);
-    for (size_t i = 0; i < count; ++i) {
-        worker_thread* w = pool[i];
+    for (size_t i = 0; i < desc->count; ++i) {
+        worker_thread* w = desc->pool[i];
         if (!w) {
-            log(" - NULL\n", YELLOW);
+            log(" - [NULL WORKER]\n", RED);
             continue;
         }
-        char buffer[128];
-        flopsnprintf(buffer, sizeof(buffer), " - %s (priority: %u)\n", w->thread->name, w->thread->priority.base);
+
+        char buffer[256];
+        flopsnprintf(buffer,
+                     sizeof(buffer),
+                     " - [%zu] %s (priority: %u, thread=%p, arg=%p)\n",
+                     i,
+                     w->thread->name ? w->thread->name : "(unnamed)",
+                     w->thread->priority.base,
+                     w->thread,
+                     w->arg);
         log(buffer, YELLOW);
     }
 }
 
+void sched_worker_pool_summary(worker_pool_descriptor_t* desc) {
+    if (!desc) {
+        log("sched: invalid worker pool descriptor\n", RED);
+        return;
+    }
+
+    char buffer[256];
+    flopsnprintf(buffer,
+                 sizeof(buffer),
+                 "Worker Pool Summary:\n"
+                 " - Name: %s\n"
+                 " - Thread Count: %zu\n"
+                 " - Min Count: %zu\n"
+                 " - Grow By: %zu\n"
+                 " - Priority: %u\n"
+                 " - Entry: %p\n"
+                 " - Args: %p\n",
+                 desc->name ? desc->name : "(unnamed)",
+                 desc->count,
+                 desc->min_count,
+                 desc->grow_by,
+                 desc->priority,
+                 desc->entry,
+                 desc->args);
+    log(buffer, CYAN);
+}
+
+void sched_all_pools_print(worker_pool_descriptor_t** pools, size_t pool_count) {
+    if (!pools || pool_count == 0) {
+        log("No worker pools defined.\n", YELLOW);
+        return;
+    }
+
+    log("==== Worker Pools Overview ====\n", GREEN);
+    for (size_t i = 0; i < pool_count; ++i) {
+        char buffer[128];
+        flopsnprintf(buffer, sizeof(buffer), "[%zu] ", i);
+        log(buffer, GREEN);
+        sched_worker_pool_summary(pools[i]);
+    }
+}
+
 int sched_init_kernel_worker_pool(void) {
-    size_t pool_size = 4;
-    worker_thread** kernel_worker_pool =
-        sched_create_worker_pool(pool_size, NULL, NULL, 5, "kernel_worker", SUBSYSTEM_NONE);
-    if (!kernel_worker_pool) {
+    static worker_pool_descriptor_t kernel_worker_pool_desc = {
+        .pool = NULL,
+        .count = 0,
+        .min_count = 4,
+        .grow_by = 2,
+        .entry = NULL,
+        .args = NULL,
+        .priority = 5,
+        .name = "kernel_worker_thread",
+    };
+
+    kernel_worker_pool_desc.entry = NULL;
+
+    if (sched_create_worker_pool(&kernel_worker_pool_desc, kernel_worker_pool_desc.min_count) < 0) {
         log("sched: failed to create kernel worker pool\n", RED);
+        return;
+    }
+
+    if (sched_start_worker_pool_manager(&kernel_worker_pool_desc) < 0) {
+        log("sched: failed to start kernel worker pool manager\n", RED);
+        return;
+    }
+
+    log("sched: kernel worker pool initialized\n", GREEN);
+}
+
+int sched_create_process_worker_pool(process_t* process, worker_pool_descriptor_t* desc, size_t count) {
+    if (!process || !desc || count == 0)
+        return -1;
+
+    if (sched_create_worker_pool(desc, count) < 0) {
+        log("sched: failed to create process worker pool\n", RED);
         return -1;
     }
 
-    log("sched: kernel worker pool created\n", GREEN);
+    log("sched: process worker pool created\n", GREEN);
+    return 0;
+}
+
+int sched_destroy_process_worker_pool(worker_pool_descriptor_t* desc) {
+    if (!desc)
+        return -1;
+
+    if (sched_remove_worker_pool(desc) < 0) {
+        log("sched: failed to remove process worker pool\n", RED);
+        return -1;
+    }
+
+    log("sched: process worker pool removed\n", GREEN);
     return 0;
 }
