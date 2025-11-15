@@ -1,6 +1,6 @@
 #ifndef SCHED_H
 #define SCHED_H
-
+#pragma once
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -10,6 +10,7 @@
 #include "../mem/vmm.h"
 #include "../fs/vfs/vfs.h"
 #include "process.h"
+typedef struct process process_t;
 
 // state of the cpu upon a context switch
 // this will be used as the parameters old and new
@@ -39,6 +40,10 @@ typedef struct thread_priority {
     unsigned effective;
 } thread_priority_t;
 
+typedef struct signal {
+    atomic_int state;
+} signal_t;
+
 #define STARVATION_THRESHOLD 1000
 #define BOOST_AMOUNT 5
 #define MAX_PRIORITY 255
@@ -50,6 +55,14 @@ typedef struct thread_list {
     char* name;
     spinlock_t lock;
 } thread_list_t;
+
+typedef struct reaper_descriptor {
+    thread_list_t dead_threads;
+    spinlock_t lock;
+    int running;
+    signal_t wake_signal;
+    thread_t* reaper_thread;
+} reaper_descriptor_t;
 
 // data structure representing a thread
 // a thread is a user thread when it has a process
@@ -91,9 +104,6 @@ typedef struct thread {
     uint32_t time_slice;
 
     uint64_t wake_time;
-
-    // TODO: add file descriptor table pointer
-    struct vfs_file_descriptor* fds[MAX_PROC_FDS];
 } thread_t;
 
 typedef struct scheduler {

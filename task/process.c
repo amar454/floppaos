@@ -13,7 +13,6 @@ You should have received a copy of the GNU General Public License along with Flo
 */
 
 #include "sched.h"
-#include "thread.h"
 #include "../mem/alloc.h"
 #include "../mem/pmm.h"
 #include "../mem/paging.h"
@@ -34,6 +33,7 @@ static bool init_process_ran = false;
 static process_t* init_process;
 proc_table_t* proc_tbl;
 static proc_info_t* proc_info_local;
+process_t* current_process;
 
 static void proc_info_init() {
     proc_info_local->next_pid = 1;
@@ -46,6 +46,10 @@ void proc_table_init() {
     static spinlock_t proc_lock_init = SPINLOCK_INIT;
     proc_tbl->proc_table_lock = proc_lock_init;
     spinlock_init(&proc_tbl->proc_table_lock);
+}
+
+process_t* proc_get_current() {
+    return current_process;
 }
 
 static void proc_init_process_dummy_entry() {
@@ -103,11 +107,11 @@ static process_t* proc_alloc(void) {
     process->ruid = 0;
     process->uid = 0;
 
-    process->state = NULL;
+    process->state = 0;
     return process;
 }
 
-int proc_cwd_assign(process_t* process, struct vfs_node* cwd) {
+static int proc_cwd_assign(process_t* process, struct vfs_node* cwd) {
     if (!process || !cwd) {
         return -1;
     }
@@ -121,7 +125,7 @@ int proc_cwd_assign(process_t* process, struct vfs_node* cwd) {
     return 0;
 }
 
-int proc_init_process_zero_ids(process_t* process) {
+static int proc_init_process_zero_ids(process_t* process) {
     if (!process) {
         return -1;
     }
@@ -137,7 +141,7 @@ int proc_init_process_zero_ids(process_t* process) {
     return 0;
 }
 
-int proc_init_process_assign_name(process_t* process, const char* name) {
+static int proc_init_process_assign_name(process_t* process, const char* name) {
     if (!process || !name) {
         return -1;
     }
@@ -151,7 +155,7 @@ int proc_init_process_assign_name(process_t* process, const char* name) {
     return 0;
 }
 
-int proc_init_process_create_region(process_t* process, size_t initial_pages) {
+static int proc_init_process_create_region(process_t* process, size_t initial_pages) {
     if (!process) {
         return -1;
     }
@@ -165,7 +169,7 @@ int proc_init_process_create_region(process_t* process, size_t initial_pages) {
     return 0;
 }
 
-int proc_init_process_family_create(process_t* init_proc) {
+static int proc_init_process_family_create(process_t* init_proc) {
     if (!init_proc || !proc_info_local) {
         return -1;
     }
@@ -180,7 +184,7 @@ int proc_init_process_family_create(process_t* init_proc) {
     return 0;
 }
 
-void proc_init_process_free_data_structures(process_t* process) {
+static void proc_init_process_free_data_structures(process_t* process) {
     if (!process) {
         return;
     }
@@ -190,7 +194,7 @@ void proc_init_process_free_data_structures(process_t* process) {
     }
 
     if (process->region) {
-        vmm_free_region(process->region);
+        vmm_region_destroy(process->region);
     }
 
     if (process->name) {
@@ -269,7 +273,7 @@ int proc_create_init_process() {
     return 0;
 }
 
-inline pid_t proc_getpid(process_t* process) {
+pid_t proc_getpid(process_t* process) {
     if (!process) {
         return -1;
     }
@@ -291,7 +295,7 @@ int proc_kill(process_t* process) {
         vfs_close(process->cwd);
     }
 
-    vmm_free_region(process->region);
+    vmm_region_destroy(process->region);
     kfree(process->name, flopstrlen(process->name) + 1);
     kfree(process->threads, sizeof(thread_list_t));
     kfree(process, sizeof(process_t));
@@ -376,7 +380,7 @@ static int proc_assign_child_ids(process_t* parent, process_t* child) {
     return 0;
 }
 
-void proc_fork_failed_child_data_structures(process_t* child) {
+static void proc_fork_failed_child_data_structures(process_t* child) {
     if (!child) {
         return;
     }

@@ -44,7 +44,6 @@ kernel.c:
 #include "../mem/gdt.h"
 #include "../mem/alloc.h"
 #include "../task/sched.h"
-#include "../task/thread.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../mem/paging.h"
 #include "../lib/logging.h"

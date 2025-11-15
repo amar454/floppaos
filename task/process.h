@@ -1,3 +1,4 @@
+#pragma once
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
@@ -8,18 +9,22 @@
 #include "../fs/vfs/vfs.h"
 #include "sched.h"
 typedef struct process process_t;
-
 typedef signed int pid_t;
 typedef int uid_t;
 typedef struct thread_list thread_list_t;
-typedef struct thread thread_t;
+extern process_t* current_process;
 
-typedef enum process_state { RUNNING, RUNNABLE, SLEEPING, STOPPED, EMBRYO } process_state_t;
+typedef enum process_state {
+    RUNNING,
+    RUNNABLE,
+    SLEEPING,
+    STOPPED,
+    EMBRYO
+} process_state_t;
 
 typedef struct proc_table {
     spinlock_t proc_table_lock;
     process_t* processes;
-
 } proc_table_t;
 
 typedef struct proc_info {
@@ -88,3 +93,11 @@ typedef struct process {
     // TODO: this is kinda shit.
     char* name;
 } process_t;
+
+process_t* proc_get_current();
+int proc_create_init_process();
+pid_t proc_getpid(process_t* process);
+int proc_kill(process_t* process);
+int proc_stop(process_t* process);
+int proc_continue(process_t* process);
+pid_t proc_fork(process_t* parent);

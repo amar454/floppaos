@@ -36,15 +36,15 @@ INTERRUPT_FLAGS = $(CFLAGS) -mgeneral-regs-only
 LD_FLAGS = -m elf_i386 -T kernel/linker.ld
 
 # Source files
-SCHED_SRC = task/sched.c task/thread.c task/sync/mutex.c task/sync/spinlock.c task/tss.c
+SCHED_SRC = task/sched.c task/sync/mutex.c task/sync/spinlock.c task/tss.c task/process.c
 MEM_SRC = mem/vmm.c mem/pmm.c mem/paging.c mem/utils.c mem/gdt.c mem/alloc.c mem/slab.c
 DRIVER_SRC = drivers/vga/vgahandler.c drivers/keyboard/keyboard.c drivers/time/floptime.c \
              drivers/io/io.c drivers/vga/framebuffer.c drivers/acpi/acpi.c drivers/mouse/ps2ms.c
 FS_SRC = fs/tmpflopfs/tmpflopfs.c fs/vfs/vfs.c
 LIB_SRC = lib/str.c lib/flopmath.c lib/logging.c
 APP_SRC = apps/echo.c apps/dsp/dsp.c
-OTHER_SRC = kernel/kernel.c multiboot/multiboot.c 
-ASM_SRC = kernel/entry.asm task/usermode_entry.asm task/ctx.asm interrupts/interrupts_asm.asm
+OTHER_SRC = kernel/kernel.c multiboot/multiboot.c sys/syscall.c
+ASM_SRC = kernel/entry.asm task/usermode_entry.asm task/ctx.asm interrupts/interrupts_asm.asm sys/syscall_asm.asm
 FLANTERM_SRC = flanterm/src/flanterm.c flanterm/src/flanterm_backends/fb.c
 
 C_SRC = $(SCHED_SRC) $(MEM_SRC) $(DRIVER_SRC) $(FS_SRC) $(LIB_SRC) $(APP_SRC) $(OTHER_SRC) $(FLANTERM_SRC)

@@ -50,6 +50,7 @@ static uint8_t interrupt_stack[ISR_STACK_SIZE] __attribute__((aligned(16)));
 #define PIT_DIVISOR_LSB_MASK 0xFF
 #define PIT_DIVISOR_MSB_SHIFT 8
 #define KERNEL_CODE_SEGMENT 0x08
+#define USER_CODE_SEGMENT 0x1B
 
 void interrupts_init(void);
 

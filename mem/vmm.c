@@ -71,6 +71,7 @@ void vmm_free(vmm_region_t* region, uintptr_t va, size_t pages) {
     }
 }
 
+// map a physical page at address pa to virtual address va
 int vmm_map(vmm_region_t* region, uintptr_t va, uintptr_t pa, uint32_t flags) {
     uint32_t pdi = pd_index(va);
     uint32_t pti = pt_index(va);
@@ -93,6 +94,7 @@ int vmm_map(vmm_region_t* region, uintptr_t va, uintptr_t pa, uint32_t flags) {
     return 0;
 }
 
+// unmap a physical page at virtual address va
 int vmm_unmap(vmm_region_t* region, uintptr_t va) {
     uint32_t pdi = pd_index(va);
     uint32_t pti = pt_index(va);
@@ -107,6 +109,7 @@ int vmm_unmap(vmm_region_t* region, uintptr_t va) {
     return 0;
 }
 
+// resolve a virtual address to a physical address
 uintptr_t vmm_resolve(vmm_region_t* region, uintptr_t va) {
     uint32_t pdi = pd_index(va);
     uint32_t pti = pt_index(va);

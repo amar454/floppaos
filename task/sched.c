@@ -13,7 +13,6 @@ You should have received a copy of the GNU General Public License along with Flo
 */
 
 #include "sched.h"
-#include "thread.h"
 #include "../mem/alloc.h"
 #include "../mem/pmm.h"
 #include "../mem/paging.h"
@@ -30,19 +29,8 @@ You should have received a copy of the GNU General Public License along with Flo
 
 uint64_t sched_ticks_counter;
 
-typedef struct signal {
-    atomic_int state;
-} signal_t;
-
-typedef struct reaper_descriptor {
-    thread_list_t dead_threads;
-    spinlock_t lock;
-    int running;
-    signal_t wake_signal;
-    thread_t* reaper_thread;
-} reaper_descriptor_t;
-
-static reaper_descriptor_t thread_reaper;
+extern process_t* current_process;
+static reaper_descriptor_t reaper_desc;
 
 static void idle_thread_loop() {
     for (;;) {
@@ -55,7 +43,7 @@ void sched_wake_reaper(void) {
 
     thread_t* reaper = sched.reaper_thread;
 
-    atomic_store(&thread_reaper.wake_signal.state, 1);
+    atomic_store(&reaper_desc.wake_signal.state, 1);
 
     if (reaper->thread_state == THREAD_RUNNING || reaper->thread_state == THREAD_READY) {
         return;
@@ -114,18 +102,17 @@ static inline void signal_send(signal_t* s) {
 static void reaper_thread_entry(void) {
     log("reaper: thread started", GREEN);
 
-    while (thread_reaper.running) {
-        signal_wait(&thread_reaper.wake_signal);
+    while (reaper_desc.running) {
+        signal_wait(&reaper_desc.wake_signal);
 
         while (1) {
-            spinlock(&thread_reaper.lock);
-            thread_t* dead = sched_dequeue(&thread_reaper.dead_threads);
-            spinlock_unlock(&thread_reaper.lock, true);
+            spinlock(&reaper_desc.lock);
+            thread_t* dead = sched_dequeue(&reaper_desc.dead_threads);
+            spinlock_unlock(&reaper_desc.lock, true);
 
             if (!dead)
                 break;
 
-            // Cleanup
             if (dead->kernel_stack)
                 kfree(dead->kernel_stack, 4096);
 
@@ -145,15 +132,15 @@ static thread_t*
 sched_internal_init_thread(void (*entry)(void), unsigned int priority, char* name, int user, process_t* process);
 
 void reaper_init(void) {
-    flop_memset(&thread_reaper, 0, sizeof(thread_reaper));
-    spinlock_init(&thread_reaper.lock);
-    signal_init(&thread_reaper.wake_signal);
-    thread_reaper.running = 1;
+    flop_memset(&reaper_desc, 0, sizeof(reaper_desc));
+    spinlock_init(&reaper_desc.lock);
+    signal_init(&reaper_desc.wake_signal);
+    reaper_desc.running = 1;
 
-    thread_reaper.reaper_thread = sched_internal_init_thread(reaper_thread_entry, 1, "reaper", 0, NULL);
+    reaper_desc.reaper_thread = sched_internal_init_thread(reaper_thread_entry, 1, "reaper", 0, NULL);
 
-    sched_enqueue(sched.ready_queue, thread_reaper.reaper_thread);
-    sched.reaper_thread = thread_reaper.reaper_thread;
+    sched_enqueue(sched.ready_queue, reaper_desc.reaper_thread);
+    sched.reaper_thread = reaper_desc.reaper_thread;
 
     log("reaper: initialized", GREEN);
 }
@@ -456,10 +443,12 @@ void reaper_enqueue(thread_t* thread) {
 
     thread->thread_state = THREAD_DEAD;
 
-    spinlock(&thread_reaper.lock);
-    sched_enqueue(&thread_reaper.dead_threads, thread);
-    spinlock_unlock(&thread_reaper.lock, true);
+    spinlock(&reaper_desc.lock);
+    sched_enqueue(&reaper_desc.dead_threads, thread);
+    spinlock_unlock(&reaper_desc.lock, true);
 }
+
+extern process_t* current_process;
 
 void sched_thread_list_add(thread_t* thread, thread_list_t* list) {
     if (!thread || !list)
@@ -495,6 +484,10 @@ thread_t* current_thread;
 // contains edi, esi, ebx, ebp, eip
 // we do not need to save esp because we have it in thread->kernel_stack
 extern void context_switch(cpu_ctx_t* old, cpu_ctx_t* new);
+
+// sched_creete_user_thread sets all user threads
+// to execute here and this sets up
+// the user stack to start executing ip
 extern void usermode_entry_routine(uint32_t sp, uint32_t ip);
 
 void sched_boost_starved_threads(thread_list_t* list) {
@@ -566,7 +559,7 @@ void sched_schedule(void) {
 
     thread_t* prev = current_thread;
     current_thread = next;
-
+    current_process = current_thread->process;
     context_switch(&prev->context, &next->context);
 }
 
