@@ -176,5 +176,5 @@ void paging_init(void) {
         __asm__ volatile("hlt");
         return;
     }
-    log("paging init - ok\n", YELLOW);
+    log("paging: init - ok\n", YELLOW);
 }

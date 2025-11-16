@@ -27,7 +27,7 @@ int vfs_init(void) {
     static spinlock_t initializer = SPINLOCK_INIT;
     mp_list.lock = initializer;
     spinlock_init(&mp_list.lock);
-    log("vfs init - ok\n", GREEN);
+    log("vfs: init - ok\n", GREEN);
     return 0;
 }
 

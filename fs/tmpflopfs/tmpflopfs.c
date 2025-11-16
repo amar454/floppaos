@@ -777,6 +777,6 @@ int tmpfs_init() {
         log("tmpfs: failed to register with VFS\n", RED);
         return ret;
     }
-    log("tmpfs init - ok\n", GREEN);
+    log("tmpfs: init - ok\n", GREEN);
     return 0;
 }

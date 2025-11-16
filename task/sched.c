@@ -1,5 +1,7 @@
 /*
 
+#include "task/sched.h"
+
 Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
 
 This file is part of FloppaOS.
@@ -14,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Flo
 
 #include "sched.h"
 #include "../mem/alloc.h"
+#include "../mem/slab.h"
 #include "../mem/pmm.h"
 #include "../mem/paging.h"
 #include "../mem/vmm.h"
@@ -194,26 +197,25 @@ int sched_spinlocks_init(void) {
 }
 
 int sched_scheduler_lists_init(void) {
-    sched.ready_queue = kmalloc(sizeof(thread_list_t));
-    if (!sched.ready_queue)
-        return -1;
-    sched.sleep_queue = kmalloc(sizeof(thread_list_t));
-    if (!sched.sleep_queue)
-        return -1;
-    sched.kernel_threads = kmalloc(sizeof(thread_list_t));
-    if (!sched.kernel_threads)
-        return -1;
-    sched.user_threads = kmalloc(sizeof(thread_list_t));
-    if (!sched.user_threads)
-        return -1;
+    static thread_list_t ready_queue_inst;
+    static thread_list_t sleep_queue_inst;
+    static thread_list_t kernel_threads_inst;
+    static thread_list_t user_threads_inst;
+
+    flop_memset(&ready_queue_inst, 0, sizeof(thread_list_t));
+    flop_memset(&sleep_queue_inst, 0, sizeof(thread_list_t));
+    flop_memset(&kernel_threads_inst, 0, sizeof(thread_list_t));
+    flop_memset(&user_threads_inst, 0, sizeof(thread_list_t));
+
+    sched.ready_queue = &ready_queue_inst;
+    sched.sleep_queue = &sleep_queue_inst;
+    sched.kernel_threads = &kernel_threads_inst;
+    sched.user_threads = &user_threads_inst;
 
     if (sched_spinlocks_init() < 0) {
         return -1;
     }
-    flop_memset(sched.ready_queue, 0, sizeof(thread_list_t));
-    flop_memset(sched.sleep_queue, 0, sizeof(thread_list_t));
-    flop_memset(sched.kernel_threads, 0, sizeof(thread_list_t));
-    flop_memset(sched.user_threads, 0, sizeof(thread_list_t));
+
     return 0;
 }
 
@@ -231,27 +233,28 @@ int sched_init_kernel_worker_pool(void);
 // init list spinlocks
 // and create reaper and idle threads
 void sched_init(void) {
+    log("sched: initializing lists\n", GREEN);
     if (sched_scheduler_lists_init() < 0) {
         log("sched: failed to init scheduler lists\n", RED);
         return;
     }
 
+    log("sched: assigning list names\n", GREEN);
     if (sched_assign_list_names() < 0) {
         log("sched: failed to init scheduler list names\n", RED);
         return;
     }
 
-    if (sched_init_kernel_worker_pool() < 0) {
-        log("sched: failed to init kernel worker pool\n", RED);
-        return;
-    }
-
     sched.stealer_thread = NULL;
     sched.next_tid = 0;
+
+    log("sched: initializing reaper\n", GREEN);
     reaper_init();
+
+    log("sched: adding idle thread to ready queue\n", GREEN);
     sched_thread_list_add(sched.idle_thread, sched.ready_queue);
 
-    log("sched init - ok", GREEN);
+    log("sched: init - ok", GREEN);
 }
 
 // add thread to the end of a thread queue

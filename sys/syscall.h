@@ -22,7 +22,8 @@ typedef enum syscall_num {
     SYSCALL_FORK = 2,
     SYSCALL_OPEN = 3,
     SYSCALL_CLOSE = 4,
-    SYSCALL_MMAP = 5
+    SYSCALL_MMAP = 5,
+    SYSCALL_BRK = 6
 } syscall_num_t;
 
 typedef struct syscall_table {
@@ -32,6 +33,7 @@ typedef struct syscall_table {
     int (*syscall_open)(char* path, uint32_t flags);
     int (*syscall_close)(int fd);
     int (*syscall_mmap)(uint32_t addr, uint32_t len, uint32_t flags);
+    int (*syscall_brk)(uint32_t addr);
 } syscall_table_t;
 
 // fork the current running process; returns pid or -1
@@ -51,9 +53,5 @@ int sys_write(int fd, void* buf, size_t count);
 
 // mmap; returns virtual address or -1
 int sys_mmap(uint32_t addr, uint32_t len, uint32_t flags);
-
-int sys_mmap_internal_alloc(vmm_region_t* region, uint32_t vaddr, uint32_t len, uint32_t flags);
-int sys_mmap_internal_get_va(vmm_region_t* region, uint32_t req, uint32_t len, uint32_t* out);
-void sys_mmap_internal_rb(vmm_region_t* region, uint32_t start, uint32_t end);
 
 #endif // SYSCALL_H

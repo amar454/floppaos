@@ -17,24 +17,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-typedef enum syscall_num {
-    SYSCALL_READ,
-    SYSCALL_WRITE,
-    SYSCALL_FORK,
-    SYSCALL_OPEN,
-    SYSCALL_CLOSE,
-    SYSCALL_MMAP
-
-} syscall_num_t;
-
-typedef struct syscall_table {
-    int (*syscall_read)(int, void*, size_t);
-    int (*syscall_write)(int, void*, size_t);
-    pid_t (*syscall_fork)(void);
-    int (*syscall_open)(const char*, uint32_t);
-    int (*syscall_close)(int);
-    int (*syscall_mmap)(void);
-} syscall_table_t;
+#include "syscall.h"
 
 // fork the current running process
 // return pid_t or -1 on failure

@@ -78,6 +78,7 @@ typedef struct alloc_info {
     spinlock_t lock;
     struct alloc_mem_block* first_block;
     struct free_list* free_list;
+    vmm_region_t* heap_region;
 } alloc_info_t;
 
 static alloc_info_t this_allocator = {.lock = SPINLOCK_INIT, .first_block = NULL, .free_list = NULL};
@@ -215,39 +216,45 @@ void* get_memory_block_size(uintptr_t addr) {
     return (void*) (block->size & ~1);
 }
 
+#define KERNEL_HEAP_STARTING_SIZE 128
+
 // get memory size, calculate appropriate heap size, allocate virtual address space for heap, and create the first memory block
 void init_kernel_heap(void) {
     log("Initializing kernel heap...\n", YELLOW);
 
-    // check mem size and do sanity check if pmm is initialized.
-    size_t total_memory = pmm_get_memory_size();
-    if (total_memory == 0) {
-        log("init_kernel_heap: PMM not initialized or no memory available!\n", RED);
-        PANIC_PMM_NOT_INITIALIZED((uintptr_t) first_block);
+    if (heap_initialized) {
+        log("init_kernel_heap: heap already initialized\n", YELLOW);
         return;
     }
 
-    kernel_heap_size = (total_memory * HEAP_PERCENTAGE) / 100;
-    kernel_heap_size = ALIGN_UP(kernel_heap_size, PAGE_SIZE);
-    if (kernel_heap_size < MIN_HEAP_SIZE) {
-        kernel_heap_size = ALIGN_UP(MIN_HEAP_SIZE, PAGE_SIZE);
-    } else if (kernel_heap_size > MAX_HEAP_SIZE) {
-        kernel_heap_size = ALIGN_UP(MAX_HEAP_SIZE, PAGE_SIZE);
+    kernel_heap_size = KERNEL_HEAP_STARTING_SIZE * PAGE_SIZE;
+    size_t pages = ALIGN_UP(kernel_heap_size, PAGE_SIZE) / PAGE_SIZE;
+
+    void* p = pmm_alloc_pages(0, pages);
+    if (!p) {
+        log("init_kernel_heap: pmm_alloc_pages failed\n", RED);
+        PANIC_PMM_NOT_INITIALIZED((uintptr_t) p);
+        return;
     }
 
-    first_block = (struct alloc_mem_block*) KERNEL_HEAP_START;
-    add_memory_block(KERNEL_HEAP_START, kernel_heap_size, 1);
-    kernel_regions.start = (uintptr_t) KERNEL_HEAP_START;
-    kernel_regions.end = (uintptr_t) (KERNEL_HEAP_START + kernel_heap_size);
     kernel_regions.next = NULL;
+    kernel_regions.start = (uintptr_t) p;
+    kernel_regions.end = kernel_regions.start + pages * PAGE_SIZE;
+    kernel_regions.free_list = NULL;
+
+    add_memory_block(kernel_regions.start, pages * PAGE_SIZE, 1);
+
+    first_block = (struct alloc_mem_block*) kernel_regions.start;
+    this_allocator.first_block = first_block;
+    free_blocks = (struct free_list*) kernel_regions.start;
+    this_allocator.free_list = free_blocks;
 
     static spinlock_t alloc_lock_initializer = SPINLOCK_INIT;
     this_allocator.lock = alloc_lock_initializer;
     spinlock_init(&this_allocator.lock);
 
-    log("kernel heap init - ok\n\n", YELLOW);
+    log("kernel heap: init - ok\n\n", YELLOW);
 
-    // now that we can alloc stuff, mark the heap as initialized.
     heap_initialized = 1;
 }
 

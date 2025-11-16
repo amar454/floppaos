@@ -27,7 +27,7 @@ void tss_init(uint32_t idx, uint32_t kss, uint32_t kesp) {
 
     __asm__ volatile("ltr %%ax" : : "a"((idx * 8) | 0x0));
 
-    log("tss init - ok\n", GREEN);
+    log("tss: init - ok\n", GREEN);
 }
 
 void tss_set_kernel_stack(uint32_t stack) {

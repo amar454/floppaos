@@ -476,7 +476,7 @@ int proc_init() {
         return -1;
     }
 
-    log("proc init - ok\n", GREEN);
+    log("proc: init - ok\n", GREEN);
     return 0;
 }
 

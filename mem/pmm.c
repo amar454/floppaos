@@ -302,7 +302,7 @@ static void buddy_init(uint64_t usable_pages, uintptr_t memory_base_first_usable
     // build the free list from the multiboot map
     _create_free_list(mb_info);
 
-    log("buddy init - ok\n", GREEN);
+    log("buddy: init - ok\n", GREEN);
 }
 
 void pmm_init(multiboot_info_t* mb_info) {

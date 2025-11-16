@@ -178,7 +178,7 @@ static void _pic_init() {
     outb(PIC1_DATA, PIC1_MASK);
     outb(PIC2_DATA, PIC2_MASK);
 
-    log("pic init - ok\n", GREEN);
+    log("pic: init - ok\n", GREEN);
 }
 
 static void _pit_init() {
@@ -188,7 +188,7 @@ static void _pit_init() {
 
     outb(PIT_CHANNEL0_PORT, divisor & PIT_DIVISOR_LSB_MASK);
     outb(PIT_CHANNEL0_PORT, (divisor >> PIT_DIVISOR_MSB_SHIFT) & PIT_DIVISOR_LSB_MASK);
-    log("pit init - ok\n", GREEN);
+    log("pit: init - ok\n", GREEN);
 }
 
 extern void syscall_handler();
@@ -214,7 +214,7 @@ static void _idt_init() {
 
     __asm__ volatile("lidt (%0)" ::"r"(&idtp) : "memory");
     __asm__ volatile("sti");
-    log("idt init - ok\n", GREEN);
+    log("idt: init - ok\n", GREEN);
 }
 
 static void disable_interrupts() {
@@ -231,5 +231,5 @@ void interrupts_init() {
     _pic_init();
     _pit_init();
     _idt_init();
-    log("interrupts init - ok.\n", GREEN);
+    log("interrupts: init - ok.\n", GREEN);
 }

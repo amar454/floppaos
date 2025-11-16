@@ -118,7 +118,7 @@ static void check_multiboot_info(multiboot_info_t* mb_info) {
 int kmain(uint32_t magic, multiboot_info_t* mb_info) {
     framebuffer_init(mb_info);
     init_console();
-    log("floppaOS kernel framebuffer init - ok\n", GREEN);
+    log("floppaOS kernel framebuffer: init - ok\n", GREEN);
     log("floppaOS - The Floperrating system, a free and open-source 32-bit hobby operating system\n", YELLOW);
 
     log("Kernel compilation time: " __DATE__ " at " __TIME__ "\n", YELLOW);
