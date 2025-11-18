@@ -31,6 +31,7 @@ typedef enum thread_state {
     THREAD_SLEEPING,
     THREAD_EXITED,
     THREAD_DEAD,
+    THREAD_SUSPENDED
 } thread_state_t;
 
 typedef struct thread thread_t;

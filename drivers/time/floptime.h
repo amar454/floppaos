@@ -12,7 +12,6 @@ struct Time {
     unsigned int year;
 };
 
-// Function declarations
 void time_get_current(struct Time* time);
 void time_to_string(struct Time* time, char* buffer, size_t size);
 void sleep_seconds(int seconds);

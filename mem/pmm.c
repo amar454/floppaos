@@ -25,7 +25,7 @@ You should have received a copy of the GNU General Public License along with Flo
 
 struct buddy_allocator buddy;
 
-void buddy_split(uintptr_t addr, uint32_t order) {
+static void buddy_split(uintptr_t addr, uint32_t order) {
     if (order == 0) {
         log("buddy_split: order=0, nothing to split\n", YELLOW);
         return;
@@ -54,7 +54,7 @@ void buddy_split(uintptr_t addr, uint32_t order) {
     buddy.free_list[order - 1] = page_b;
 }
 
-void buddy_merge(uintptr_t addr, uint32_t order) {
+static void buddy_merge(uintptr_t addr, uint32_t order) {
     uintptr_t buddy_addr = addr ^ (((uintptr_t) 1 << order) * PAGE_SIZE);
 
     struct page* page = phys_to_page_index(addr);

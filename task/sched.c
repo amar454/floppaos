@@ -361,13 +361,44 @@ thread_t* sched_remove(thread_list_t* list, thread_t* target) {
     return NULL;
 }
 
+static void* sched_internal_init_thread_stack_alloc(thread_t* thread) {
+    thread->kernel_stack = (void*) kmalloc(4096);
+    if (!thread->kernel_stack) {
+        // stack allocation failed
+        return NULL;
+    }
+
+    return thread->kernel_stack;
+}
+
+static int sched_init_thread_kernel_or_user_list_insert(thread_t* thread, process_t* process, int user) {
+    if (user) {
+        thread->user = 1;
+        if (process == NULL) {
+            // user threads require a process
+            return -1;
+        }
+        thread->process = process;
+    } else {
+        thread->user = 0;
+        if (process != NULL) {
+            return -1;
+            // kernel threads cannot have a process
+            // that's actually the only thing that makes them kernel threads.
+        }
+        thread->process = NULL;
+        // this must remain null.
+    }
+    return 0;
+}
+
 static thread_t*
 sched_internal_init_thread(void (*entry)(void), unsigned priority, char* name, int user, process_t* process) {
     // todo: create slab cache for thread structs
     thread_t* this_thread = kmalloc(sizeof(thread_t));
     this_thread->next = NULL;
     this_thread->previous = NULL;
-    this_thread->kernel_stack = (void*) kmalloc(4096);
+    this_thread->kernel_stack = sched_internal_init_thread_stack_alloc(this_thread);
     if (!this_thread->kernel_stack) {
         // stack allocation failed
         return NULL;
@@ -388,22 +419,10 @@ sched_internal_init_thread(void (*entry)(void), unsigned priority, char* name, i
 
     this_thread->context = this_thread_context;
 
-    if (user) {
-        this_thread->user = 1;
-        if (process == NULL) {
-            // user threads require a process
-            return NULL;
-        }
-        this_thread->process = process;
-    } else {
-        this_thread->user = 0;
-        if (process != NULL) {
-            return NULL;
-            // kernel threads cannot have a process
-            // that's actually the only thing that makes them kernel threads.
-        }
-        this_thread->process = NULL;
-        // this must remain null.
+    if (!sched_init_thread_kernel_or_user_list_insert(this_thread, process, user)) {
+        kfree(this_thread->kernel_stack, 4096);
+        kfree(this_thread, sizeof(thread_t));
+        return NULL;
     }
 
     this_thread->id = sched.next_tid;
@@ -514,64 +533,122 @@ void sched_boost_starved_threads(thread_list_t* list) {
     spinlock_unlock(&list->lock, true);
 }
 
-static thread_t* sched_select_by_time_slice(thread_list_t* list) {
-    if (!list || !list->head)
-        return NULL;
-
+void sched_find_best_thread_iterate(thread_list_t* list,
+                                    thread_t** out_best,
+                                    thread_t** out_prev_best,
+                                    thread_t** out_prev) {
     thread_t* iter = list->head;
-    thread_t* best = iter;
-    thread_t* best_prev = NULL;
     thread_t* prev = NULL;
 
     while (iter) {
-        if (iter->priority.base > best->priority.base) {
-            best_prev = prev;
-            best = iter;
+        if (!*out_best || iter->priority.effective > (*out_best)->priority.effective) {
+            *out_best = iter;
+            *out_prev_best = prev;
         }
         prev = iter;
         iter = iter->next;
     }
+}
 
-    if (!best)
+static thread_t* sched_find_best_thread(thread_list_t* list, thread_t** out_prev) {
+    if (!list || !list->head)
         return NULL;
 
-    if (best_prev)
-        best_prev->next = best->next;
-    else
-        list->head = best->next;
+    thread_t* best = NULL;
+    thread_t* best_prev = NULL;
 
-    if (best == list->tail)
-        list->tail = best_prev;
+    sched_find_best_thread_iterate(list, &best, &best_prev, NULL);
+
+    if (out_prev) {
+        *out_prev = best_prev;
+    }
+
+    return best;
+}
+
+static void sched_unlink_thread(thread_list_t* list, thread_t* thread, thread_t* prev) {
+    if (!list || !thread)
+        return;
+
+    if (prev) {
+        prev->next = thread->next;
+    } else {
+        list->head = thread->next;
+    }
+
+    if (list->tail == thread) {
+        list->tail = prev;
+    }
 
     if (list->count > 0)
         list->count--;
 
-    best->next = NULL;
-    best->time_slice = best->priority.base ? best->priority.base : 1;
+    thread->next = NULL;
+}
+
+static inline void sched_assign_time_slice(thread_t* t) {
+    t->time_slice = t->priority.base ? t->priority.base : 1;
+}
+
+static thread_t* sched_select_by_time_slice(thread_list_t* list) {
+    if (!list || !list->head)
+        return NULL;
+
+    thread_t* prev = NULL;
+    thread_t* best = sched_find_best_thread(list, &prev);
+    if (!best)
+        return NULL;
+
+    sched_unlink_thread(list, best, prev);
+    sched_assign_time_slice(best);
+
     return best;
 }
 
-void sched_schedule(void) {
+static thread_t* sched_select_next(void) {
     sched_boost_starved_threads(sched.ready_queue);
 
     spinlock(&sched.ready_queue->lock);
     thread_t* next = sched_select_by_time_slice(sched.ready_queue);
     spinlock_unlock(&sched.ready_queue->lock, true);
 
-    if (!next) {
-        next = sched.idle_thread;
-        next->time_slice = next->priority.base ? next->priority.base : 1;
-    }
+    return next;
+}
 
-    if (next == current_thread)
-        return;
+static thread_t* sched_select_idle_if_needed(thread_t* candidate) {
+    if (candidate)
+        return candidate;
 
+    thread_t* idle = sched.idle_thread;
+    idle->time_slice = idle->priority.base ? idle->priority.base : 1;
+    return idle;
+}
+
+static inline bool sched_should_skip(thread_t* next) {
+    return next == current_thread;
+}
+
+static inline void sched_prepare_thread(thread_t* next) {
     next->time_since_last_run = 0;
+}
 
+static void sched_determine_and_switch(thread_t* next) {
     thread_t* prev = current_thread;
     current_thread = next;
-    current_process = current_thread->process;
+    current_process = next->process;
+
     context_switch(&prev->context, &next->context);
+}
+
+void sched_schedule(void) {
+    thread_t* next = sched_select_next();
+    next = sched_select_idle_if_needed(next);
+
+    if (sched_should_skip(next))
+        return;
+
+    sched_prepare_thread(next);
+    sched_determine_and_switch(next);
 }
 
 thread_t* sched_current_thread(void) {
@@ -607,36 +684,56 @@ void sched_thread_sleep(uint32_t ms) {
     sched_yield();
 }
 
+static inline bool sched_thread_should_wake(thread_t* t) {
+    return t->wake_time <= sched_ticks_counter;
+}
+
+static void sched_remove_from_sleep_queue(thread_list_t* sleep_queue, thread_t* thread, thread_t* prev) {
+    if (prev) {
+        prev->next = thread->next;
+    } else {
+        sleep_queue->head = thread->next;
+    }
+
+    if (sleep_queue->tail == thread) {
+        sleep_queue->tail = prev;
+    }
+
+    if (sleep_queue->count > 0) {
+        sleep_queue->count--;
+    }
+
+    thread->next = NULL;
+}
+
+static void sched_wake_thread(thread_t* t) {
+    t->thread_state = THREAD_READY;
+    sched_enqueue(sched.ready_queue, t);
+}
+
+static thread_t* sched_process_sleep_thread(thread_list_t* sleep_queue, thread_t* t, thread_t* prev) {
+    thread_t* next = t->next;
+
+    if (sched_thread_should_wake(t)) {
+        sched_remove_from_sleep_queue(sleep_queue, t, prev);
+        sched_wake_thread(t);
+        return prev; // prev stays the same since we removed t
+    } else {
+        return t; // prev moves forward
+    }
+}
+
 void sched_tick(void) {
     sched_ticks_counter++;
 
-    // wake sleeping threads
     spinlock(&sched.sleep_queue->lock);
+
     thread_t* prev = NULL;
     thread_t* curr = sched.sleep_queue->head;
 
     while (curr) {
-        thread_t* next = curr->next;
-
-        if (curr->wake_time <= sched_ticks_counter) {
-            if (prev)
-                prev->next = next;
-            else
-                sched.sleep_queue->head = next;
-
-            if (curr == sched.sleep_queue->tail)
-                sched.sleep_queue->tail = prev;
-
-            sched.sleep_queue->count--;
-
-            curr->next = NULL;
-            curr->thread_state = THREAD_READY;
-            sched_enqueue(sched.ready_queue, curr);
-        } else {
-            prev = curr;
-        }
-
-        curr = next;
+        prev = sched_process_sleep_thread(sched.sleep_queue, curr, prev);
+        curr = (prev) ? prev->next : sched.sleep_queue->head;
     }
 
     spinlock_unlock(&sched.sleep_queue->lock, true);
@@ -739,13 +836,13 @@ int sched_create_worker_pool(worker_pool_descriptor_t* desc, size_t count) {
     size_t created = 0;
     for (size_t i = 0; i < count; ++i) {
         void* arg = desc->args ? desc->args[i] : NULL;
-        worker_thread* w = sched_create_worker_thread(desc->entry, arg, desc->priority, desc->name);
-        if (!w) {
+        worker_thread* worker = sched_create_worker_thread(desc->entry, arg, desc->priority, desc->name);
+        if (!worker) {
             break;
         }
 
-        sched_enqueue(sched.ready_queue, w->thread);
-        pool[created++] = w;
+        sched_enqueue(sched.ready_queue, worker->thread);
+        pool[created++] = worker;
     }
 
     if (created < count) {
@@ -791,12 +888,12 @@ int sched_expand_worker_pool(worker_pool_descriptor_t* desc, size_t target_count
     size_t created = 0;
     for (size_t i = desc->count; i < target_count; ++i) {
         void* arg = desc->args ? desc->args[i] : NULL;
-        worker_thread* w = sched_create_worker_thread(desc->entry, arg, desc->priority, desc->name);
-        if (!w) {
+        worker_thread* worker = sched_create_worker_thread(desc->entry, arg, desc->priority, desc->name);
+        if (!worker) {
             break;
         }
-        sched_enqueue(sched.ready_queue, w->thread);
-        new_pool[i] = w;
+        sched_enqueue(sched.ready_queue, worker->thread);
+        new_pool[i] = worker;
         created++;
     }
 
@@ -847,16 +944,16 @@ int sched_remove_worker_pool(worker_pool_descriptor_t* desc) {
     }
 
     for (size_t i = 0; i < desc->count; ++i) {
-        worker_thread* w = desc->pool[i];
-        if (!w) {
+        worker_thread* worker = desc->pool[i];
+        if (!worker) {
             continue;
         }
-        sched_remove(sched.kernel_threads, w->thread);
-        if (w->thread->kernel_stack) {
-            kfree(w->thread->kernel_stack, 4096);
+        sched_remove(sched.kernel_threads, worker->thread);
+        if (worker->thread->kernel_stack) {
+            kfree(worker->thread->kernel_stack, 4096);
         }
-        kfree(w->thread, sizeof(thread_t));
-        kfree(w, sizeof(worker_thread));
+        kfree(worker->thread, sizeof(thread_t));
+        kfree(worker, sizeof(worker_thread));
     }
 
     kfree(desc->pool, sizeof(worker_thread*) * desc->count);
@@ -895,16 +992,16 @@ int sched_copy_worker_pool(worker_pool_descriptor_t* dest, const worker_pool_des
 
     if (copied < src->count) {
         for (size_t j = 0; j < copied; ++j) {
-            worker_thread* w = new_pool[j];
-            if (!w) {
+            worker_thread* worker = new_pool[j];
+            if (!worker) {
                 continue;
             }
-            sched_remove(sched.kernel_threads, w->thread);
-            if (w->thread->kernel_stack) {
-                kfree(w->thread->kernel_stack, 4096);
+            sched_remove(sched.kernel_threads, worker->thread);
+            if (worker->thread->kernel_stack) {
+                kfree(worker->thread->kernel_stack, 4096);
             }
-            kfree(w->thread, sizeof(thread_t));
-            kfree(w, sizeof(worker_thread));
+            kfree(worker->thread, sizeof(thread_t));
+            kfree(worker, sizeof(worker_thread));
         }
         kfree(new_pool, sizeof(worker_thread*) * src->count);
         return -1;
@@ -963,16 +1060,16 @@ int sched_copy_selected_workers(worker_pool_descriptor_t* dest,
 
     if (copied < indices_count) {
         for (size_t j = 0; j < copied; ++j) {
-            worker_thread* w = new_pool[j];
-            if (!w) {
+            worker_thread* worker = new_pool[j];
+            if (!worker) {
                 continue;
             }
-            sched_remove(sched.kernel_threads, w->thread);
-            if (w->thread->kernel_stack) {
-                kfree(w->thread->kernel_stack, 4096);
+            sched_remove(sched.kernel_threads, worker->thread);
+            if (worker->thread->kernel_stack) {
+                kfree(worker->thread->kernel_stack, 4096);
             }
-            kfree(w->thread, sizeof(thread_t));
-            kfree(w, sizeof(worker_thread));
+            kfree(worker->thread, sizeof(thread_t));
+            kfree(worker, sizeof(worker_thread));
         }
         kfree(new_pool, sizeof(worker_thread*) * indices_count);
         return -1;
@@ -1005,17 +1102,17 @@ int sched_delete_specified_workers_from_pool(worker_pool_descriptor_t* desc,
             continue;
         }
 
-        worker_thread* w = desc->pool[idx];
-        if (!w) {
+        worker_thread* worker = desc->pool[idx];
+        if (!worker) {
             continue;
         }
 
-        sched_remove(sched.kernel_threads, w->thread);
-        if (w->thread->kernel_stack) {
-            kfree(w->thread->kernel_stack, 4096);
+        sched_remove(sched.kernel_threads, worker->thread);
+        if (worker->thread->kernel_stack) {
+            kfree(worker->thread->kernel_stack, 4096);
         }
-        kfree(w->thread, sizeof(thread_t));
-        kfree(w, sizeof(worker_thread));
+        kfree(worker->thread, sizeof(thread_t));
+        kfree(worker, sizeof(worker_thread));
 
         desc->pool[idx] = NULL;
     }
@@ -1039,13 +1136,13 @@ int sched_add_workers_to_pool(worker_pool_descriptor_t* desc, worker_thread** ne
     }
 
     for (size_t i = 0; i < new_count; ++i) {
-        worker_thread* w = new_workers[i];
-        if (!w) {
+        worker_thread* worker = new_workers[i];
+        if (!worker) {
             new_pool[desc->count + i] = NULL;
             continue;
         }
-        sched_thread_list_add(w->thread, sched.kernel_threads);
-        new_pool[desc->count + i] = w;
+        sched_thread_list_add(worker->thread, sched.kernel_threads);
+        new_pool[desc->count + i] = worker;
     }
 
     if (desc->pool) {
@@ -1055,6 +1152,135 @@ int sched_add_workers_to_pool(worker_pool_descriptor_t* desc, worker_thread** ne
     desc->pool = new_pool;
     desc->count = target_count;
     return 0;
+}
+
+static worker_thread* sched_get_worker(worker_pool_descriptor_t* desc, size_t index) {
+    if (!desc || !desc->pool || index >= desc->count)
+        return NULL;
+    return desc->pool[index];
+}
+
+static size_t sched_count_active_workers(worker_pool_descriptor_t* desc) {
+    if (!desc || !desc->pool)
+        return 0;
+
+    size_t count = 0;
+    for (size_t i = 0; i < desc->count; i++) {
+        if (desc->pool[i])
+            count++;
+    }
+    return count;
+}
+
+static int sched_replace_worker(worker_pool_descriptor_t* desc, size_t index, worker_thread* new_worker) {
+    if (!desc || !desc->pool || index >= desc->count || !new_worker)
+        return -1;
+
+    worker_thread* old = desc->pool[index];
+    if (old) {
+        sched_remove(sched.kernel_threads, old->thread);
+        if (old->thread->kernel_stack)
+            kfree(old->thread->kernel_stack, 4096);
+        kfree(old->thread, sizeof(thread_t));
+        kfree(old, sizeof(worker_thread));
+    }
+
+    desc->pool[index] = new_worker;
+    sched_thread_list_add(new_worker->thread, sched.kernel_threads);
+    sched_enqueue(sched.ready_queue, new_worker->thread);
+    return 0;
+}
+
+static int sched_suspend_worker(worker_thread* worker) {
+    if (!worker || !worker->thread)
+        return -1;
+
+    worker->thread->thread_state = THREAD_SUSPENDED;
+    sched_remove(sched.ready_queue, worker->thread);
+    return 0;
+}
+
+static int sched_resume_worker(worker_thread* worker) {
+    if (!worker || !worker->thread)
+        return -1;
+
+    worker->thread->thread_state = THREAD_READY;
+    sched_enqueue(sched.ready_queue, worker->thread);
+    return 0;
+}
+
+static int sched_broadcast_to_pool(worker_pool_descriptor_t* desc, void (*fn)(worker_thread*, void*), void* arg) {
+    if (!desc || !fn)
+        return -1;
+
+    for (size_t i = 0; i < desc->count; i++) {
+        worker_thread* worker = desc->pool[i];
+        if (worker)
+            fn(worker, arg);
+    }
+    return 0;
+}
+
+static worker_thread* sched_find_idle_worker(worker_pool_descriptor_t* desc) {
+    if (!desc || !desc->pool)
+        return NULL;
+
+    for (size_t i = 0; i < desc->count; i++) {
+        worker_thread* worker = desc->pool[i];
+        if (worker && worker->thread->thread_state == THREAD_READY)
+            return worker;
+    }
+    return NULL;
+}
+
+static int sched_set_worker_priority(worker_thread* worker, unsigned priority) {
+    if (!worker || !worker->thread)
+        return -1;
+
+    worker->thread->priority.base = priority ? priority : 1;
+    return 0;
+}
+
+static int sched_for_each_worker(worker_pool_descriptor_t* desc, int (*fn)(worker_thread*, void*), void* arg) {
+    if (!desc || !fn)
+        return -1;
+
+    int ret = 0;
+    for (size_t i = 0; i < desc->count; i++) {
+        worker_thread* worker = desc->pool[i];
+        if (worker) {
+            int r = fn(worker, arg);
+            if (r != 0)
+                ret = r;
+        }
+    }
+    return ret;
+}
+
+static int sched_dispatch_task_to_worker(worker_pool_descriptor_t* pool, void (*task)(void*), void* arg) {
+    if (!pool || !task)
+        return -1;
+
+    for (size_t i = 0; i < pool->count; i++) {
+        worker_thread* worker = pool->pool[i];
+        if (!worker)
+            continue;
+
+        thread_t* t = worker->thread;
+        if (!t)
+            continue;
+
+        if (t->thread_state == THREAD_READY) {
+            worker->entry = task;
+            worker->arg = arg;
+
+            t->thread_state = THREAD_READY;
+            sched_enqueue(sched.ready_queue, t);
+            return 0;
+        }
+    }
+
+    return -1;
 }
 
 void sched_worker_thread_print(void) {
@@ -1107,8 +1333,8 @@ void sched_worker_pool_print(worker_pool_descriptor_t* desc) {
 
     log("Worker Pool Threads:\n", YELLOW);
     for (size_t i = 0; i < desc->count; ++i) {
-        worker_thread* w = desc->pool[i];
-        if (!w) {
+        worker_thread* worker = desc->pool[i];
+        if (!worker) {
             log(" - [NULL WORKER]\n", RED);
             continue;
         }
@@ -1118,10 +1344,10 @@ void sched_worker_pool_print(worker_pool_descriptor_t* desc) {
                      sizeof(buffer),
                      " - [%zu] %s (priority: %u, thread=%p, arg=%p)\n",
                      i,
-                     w->thread->name ? w->thread->name : "(unnamed)",
-                     w->thread->priority.base,
-                     w->thread,
-                     w->arg);
+                     worker->thread->name ? worker->thread->name : "(unnamed)",
+                     worker->thread->priority.base,
+                     worker->thread,
+                     worker->arg);
         log(buffer, YELLOW);
     }
 }

@@ -348,6 +348,14 @@ int sys_rename(char* oldpath, char* newpath) {
     return vfs_rename(oldpath, newpath);
 }
 
+int sys_getpid() {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return -1;
+    }
+    return proc->pid;
+}
+
 void c_syscall_handler() {
     uint32_t num, a1, a2, a3, a4, a5;
 

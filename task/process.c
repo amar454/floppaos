@@ -13,6 +13,7 @@ You should have received a copy of the GNU General Public License along with Flo
 */
 
 #include "sched.h"
+
 #include "../mem/alloc.h"
 #include "../mem/pmm.h"
 #include "../mem/paging.h"
@@ -67,20 +68,117 @@ static void proc_family_init(process_t* process) {
     process->parent = NULL;
 }
 
+// add child to parent's children list
+static void proc_family_add_child(process_t* parent, process_t* child) {
+    if (!parent || !child) {
+        return;
+    }
+
+    child->parent = parent;
+    child->siblings = parent->children;
+    parent->children = child;
+}
+
+// remove child from parent's children list
+static void proc_family_remove_child(process_t* parent, process_t* child) {
+    if (!parent || !child) {
+        return;
+    }
+
+    process_t* current = parent->children;
+    process_t* prev = NULL;
+
+    while (current) {
+        if (current == child) {
+            if (prev) {
+                prev->siblings = current->siblings;
+            } else {
+                parent->children = current->siblings;
+            }
+            child->parent = NULL;
+            child->siblings = NULL;
+            return;
+        }
+        prev = current;
+        current = current->siblings;
+    }
+}
+
+static void proc_family_remove_all_children(process_t* parent) {
+    if (!parent) {
+        return;
+    }
+
+    process_t* current = parent->children;
+    process_t* next;
+
+    while (current) {
+        next = current->siblings;
+        current->parent = NULL;
+        current->siblings = NULL;
+        current = next;
+    }
+
+    parent->children = NULL;
+}
+
+static void proc_family_transfer_children(process_t* old_parent, process_t* new_parent) {
+    if (!old_parent || !new_parent) {
+        return;
+    }
+
+    process_t* current = old_parent->children;
+    process_t* next;
+
+    while (current) {
+        next = current->siblings;
+        proc_family_add_child(new_parent, current);
+        current = next;
+    }
+
+    old_parent->children = NULL;
+}
+
+static process_t* proc_alloc_process_struct() {
+    process_t* process = (process_t*) kmalloc(sizeof(process_t));
+    if (!process)
+        return NULL;
+    flop_memset(process, 0, sizeof(process_t));
+    return process;
+}
+
+static thread_list_t* proc_alloc_thread_list() {
+    thread_list_t* thread_list = (thread_list_t*) kmalloc(sizeof(thread_list_t));
+    if (!thread_list)
+        return NULL;
+    flop_memset(thread_list, 0, sizeof(thread_list_t));
+    return thread_list;
+}
+
+static void proc_alloc_assign_ids(process_t* process) {
+    process->pid = -1;
+    process->sid = -1;
+    process->pgid = -1;
+    process->rgid = 0;
+    process->gid = 0;
+    process->ruid = 0;
+    process->uid = 0;
+}
+
 // this is kinda tricky because the
 // caller of this function is supposed to
 // set up the rest of the process_t data structure.
 // this does nothing besides allocate and zero the data structures behind a process
 static process_t* proc_alloc(void) {
-    process_t* process = (process_t*) kmalloc(sizeof(process_t));
-    if (!process)
+    process_t* process = proc_alloc_process_struct();
+    if (!process) {
         return NULL;
-    flop_memset(process, 0, sizeof(process_t));
+    }
 
     // allocate a thread list for the process
     // threads are allocated as they are created
     // meaning we only need a thread list allocation here
-    process->threads = (thread_list_t*) kmalloc(sizeof(thread_list_t));
+    process->threads = proc_alloc_thread_list();
     if (!process->threads) {
         kfree(process, sizeof(process_t));
         return NULL;
@@ -99,13 +197,7 @@ static process_t* proc_alloc(void) {
     process->siblings = NULL;
     process->name = NULL;
 
-    process->pid = -1;
-    process->sid = -1;
-    process->pgid = -1;
-    process->rgid = 0;
-    process->gid = 0;
-    process->ruid = 0;
-    process->uid = 0;
+    proc_alloc_assign_ids(process);
 
     process->state = 0;
     return process;
@@ -138,20 +230,6 @@ static int proc_init_process_zero_ids(process_t* process) {
     process->ruid = 0;
     process->uid = 0;
 
-    return 0;
-}
-
-static int proc_init_process_assign_name(process_t* process, const char* name) {
-    if (!process || !name) {
-        return -1;
-    }
-
-    size_t name_len = flopstrlen(name) + 1;
-    process->name = (char*) kmalloc(name_len);
-    if (!process->name) {
-        return -1;
-    }
-    flopstrcopy(process->name, name, name_len);
     return 0;
 }
 
@@ -209,6 +287,34 @@ static void proc_init_process_free_data_structures(process_t* process) {
     return;
 }
 
+int proc_init_process_create_thread(process_t* process,
+                                    void (*entry)(void),
+                                    unsigned priority,
+                                    const char* thread_name) {
+    if (!process || !entry || !thread_name) {
+        return -1;
+    }
+
+    thread_t* thread = sched_create_user_thread(entry, priority, (char*) thread_name, process);
+    if (!thread) {
+        return -1;
+    }
+
+    sched_thread_list_add(thread, process->threads);
+    return 0;
+}
+
+int proc_init_process_assign_name(process_t* process, const char* name) {
+    char* init_process_name = "init_process";
+    size_t name_len = flopstrlen(init_process_name) + 1;
+    process->name = (char*) kmalloc(name_len);
+    if (!process->name) {
+        return -1;
+    }
+    flopstrcopy(process->name, init_process_name, name_len);
+    return 0;
+}
+
 int proc_create_init_process() {
     spinlock(&proc_tbl->proc_table_lock);
     init_process = proc_alloc();
@@ -230,15 +336,10 @@ int proc_create_init_process() {
     // processes do heap allocations for names
     // kmalloc is thread safe so this is ok
     // i'd rather do this than some preallocated buffer
-    char* init_process_name = "init_process";
-    size_t name_len = flopstrlen(init_process_name) + 1;
-    init_process->name = (char*) kmalloc(name_len);
-    if (!init_process->name) {
+    if (proc_init_process_assign_name(init_process, "init_process") < 0) {
         proc_init_process_free_data_structures(init_process);
         return -1;
     }
-    flopstrcopy(init_process->name, init_process_name, name_len);
-
     // setup the address space
     if (proc_init_process_create_region(init_process, 4) < 0) {
         proc_init_process_free_data_structures(init_process);
@@ -248,7 +349,6 @@ int proc_create_init_process() {
     init_process->mem_usage = 4 * PAGE_SIZE;
 
     if (proc_init_process_family_create(init_process) < 0) {
-        vmm_region_destroy(init_process->region);
         proc_init_process_free_data_structures(init_process);
         return -1;
     }
@@ -256,12 +356,7 @@ int proc_create_init_process() {
     init_process->cwd = NULL;
 
     vfs_mount("procfs", "/process/", VFS_TYPE_PROCFS);
-    thread_t* init_process_thread =
-        sched_create_user_thread(&proc_init_process_dummy_entry, 5, "init_thread", init_process);
-    if (init_process_thread) {
-        sched_thread_list_add(init_process_thread, init_process->threads);
-    } else {
-        vmm_region_destroy(init_process->region);
+    if (proc_init_process_create_thread(init_process, proc_init_process_dummy_entry, 0, "init_thread") < 0) {
         proc_init_process_free_data_structures(init_process);
         return -1;
     }
@@ -537,6 +632,166 @@ proc_info_t* proc_get_proc_info() {
 
 proc_table_t* proc_get_proc_table() {
     return proc_tbl;
+}
+
+static void proc_reparent_children(process_t* old_parent, process_t* new_parent) {
+    if (!old_parent || !new_parent)
+        return;
+
+    process_t* iter_child = old_parent->children;
+    process_t* next_child;
+
+    while (iter_child) {
+        next_child = iter_child->siblings;
+        proc_family_add_child(new_parent, iter_child);
+        iter_child = next_child;
+    }
+
+    old_parent->children = NULL;
+}
+
+static int proc_terminate_all_threads(process_t* process) {
+    if (!process || !process->threads)
+        return -1;
+
+    thread_t* iter_thread = process->threads->head;
+    while (iter_thread) {
+        thread_t* next_thread = iter_thread->next;
+        sched_remove(sched.ready_queue, iter_thread);
+        sched_remove(sched.sleep_queue, iter_thread);
+        iter_thread = next_thread;
+    }
+
+    process->threads->head = NULL;
+    process->threads->tail = NULL;
+    return 0;
+}
+
+static int proc_resource_clean(process_t* process) {
+    if (!process)
+        return -1;
+
+    if (process->cwd) {
+        vfs_close(process->cwd);
+        process->cwd = NULL;
+    }
+
+    if (process->region) {
+        vmm_region_destroy(process->region);
+        process->region = NULL;
+    }
+
+    if (process->name) {
+        kfree(process->name, flopstrlen(process->name) + 1);
+        process->name = NULL;
+    }
+
+    if (process->threads) {
+        kfree(process->threads, sizeof(thread_list_t));
+        process->threads = NULL;
+    }
+
+    return 0;
+}
+
+static int proc_remove_process_from_table(process_t* process) {
+    if (!proc_tbl || !proc_tbl->processes || !process)
+        return -1;
+
+    spinlock(&proc_tbl->proc_table_lock);
+
+    process_t* iter_process = proc_tbl->processes;
+    process_t* prev_process = NULL;
+
+    while (iter_process) {
+        if (iter_process == process) {
+            if (prev_process)
+                prev_process->siblings = iter_process->siblings;
+            else
+                proc_tbl->processes = iter_process->siblings;
+
+            spinlock_unlock(&proc_tbl->proc_table_lock, true);
+            return 0;
+        }
+
+        prev_process = iter_process;
+        iter_process = iter_process->siblings;
+    }
+
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+    return -1;
+}
+
+static int proc_terminate_process(process_t* process) {
+    if (!process)
+        return -1;
+
+    proc_terminate_all_threads(process);
+    proc_resource_clean(process);
+    proc_remove_process_from_table(process);
+
+    spinlock(&proc_tbl->proc_table_lock);
+    if (proc_info_local && proc_info_local->process_count > 0)
+        proc_info_local->process_count--;
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+
+    kfree(process, sizeof(process_t));
+    return 0;
+}
+
+static int proc_kill_all_children(process_t* parent) {
+    if (!parent)
+        return -1;
+
+    process_t* iter_child = parent->children;
+    process_t* next_child;
+
+    while (iter_child) {
+        next_child = iter_child->siblings;
+        proc_terminate_process(iter_child);
+        iter_child = next_child;
+    }
+
+    parent->children = NULL;
+    return 0;
+}
+
+static int proc_copy_process_memory(process_t* source_process, process_t* target_process) {
+    if (!source_process || !target_process)
+        return -1;
+
+    if (!source_process->region)
+        return -1;
+
+    target_process->region = vmm_copy_pagemap(source_process->region);
+    if (!target_process->region)
+        return -1;
+
+    target_process->mem_usage = source_process->mem_usage;
+    return 0;
+}
+
+static int proc_duplicate_process_fds(process_t* source_process, process_t* target_process) {
+    if (!source_process || !target_process)
+        return -1;
+
+    for (int i = 0; i < MAX_PROC_FDS; ++i) {
+        flop_memcpy(&target_process->fds[i], &source_process->fds[i], sizeof(struct vfs_file_descriptor));
+        if (target_process->fds[i].node)
+            refcount_inc_not_zero(&target_process->fds[i].node->refcount);
+    }
+    return 0;
+}
+
+static int proc_set_parent_process(process_t* process, process_t* parent) {
+    if (!process)
+        return -1;
+
+    process->parent = parent;
+    if (parent)
+        proc_family_add_child(parent, process);
+
+    return 0;
 }
 
 void proc_debug_dump_process_info(process_t* process) {
