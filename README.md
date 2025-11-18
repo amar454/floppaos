@@ -1,14 +1,12 @@
 
-# **floppaOS**  
+# **The Flopperating System | floppaOS**  
 
 <img width="1011" height="145" alt="image" src="https://github.com/user-attachments/assets/7b9eacfb-147e-490f-ab99-579e631d7ba6" />
 
 ### **Copyright © Amar Djulovic 2024, 2025**  
 
-FloppaOS, or the Flopperating System is a lightweight, multitasking, and simplicity focused os.
-It features a monolithic kernel with a self-documented, diagram oriented, and easy to read code style
-is intended to be easy to approach and study for beginners. 
- 
+#### The Flopperating System, or (formally) floppaOS is a lightweight, monolithic, and multitasking hobby operating system. It targets the i386 platform. It is all designed by me and all code was made by me. My goal is simplicity, performance, ease of use, code readabiliy, and nice namespacing. This project is my prized possession and will most likely be a thesis for college.
+
 ---
 
 ## **Compiling Instructions**  
@@ -63,4 +61,5 @@ make cleanobj
 - [ ] if youre wondering if i have a gdt, you're in the wrong place
 
 ---
+
 
