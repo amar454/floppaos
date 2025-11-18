@@ -44,6 +44,7 @@ kernel.c:
 #include "../mem/gdt.h"
 #include "../mem/alloc.h"
 #include "../task/sched.h"
+#include "../task/process.h"
 #include "../drivers/vga/vgahandler.h"
 #include "../mem/paging.h"
 #include "../lib/logging.h"
@@ -139,7 +140,7 @@ int kmain(uint32_t magic, multiboot_info_t* mb_info) {
     init_kernel_heap();
     vfs_init();
     sched_init();
-
+    proc_init();
     echo("floppaOS kernel booted! now we do nothing.\n", GREEN);
 
     draw_floppaos_logo();

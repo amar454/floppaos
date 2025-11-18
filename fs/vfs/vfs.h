@@ -50,11 +50,27 @@ struct vfs_directory_list {
     struct vfs_directory_entry* tail;
 };
 
+typedef struct stat {
+    uint32_t st_mode;
+    uint32_t st_uid;
+    uint32_t st_gid;
+    uint64_t st_size;
+    uint64_t st_atime;
+    uint64_t st_mtime;
+    uint64_t st_ctime;
+    uint32_t st_nlink;
+    uint32_t st_ino;
+    uint32_t st_dev;
+} stat_t;
+
 struct vfs_node {
     struct vfs_mountpoint* mountpoint;
     void* data_pointer;
     int vfs_mode;
     refcount_t refcount;
+    stat_t stat;
+    struct vfs_op_tbl* ops;
+    char* name;
 };
 
 struct vfs_file_descriptor {
@@ -65,38 +81,25 @@ struct vfs_file_descriptor {
 typedef int (*rw)(struct vfs_node*, unsigned char*, unsigned long);
 
 struct vfs_op_tbl {
-    // open a file
-    struct vfs_node* (*open)(struct vfs_node*, char*); // node, path
-
-    // close an opened file
-    int (*close)(struct vfs_node*); // node
-
-    rw read;  // node, buffer, size
-    rw write; // node, buffer, size
-
-    // mounts a file system registered with the vfs
+    struct vfs_node* (*open)(struct vfs_node*, char*);
+    int (*close)(struct vfs_node*);
+    rw read;
+    rw write;
     void* (*mount)(char*, char*, int);
-
-    // unmounts a file system registered with the vfs
-    int (*unmount)(struct vfs_mountpoint*, char*); // mp, device name
-
-    // create a file
-    int (*create)(struct vfs_mountpoint*, char*); // mp, file name
-
-    // delete a file
-    int (*delete)(struct vfs_mountpoint*, char*); // mp, file name
-
-    // rename a file
-    int (*rename)(struct vfs_mountpoint*, char*, char*); // mp, old name, new name
-
-    // change file permissions
-    int (*ctrl)(struct vfs_node*, unsigned long, unsigned long); // node, command, arg
-
-    // seek within a file
-    int (*seek)(struct vfs_node*, unsigned long, unsigned char); // node, offset, whence
-
-    // return the list of a directory
-    struct vfs_directory_list* (*listdir)(struct vfs_mountpoint*, char*); // mp, path
+    int (*unmount)(struct vfs_mountpoint*, char*);
+    int (*create)(struct vfs_mountpoint*, char*);
+    int (*delete)(struct vfs_mountpoint*, char*);
+    int (*unlink)(struct vfs_mountpoint*, char*);
+    int (*mkdir)(struct vfs_mountpoint*, char*, uint32_t);
+    int (*rmdir)(struct vfs_mountpoint*, char*);
+    int (*rename)(struct vfs_mountpoint*, char*, char*);
+    int (*ctrl)(struct vfs_node*, unsigned long, unsigned long);
+    int (*seek)(struct vfs_node*, unsigned long, unsigned char);
+    struct vfs_directory_list* (*listdir)(struct vfs_mountpoint*, char*);
+    int (*stat)(const char* path, struct stat* st);
+    int (*fstat)(struct vfs_node* node, struct stat* st);
+    int (*lstat)(const char* path, struct stat* st);
+    int (*truncate)(struct vfs_node*, uint64_t length);
 };
 
 struct vfs_fs {
@@ -106,7 +109,6 @@ struct vfs_fs {
 };
 
 int vfs_init(void);
-
 int vfs_acknowledge_fs(struct vfs_fs* fs);
 int vfs_unacknowledge_fs(struct vfs_fs* fs);
 int vfs_mount(char* device, char* mount_point, int type);
@@ -117,5 +119,17 @@ int vfs_read(struct vfs_node* node, unsigned char* buffer, unsigned long size);
 int vfs_write(struct vfs_node* node, unsigned char* buffer, unsigned long size);
 struct vfs_directory_list* vfs_listdir(struct vfs_mountpoint* mp, char* path);
 int vfs_ctrl(struct vfs_node* node, unsigned long command, unsigned long arg);
+int vfs_seek(struct vfs_node* node, unsigned long offset, unsigned char whence);
+int vfs_stat(char* path, stat_t* st);
+int vfs_fstat(struct vfs_node* node, stat_t* st);
+int vfs_truncate(struct vfs_node* node, uint32_t length);
+int vfs_ftruncate(struct vfs_node* node, uint32_t length);
+int vfs_truncate_path(char* path, uint64_t length);
+int vfs_unlink(char* path);
+int vfs_mkdir(char* path, uint32_t mode);
+int vfs_rmdir(char* path);
+int vfs_rename(char* oldpath, char* newpath);
+struct vfs_directory_list* vfs_readdir_path(char* path);
+int vfs_ioctl(struct vfs_node* node, unsigned long cmd, unsigned long arg);
 
 #endif

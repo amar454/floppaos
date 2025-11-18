@@ -1,3 +1,6 @@
+#ifndef PROCESS_H
+#define PROCESS_H
+
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
@@ -101,3 +104,6 @@ int proc_kill(process_t* process);
 int proc_stop(process_t* process);
 int proc_continue(process_t* process);
 pid_t proc_fork(process_t* parent);
+int proc_init();
+
+#endif

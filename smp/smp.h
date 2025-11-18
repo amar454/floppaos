@@ -10,7 +10,6 @@
 #define CONFIG_MAX_CPUS 64
 #endif
 
-/* Public API */
 void smp_init_bsp(void);
 int smp_register_cpu(uint8_t apic_id);
 int smp_fetch_cpu(void);

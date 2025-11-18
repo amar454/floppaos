@@ -8,6 +8,7 @@ void c_syscall_handler(void);
 #include <stdbool.h>
 
 #include "../task/process.h"
+#include "../apps/echo.h"
 #include "../fs/vfs/vfs.h"
 #include "../mem/vmm.h"
 #include "../mem/pmm.h"
@@ -23,18 +24,37 @@ typedef enum syscall_num {
     SYSCALL_OPEN = 3,
     SYSCALL_CLOSE = 4,
     SYSCALL_MMAP = 5,
-    SYSCALL_BRK = 6
+    SYSCALL_SEEK = 6,
+    SYSCALL_STAT = 7,
+    SYSCALL_FSTAT = 8,
+    SYSCALL_UNLINK = 9,
+    SYSCALL_MKDIR = 10,
+    SYSCALL_RMDIR = 11,
+    SYSCALL_TRUNCATE = 12,
+    SYSCALL_FTRUNCATE = 13,
+    SYSCALL_RENAME = 14
 } syscall_num_t;
 
 typedef struct syscall_table {
     int (*syscall_read)(int fd, void* buf, size_t count);
     int (*syscall_write)(int fd, void* buf, size_t count);
     pid_t (*syscall_fork)(void);
-    int (*syscall_open)(char* path, uint32_t flags);
+    int (*syscall_open)(void* path, uint32_t flags);
     int (*syscall_close)(int fd);
-    int (*syscall_mmap)(uint32_t addr, uint32_t len, uint32_t flags);
-    int (*syscall_brk)(uint32_t addr);
+    int (*syscall_mmap)(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offset);
+    int (*sys_seek)(int fd, int offset, int whence);
+    int (*sys_stat)(char* path, stat_t* st);
+    int (*sys_fstat)(int fd, stat_t* st);
+    int (*sys_unlink)(char* path);
+    int (*sys_mkdir)(char* path, uint32_t mode);
+    int (*sys_rmdir)(char* path);
+    int (*sys_truncate)(char* path, uint64_t length);
+    int (*sys_ftruncate)(int fd, uint64_t length);
+    int (*sys_rename)(char* oldpath, char* newpath);
+    int (*sys_print)(void* str_ptr);
 } syscall_table_t;
+
+int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5);
 
 // fork the current running process; returns pid or -1
 pid_t sys_fork(void);
@@ -52,6 +72,38 @@ int sys_read(int fd, void* buf, size_t count);
 int sys_write(int fd, void* buf, size_t count);
 
 // mmap; returns virtual address or -1
-int sys_mmap(uint32_t addr, uint32_t len, uint32_t flags);
+int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offset);
+
+// seek to offset
+int sys_seek(int fd, int offset, int whence);
+
+// print to console
+int sys_print(void* str_ptr);
+
+// stat a file
+int sys_stat(char* path, stat_t* st);
+
+// fstat a file descriptor
+int sys_fstat(int fd, stat_t* st);
+
+// unlink a file
+int sys_unlink(char* path);
+
+// make directory
+int sys_mkdir(char* path, uint32_t mode);
+
+// remove directory
+int sys_rmdir(char* path);
+
+// truncate a file
+int sys_truncate(char* path, uint64_t length);
+
+// ftruncate a file descriptor
+int sys_ftruncate(int fd, uint64_t length);
+
+// rename a file
+int sys_rename(char* oldpath, char* newpath);
+
+extern syscall_table_t syscall_table;
 
 #endif // SYSCALL_H

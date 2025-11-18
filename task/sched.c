@@ -136,12 +136,18 @@ sched_internal_init_thread(void (*entry)(void), unsigned int priority, char* nam
 
 void reaper_init(void) {
     flop_memset(&reaper_desc, 0, sizeof(reaper_desc));
+
     spinlock_init(&reaper_desc.lock);
     signal_init(&reaper_desc.wake_signal);
     reaper_desc.running = 1;
 
+    flop_memset(&reaper_desc.dead_threads, 0, sizeof(reaper_desc.dead_threads));
+    spinlock_init(&reaper_desc.dead_threads.lock);
+    reaper_desc.dead_threads.head = NULL;
+    reaper_desc.dead_threads.tail = NULL;
+    reaper_desc.dead_threads.count = 0;
+    reaper_desc.dead_threads.name = "reaper_dead";
     reaper_desc.reaper_thread = sched_internal_init_thread(reaper_thread_entry, 1, "reaper", 0, NULL);
-
     sched_enqueue(sched.ready_queue, reaper_desc.reaper_thread);
     sched.reaper_thread = reaper_desc.reaper_thread;
 
@@ -197,22 +203,27 @@ int sched_spinlocks_init(void) {
 }
 
 int sched_scheduler_lists_init(void) {
-    static thread_list_t ready_queue_inst;
-    static thread_list_t sleep_queue_inst;
-    static thread_list_t kernel_threads_inst;
-    static thread_list_t user_threads_inst;
+    thread_list_t* ready_queue_list_instance = kmalloc(sizeof(thread_list_t));
+    thread_list_t* sleep_queue_list_instance = kmalloc(sizeof(thread_list_t));
+    thread_list_t* kernel_threads_inst = kmalloc(sizeof(thread_list_t));
+    thread_list_t* user_threads_inst = kmalloc(sizeof(thread_list_t));
 
-    flop_memset(&ready_queue_inst, 0, sizeof(thread_list_t));
-    flop_memset(&sleep_queue_inst, 0, sizeof(thread_list_t));
-    flop_memset(&kernel_threads_inst, 0, sizeof(thread_list_t));
-    flop_memset(&user_threads_inst, 0, sizeof(thread_list_t));
+    flop_memset(ready_queue_list_instance, 0, sizeof(thread_list_t));
+    flop_memset(sleep_queue_list_instance, 0, sizeof(thread_list_t));
+    flop_memset(kernel_threads_inst, 0, sizeof(thread_list_t));
+    flop_memset(user_threads_inst, 0, sizeof(thread_list_t));
 
-    sched.ready_queue = &ready_queue_inst;
-    sched.sleep_queue = &sleep_queue_inst;
-    sched.kernel_threads = &kernel_threads_inst;
-    sched.user_threads = &user_threads_inst;
+    sched.ready_queue = ready_queue_list_instance;
+    sched.sleep_queue = sleep_queue_list_instance;
+    sched.kernel_threads = kernel_threads_inst;
+    sched.user_threads = user_threads_inst;
 
     if (sched_spinlocks_init() < 0) {
+        kfree(sched.ready_queue, sizeof(thread_list_t));
+        kfree(sched.sleep_queue, sizeof(thread_list_t));
+        kfree(sched.kernel_threads, sizeof(thread_list_t));
+        kfree(sched.user_threads, sizeof(thread_list_t));
+        sched.ready_queue = sched.sleep_queue = sched.kernel_threads = sched.user_threads = NULL;
         return -1;
     }
 
@@ -247,9 +258,6 @@ void sched_init(void) {
 
     sched.stealer_thread = NULL;
     sched.next_tid = 0;
-
-    log("sched: initializing reaper\n", GREEN);
-    reaper_init();
 
     log("sched: adding idle thread to ready queue\n", GREEN);
     sched_thread_list_add(sched.idle_thread, sched.ready_queue);
@@ -675,6 +683,45 @@ static worker_thread* sched_create_worker_thread(void (*entry)(void*), void* arg
     if (!worker) {
         return NULL;
     }
+    sched_thread_list_add(worker->thread, sched.kernel_threads);
+    return worker;
+}
+
+typedef enum {
+    SUBSYS_MEM = 0,
+    SUBSYS_PROC,
+    SUBSYS_FS,
+    SUBSYS_DRIVERS,
+    SUBSYS_MISC,
+} sched_subsystem_t;
+
+worker_thread* sched_create_subsystem_worker(
+    sched_subsystem_t subsys, void (*entry)(void*), void* arg, unsigned priority, char* name) {
+    const char* default_name;
+    switch (subsys) {
+        case SUBSYS_MEM:
+            default_name = "mem_worker";
+            break;
+        case SUBSYS_PROC:
+            default_name = "proc_worker";
+            break;
+        case SUBSYS_FS:
+            default_name = "fs_worker";
+            break;
+        case SUBSYS_DRIVERS:
+            default_name = "drivers_worker";
+            break;
+        case SUBSYS_MISC:
+        default:
+            default_name = "misc_worker";
+            break;
+    }
+
+    worker_thread* worker = sched_internal_init_worker(entry, arg, priority, name ? name : (char*) default_name);
+    if (!worker) {
+        return NULL;
+    }
+
     sched_thread_list_add(worker->thread, sched.kernel_threads);
     return worker;
 }

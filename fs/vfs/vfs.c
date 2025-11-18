@@ -3,6 +3,7 @@
 #include "../../lib/refcount.h"
 #include "../../mem/alloc.h"
 #include "../../mem/paging.h"
+#include "../../mem/utils.h"
 #include "../../mem/vmm.h"
 #include "../../drivers/vga/vgahandler.h"
 #include "../../lib/str.h"
@@ -195,10 +196,21 @@ static int vfs_node_alloc(struct vfs_node** node, struct vfs_mountpoint* mp, int
     }
     (*node)->mountpoint = mp;
     (*node)->vfs_mode = mode;
+
     refcount_init(&(*node)->refcount);
 
     refcount_inc_not_zero(&mp->refcount);
 
+    (*node)->stat.st_mode = 0;
+    (*node)->stat.st_uid = 0;
+    (*node)->stat.st_gid = 0;
+    (*node)->stat.st_size = 0;
+    (*node)->stat.st_atime = 0;
+    (*node)->stat.st_mtime = 0;
+    (*node)->stat.st_ctime = 0;
+    (*node)->stat.st_nlink = 1;
+    (*node)->stat.st_ino = 0;
+    (*node)->stat.st_dev = 0;
     return 0;
 }
 
@@ -347,6 +359,44 @@ void vfs_directory_list_free(struct vfs_directory_list* list) {
         entry = next;
     }
     kfree(list, sizeof(struct vfs_directory_list));
+}
+
+static int vfs_internal_stat(struct vfs_node* node, stat_t* st) {
+    if (!node || !st)
+        return -1;
+
+    if (node->mountpoint->filesystem->op_table.stat)
+        return node->mountpoint->filesystem->op_table.stat(node->name, st);
+
+    *st = node->stat;
+    return 0;
+}
+
+int vfs_fstat(struct vfs_node* node, stat_t* st) {
+    if (!node || !st)
+        return -1;
+
+    return vfs_internal_stat(node, st);
+}
+
+int vfs_stat(char* path, stat_t* st) {
+    if (!path || !st)
+        return -1;
+
+    char* rel = NULL;
+    struct vfs_mountpoint* mp = vfs_resolve_mountpoint_and_path(path, &rel);
+    if (!mp)
+        return -1;
+
+    struct vfs_node temp;
+    flop_memset(&temp, 0, sizeof(temp));
+    temp.mountpoint = mp;
+    temp.vfs_mode = VFS_MODE_R;
+
+    if (vfs_try_open(&temp, mp, rel) != 0)
+        return -1;
+
+    return vfs_internal_stat(&temp, st);
 }
 
 // op table functions
@@ -525,4 +575,124 @@ int vfs_ctrl(struct vfs_node* node, unsigned long command, unsigned long arg) {
         return node->mountpoint->filesystem->op_table.ctrl(node, command, arg);
     }
     return -1;
+}
+
+int vfs_truncate(struct vfs_node* node, uint32_t new_size) {
+    if (!node)
+        return -1;
+
+    if (!node->ops || !node->ops->truncate)
+        return -1;
+
+    int r = node->ops->truncate(node, new_size);
+    if (r < 0)
+        return -1;
+
+    node->stat.st_size = new_size;
+    return 0;
+}
+
+int vfs_ftruncate(struct vfs_node* node, uint32_t len) {
+    return vfs_truncate(node, len);
+}
+
+int vfs_unlink(char* path) {
+    if (!path)
+        return -1;
+    char* rel = NULL;
+    struct vfs_mountpoint* mp = vfs_get_mountpoint_for_create(path, &rel);
+    if (!mp)
+        return -1;
+    if (mp->filesystem->op_table.unlink == NULL) {
+        if (refcount_dec_and_test(&mp->refcount))
+            vfs_free_mountpoint(mp);
+        return -1;
+    }
+    int r = mp->filesystem->op_table.unlink(mp, rel);
+    if (refcount_dec_and_test(&mp->refcount))
+        vfs_free_mountpoint(mp);
+    return r;
+}
+
+int vfs_mkdir(char* path, uint32_t mode) {
+    if (!path)
+        return -1;
+    char* rel = NULL;
+    struct vfs_mountpoint* mp = vfs_get_mountpoint_for_create(path, &rel);
+    if (!mp)
+        return -1;
+    if (mp->filesystem->op_table.mkdir == NULL) {
+        if (refcount_dec_and_test(&mp->refcount))
+            vfs_free_mountpoint(mp);
+        return -1;
+    }
+    int r = mp->filesystem->op_table.mkdir(mp, rel, mode);
+    if (refcount_dec_and_test(&mp->refcount))
+        vfs_free_mountpoint(mp);
+    return r;
+}
+
+int vfs_rmdir(char* path) {
+    if (!path)
+        return -1;
+    char* rel = NULL;
+    struct vfs_mountpoint* mp = vfs_get_mountpoint_for_create(path, &rel);
+    if (!mp)
+        return -1;
+    if (mp->filesystem->op_table.rmdir == NULL) {
+        if (refcount_dec_and_test(&mp->refcount))
+            vfs_free_mountpoint(mp);
+        return -1;
+    }
+    int r = mp->filesystem->op_table.rmdir(mp, rel);
+    if (refcount_dec_and_test(&mp->refcount))
+        vfs_free_mountpoint(mp);
+    return r;
+}
+
+struct vfs_directory_list* vfs_readdir_path(char* path) {
+    if (!path)
+        return NULL;
+    struct vfs_mountpoint* mp = vfs_file_to_mountpoint(path);
+    if (!mp)
+        return NULL;
+    char* rel = path + flopstrlen(mp->mount_point);
+    if (mp->filesystem->op_table.listdir == NULL)
+        return NULL;
+    return mp->filesystem->op_table.listdir(mp, rel);
+}
+
+int vfs_rename(char* oldpath, char* newpath) {
+    if (!oldpath || !newpath)
+        return -1;
+    struct vfs_mountpoint* mp_old = vfs_file_to_mountpoint(oldpath);
+    struct vfs_mountpoint* mp_new = vfs_file_to_mountpoint(newpath);
+    if (!mp_old || !mp_new)
+        return -1;
+    if (mp_old != mp_new)
+        return -1;
+    char* rel_old = oldpath + flopstrlen(mp_old->mount_point);
+    char* rel_new = newpath + flopstrlen(mp_old->mount_point);
+    if (mp_old->filesystem->op_table.rename == NULL)
+        return -1;
+    return mp_old->filesystem->op_table.rename(mp_old, rel_old, rel_new);
+}
+
+int vfs_truncate_path(char* path, uint64_t len) {
+    if (!path)
+        return -1;
+    struct vfs_node* n = vfs_open(path, VFS_MODE_W);
+    if (!n)
+        return -1;
+    if (n->mountpoint->filesystem->op_table.truncate == NULL) {
+        vfs_close(n);
+        return -1;
+    }
+    int r = n->mountpoint->filesystem->op_table.truncate(n, len);
+    vfs_close(n);
+    return r;
+}
+
+int vfs_ioctl(struct vfs_node* node, unsigned long cmd, unsigned long arg) {
+    return vfs_ctrl(node, cmd, arg);
 }

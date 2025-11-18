@@ -36,14 +36,22 @@ slab.c
 #include "../drivers/vga/vgahandler.h"
 #include "utils.h"
 #include <stdbool.h>
+#include "slab.h"
+#include "pmm.h"
+#include "../lib/logging.h"
+#include "../kernel/kernel.h"
+#include "../drivers/vga/vgahandler.h"
+#include "utils.h"
+#include <stdbool.h>
+
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 static slab_cache_t slab_cache_array[SLAB_ORDER_COUNT];
 static slab_cache_t* slab_caches[SLAB_ORDER_COUNT] = {0};
 
-static size_t get_order(size_t size) {
-    if (size == 0)
+static size_t slab_get_order(size_t size) {
+    if (!size)
         return 0;
-
     size_t order = 0;
     size_t slab_bytes = SLAB_PAGE_SIZE;
     while (slab_bytes < size + sizeof(slab_t)) {
@@ -55,26 +63,36 @@ static size_t get_order(size_t size) {
     return order;
 }
 
-static bool initialize_slab(slab_t* slab, slab_cache_t* cache, size_t order) {
-    size_t slab_bytes = SLAB_PAGE_SIZE * (1u << order);
-    if (slab_bytes <= sizeof(slab_t))
-        return false;
-
-    slab->num_objects = (slab_bytes - sizeof(slab_t)) / cache->object_size;
-    if (slab->num_objects == 0)
-        return false;
-
-    slab->free_count = slab->num_objects;
-    slab->next = NULL;
-    return true;
+static slab_cache_t* slab_create_cache_for_order(size_t order) {
+    size_t size = SLAB_MIN_SIZE << order;
+    slab_cache_t* cache = &slab_cache_array[order];
+    if (!cache)
+        return NULL;
+    cache->object_size = size;
+    cache->num_objects = (SLAB_PAGE_SIZE * (1u << order) - sizeof(slab_t)) / size;
+    if (!cache->num_objects)
+        return NULL;
+    cache->free_list = NULL;
+    cache->slab_list = NULL;
+    cache->free_count = 0;
+    return cache;
 }
 
-static void link_slab_to_cache(slab_t* slab, slab_cache_t* cache) {
+static slab_t* slab_create(slab_cache_t* cache, size_t order) {
+    if (!cache)
+        return NULL;
+    slab_t* slab = (slab_t*) pmm_alloc_pages(0, 1u << order);
+    if (!slab)
+        return NULL;
+    size_t slab_bytes = SLAB_PAGE_SIZE * (1u << order);
+    slab->num_objects = (slab_bytes - sizeof(slab_t)) / cache->object_size;
+    if (!slab->num_objects) {
+        pmm_free_pages(slab, order, 1);
+        return NULL;
+    }
+    slab->free_count = slab->num_objects;
     slab->next = cache->slab_list;
     cache->slab_list = slab;
-}
-
-static void initialize_slab_free_list(slab_t* slab, slab_cache_t* cache) {
     uint8_t* ptr = (uint8_t*) (slab + 1);
     for (size_t i = 0; i < slab->num_objects; i++) {
         *(uint8_t**) ptr = cache->free_list;
@@ -82,285 +100,101 @@ static void initialize_slab_free_list(slab_t* slab, slab_cache_t* cache) {
         ptr += cache->object_size;
     }
     cache->free_count += slab->num_objects;
-}
-
-static bool initialize_slab_cache(slab_cache_t* cache, size_t size, size_t order) {
-    if (!cache || size == 0)
-        return false;
-
-    cache->object_size = size;
-    size_t slab_bytes = SLAB_PAGE_SIZE * (1u << order);
-    cache->num_objects = (slab_bytes - sizeof(slab_t)) / size;
-    if (cache->num_objects == 0)
-        return false;
-
-    cache->free_count = 0;
-    cache->free_list = NULL;
-    cache->slab_list = NULL;
-    return true;
-}
-
-static slab_cache_t* create_slab_cache_for_order(size_t order) {
-    size_t size = SLAB_MIN_SIZE << order;
-    slab_cache_t* cache = &slab_cache_array[order];
-    if (!initialize_slab_cache(cache, size, order))
-        return NULL;
-    return cache;
-}
-
-static slab_t* create_slab(slab_cache_t* cache, size_t order) {
-    if (!cache)
-        return NULL;
-
-    uint32_t pages = 1u << order;
-    slab_t* slab = (slab_t*) pmm_alloc_pages(0, pages);
-    if (!slab)
-        return NULL;
-
-    if (!initialize_slab(slab, cache, order)) {
-        pmm_free_pages(slab, order, 1);
-        PANIC_FAILED_TO_CREATE_SLAB((uintptr_t) slab);
-        return NULL;
-    }
-
-    link_slab_to_cache(slab, cache);
-    initialize_slab_free_list(slab, cache);
-
     return slab;
 }
 
-static int get_slab_size(slab_cache_t* cache) {
-    if (!cache)
-        return 0;
-    return (int) (cache->object_size * cache->num_objects);
-}
-
-static int get_slab_order(slab_cache_t* cache) {
-    if (!cache)
-        return 0;
-    return (int) get_order(cache->object_size);
-}
-
-static void log_slab_info(slab_cache_t* cache) {
-    if (!cache)
-        return;
-    log("Slab cache info:\n", LIGHT_GRAY);
-    log("Object size: ", LIGHT_GRAY);
-    log_uint("", cache->object_size);
-    log("\nNumber of objects (per slab): ", LIGHT_GRAY);
-    log_uint("", cache->num_objects);
-    log("\nFree count (total): ", LIGHT_GRAY);
-    log_uint("", cache->free_count);
-    log("\nSlab list: ", LIGHT_GRAY);
-    log_uint("", (uintptr_t) cache->slab_list);
-    log("\nFree list head: ", LIGHT_GRAY);
-    log_uint("", (uintptr_t) cache->free_list);
-    log("\n", LIGHT_GRAY);
-}
-
-static void* allocate_from_free_list(slab_cache_t* cache) {
-    if (cache->free_count > 0 && cache->free_list) {
-        void* ptr = cache->free_list;
-        cache->free_list = *(uint8_t**) ptr;
-        cache->free_count--;
-        return ptr;
-    }
-    return NULL;
-}
-
-static slab_cache_t* validate_allocation(size_t size, size_t* out_order) {
-    if (size == 0 || size > SLAB_MAX_SIZE || !out_order)
+static void* slab_free_list_alloc(slab_cache_t* cache) {
+    if (!cache || !cache->free_list)
         return NULL;
+    void* ptr = cache->free_list;
+    cache->free_list = *(uint8_t**) ptr;
+    cache->free_count--;
+    return ptr;
+}
 
-    size_t order_index = 0;
-    size_t found = SIZE_MAX;
+static slab_cache_t* slab_find_cache_from_size(size_t size, size_t* out_order) {
+    if (!size || size > SLAB_MAX_SIZE || !out_order)
+        return NULL;
     for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
-        size_t obj_size = SLAB_MIN_SIZE << i;
-        if (obj_size >= size) {
-            order_index = i;
-            found = i;
-            break;
-        }
-    }
-    if (found == SIZE_MAX)
-        return NULL;
-
-    *out_order = order_index;
-    return slab_caches[order_index];
-}
-
-static void* create_and_allocate(slab_cache_t* cache, size_t order) {
-    if (!cache)
-        return NULL;
-    slab_t* s = create_slab(cache, order);
-    if (!s)
-        return NULL;
-    return allocate_from_free_list(cache);
-}
-
-static void remove_slab_from_cache(slab_cache_t* cache, slab_t* slab) {
-    if (!cache || !slab)
-        return;
-
-    if (slab == cache->slab_list) {
-        cache->slab_list = slab->next;
-        return;
-    }
-
-    for (slab_t* prev = cache->slab_list; prev; prev = prev->next) {
-        if (prev->next == slab) {
-            prev->next = slab->next;
-            return;
-        }
-    }
-}
-
-static bool find_slab_in_cache(slab_cache_t* cache, slab_t* target_slab) {
-    if (!cache)
-        return false;
-    for (slab_t* slab = cache->slab_list; slab; slab = slab->next) {
-        if (slab == target_slab)
-            return true;
-    }
-    return false;
-}
-
-static slab_cache_t* find_containing_cache(slab_t* containing_slab, size_t* out_order) {
-    if (!containing_slab || !out_order)
-        return NULL;
-    for (size_t order = 0; order < SLAB_ORDER_COUNT; order++) {
-        slab_cache_t* cache = slab_caches[order];
-        if (!cache)
-            continue;
-        if (find_slab_in_cache(cache, containing_slab)) {
-            *out_order = order;
-            return cache;
+        if ((SLAB_MIN_SIZE << i) >= size) {
+            *out_order = i;
+            return slab_caches[i];
         }
     }
     return NULL;
 }
 
-static void add_to_free_list(slab_cache_t* cache, void* ptr) {
-    if (!cache || !ptr)
-        return;
+void slab_init(void) {
+    for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
+        slab_caches[i] = slab_create_cache_for_order(i);
+    }
+}
+
+void* slab_alloc(size_t size) {
+    if (!size || size > SLAB_MAX_SIZE)
+        return NULL;
+    size_t order;
+    slab_cache_t* cache = slab_find_cache_from_size(size, &order);
+    if (!cache)
+        return NULL;
+    void* ptr = slab_free_list_alloc(cache);
+    if (ptr)
+        return ptr;
+    return slab_create(cache, order) ? slab_free_list_alloc(cache) : NULL;
+}
+
+static slab_t* get_containing_slab(void* ptr) {
+    return (slab_t*) ((uintptr_t) ptr & ~(SLAB_PAGE_SIZE - 1));
+}
+
+static slab_cache_t* slab_find_containing_cache(slab_t* slab, size_t* out_order) {
+    if (!slab || !out_order)
+        return NULL;
+    for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
+        slab_cache_t* cache = slab_caches[i];
+        for (slab_t* s = cache->slab_list; s; s = s->next) {
+            if (s == slab) {
+                *out_order = i;
+                return cache;
+            }
+        }
+    }
+    return NULL;
+}
+
+static void slab_add_to_free_list(slab_cache_t* cache, void* ptr) {
     *(uint8_t**) ptr = cache->free_list;
     cache->free_list = ptr;
     cache->free_count++;
 }
 
-static void destroy_slab(slab_t* slab, size_t order) {
-    if (!slab)
+static void slab_remove_slab(slab_cache_t* cache, slab_t* slab) {
+    if (cache->slab_list == slab) {
+        cache->slab_list = slab->next;
         return;
-    pmm_free_pages(slab, order, 1);
-}
-
-static bool is_slab_empty(slab_t* slab) {
-    return slab && slab->free_count == slab->num_objects;
-}
-
-static bool is_ptr_valid(void* ptr, uintptr_t page_addr) {
-    uintptr_t ptr_addr = (uintptr_t) ptr;
-    return ptr && ptr_addr >= page_addr + sizeof(slab_t);
-}
-
-slab_t* get_containing_slab(void* ptr) {
-    uintptr_t ptr_addr = (uintptr_t) ptr;
-    return (slab_t*) (ptr_addr & ~(SLAB_PAGE_SIZE - 1));
-}
-
-static void initialize_slab_cache_for_order(size_t order) {
-    size_t size = SLAB_MIN_SIZE << order;
-    if (size == 0)
-        return;
-
-    slab_caches[order] = create_slab_cache_for_order(order);
-    if (slab_caches[order]) {
-        log_uint("Initialized slab cache for size: ", size);
+    }
+    for (slab_t* s = cache->slab_list; s; s = s->next) {
+        if (s->next == slab) {
+            s->next = slab->next;
+            return;
+        }
     }
 }
 
-void slab_init(void) {
-    log("Initializing slab allocator...\n", LIGHT_GRAY);
-    for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
-        initialize_slab_cache_for_order(i);
-    }
-    log("Slab allocator initialized.\n", GREEN);
-}
-
-// allocate an object from slab allocator
-// not thread safe, caller must hold lock
-void* slab_alloc(size_t size) {
-    if (size == 0 || size > SLAB_MAX_SIZE)
-        return NULL;
-
-    size_t order_idx;
-    slab_cache_t* cache = validate_allocation(size, &order_idx);
-    if (!cache) {
-        return NULL;
-    }
-
-    void* ptr = allocate_from_free_list(cache);
-    if (ptr)
-        return ptr;
-
-    return create_and_allocate(cache, order_idx);
-}
-
-static void handle_slab_free(void* ptr, slab_t* containing_slab, slab_cache_t* cache, size_t order) {
-    if (!ptr || !containing_slab || !cache)
-        return;
-
-    add_to_free_list(cache, ptr);
-    containing_slab->free_count++;
-
-    if (is_slab_empty(containing_slab)) {
-        remove_slab_from_cache(cache, containing_slab);
-        destroy_slab(containing_slab, order);
-    }
-}
-
-// free an object from the slab allocator
-// not thread safe, caller must hold lock
 void slab_free(void* ptr) {
     if (!ptr)
         return;
-
-    slab_t* containing_slab = get_containing_slab(ptr);
-    if (!is_ptr_valid(ptr, (uintptr_t) containing_slab))
-        return;
-
+    slab_t* slab = get_containing_slab(ptr);
     size_t order;
-    slab_cache_t* cache = find_containing_cache(containing_slab, &order);
+    slab_cache_t* cache = slab_find_containing_cache(slab, &order);
     if (!cache)
         return;
-
-    handle_slab_free(ptr, containing_slab, cache, order);
-}
-
-static void* handle_reallocation(void* ptr, size_t new_size) {
-    void* new_ptr = slab_alloc(new_size);
-    if (!new_ptr)
-        return NULL;
-
-    slab_t* old_slab = get_containing_slab(ptr);
-    size_t old_order;
-    slab_cache_t* old_cache = find_containing_cache(old_slab, &old_order);
-    if (old_cache) {
-        flop_memcpy(new_ptr, ptr, MIN(new_size, old_cache->object_size));
+    slab_add_to_free_list(cache, ptr);
+    slab->free_count--;
+    if (slab->free_count == slab->num_objects) {
+        slab_remove_slab(cache, slab);
+        pmm_free_pages(slab, order, 1);
     }
-
-    slab_free(ptr);
-    return new_ptr;
-}
-
-void* slab_realloc(void* ptr, size_t new_size) {
-    if (!ptr)
-        return slab_alloc(new_size);
-    if (!new_size) {
-        slab_free(ptr);
-        return NULL;
-    }
-    return handle_reallocation(ptr, new_size);
 }
 
 void* slab_calloc(size_t num, size_t size) {
@@ -371,26 +205,33 @@ void* slab_calloc(size_t num, size_t size) {
     return ptr;
 }
 
-static void* align_pointer(void* ptr, size_t alignment) {
-    uintptr_t addr = (uintptr_t) ptr;
-    return (void*) ((addr + alignment - 1) & ~(alignment - 1));
-}
-
-static bool is_valid_alignment(size_t alignment) {
-    return alignment && !(alignment & (alignment - 1));
+void* slab_realloc(void* ptr, size_t new_size) {
+    if (!ptr)
+        return slab_alloc(new_size);
+    if (!new_size) {
+        slab_free(ptr);
+        return NULL;
+    }
+    void* new_ptr = slab_alloc(new_size);
+    if (!new_ptr)
+        return NULL;
+    slab_t* old_slab = get_containing_slab(ptr);
+    size_t order;
+    slab_cache_t* old_cache = slab_find_containing_cache(old_slab, &order);
+    if (old_cache)
+        flop_memcpy(new_ptr, ptr, MIN(new_size, old_cache->object_size));
+    slab_free(ptr);
+    return new_ptr;
 }
 
 void* slab_aligned_alloc(size_t alignment, size_t size) {
-    if (!is_valid_alignment(alignment)) {
-        log("slab: invalid alignment\n", RED);
+    if (!alignment || (alignment & (alignment - 1)))
         return NULL;
-    }
-
-    size_t padded_size = size + alignment - 1;
-    void* ptr = slab_alloc(padded_size);
+    void* ptr = slab_alloc(size + alignment - 1);
     if (!ptr)
         return NULL;
-    return align_pointer(ptr, alignment);
+    uintptr_t addr = ((uintptr_t) ptr + alignment - 1) & ~(alignment - 1);
+    return (void*) addr;
 }
 
 size_t slab_get_allocated_size(void* ptr) {
@@ -398,47 +239,10 @@ size_t slab_get_allocated_size(void* ptr) {
         return 0;
     slab_t* slab = get_containing_slab(ptr);
     size_t order;
-    slab_cache_t* cache = find_containing_cache(slab, &order);
+    slab_cache_t* cache = slab_find_containing_cache(slab, &order);
     return cache ? cache->object_size : 0;
 }
 
-static void* handle_resize(void* ptr, size_t new_size) {
-    slab_t* slab = get_containing_slab(ptr);
-    size_t order;
-    slab_cache_t* cache = find_containing_cache(slab, &order);
-    if (!cache)
-        return NULL;
-
-    void* new_ptr = slab_alloc(new_size);
-    if (new_ptr) {
-        flop_memcpy(new_ptr, ptr, cache->object_size);
-        slab_free(ptr);
-    }
-    return new_ptr;
-}
-
 void* slab_resize(void* ptr, size_t new_size) {
-    if (!ptr)
-        return slab_alloc(new_size);
-    if (!new_size) {
-        slab_free(ptr);
-        return NULL;
-    }
-    return handle_resize(ptr, new_size);
-}
-
-static void print_slab_cache_info(slab_cache_t* cache) {
-    if (!cache)
-        return;
-    log_f("Slab cache size:", cache->object_size);
-    log_f("  Free count:", cache->free_count);
-    for (slab_t* slab = cache->slab_list; slab; slab = slab->next) {
-        log_f("    Slab free count:", slab->free_count);
-    }
-}
-
-void slab_debug(void) {
-    for (size_t i = 0; i < SLAB_ORDER_COUNT; i++) {
-        print_slab_cache_info(slab_caches[i]);
-    }
+    return slab_realloc(ptr, new_size);
 }

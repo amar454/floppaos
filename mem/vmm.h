@@ -36,6 +36,7 @@ typedef struct {
 extern uint32_t* pg_dir;
 extern uint32_t* pg_tbls;
 extern uint32_t* current_pg_dir;
+
 int vmm_alloc_pde(uint32_t* dir, uint32_t pde_idx, uint32_t flags);
 #define USER_SPACE_START 0x00100000U
 #define USER_SPACE_END 0xBFFFFFFFU
