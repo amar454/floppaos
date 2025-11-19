@@ -9,6 +9,22 @@
 
 ---
 
+## **Feature Overview**  
+
+- [x] Physical memory manager
+- [x] Virtual memory manager
+- [x] Heap allocator
+- [x] Processes
+- [x] Scheduling
+- [x] Userspace
+- [x] IPC (pipes)
+- [x] Interrupts
+- [x] Drivers (time, keyboard, ACPI, VGA, framebuffer)
+- [x] Grahpical Terminal 
+- [ ] if youre wondering if i have a GDT, you're in the wrong place
+
+---
+
 ## **Compiling Instructions**  
 
 > *Note: If you're on Windows, you'll need a UNIX-like environment such as Cygwin to compile the source code.*  
@@ -46,20 +62,6 @@ make cleanobj
 ```  
 *(This is the recommended step after compilation.)*  
 
----
 
-## **Feature Overview**  
-
-- [x] Memory allocation (pmm, vmm, paging, heap)
-- [x] Task scheduling (smp) 
-- [x] Multiboot 1   
-- [x] Tmpfs 
-- [x] vfs
-- [x] Full graphical support 
-- [x] Flanterm 
-
-- [ ] if youre wondering if i have a gdt, you're in the wrong place
-
----
 
 
