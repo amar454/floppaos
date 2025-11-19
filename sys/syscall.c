@@ -241,6 +241,28 @@ static int sys_mmap_internal_get_va(vmm_region_t* region, uint32_t requested_va,
     return 0;
 }
 
+int sys_mmap_internal_find_and_seek(int fd, struct vfs_node** out_node, uint32_t offset) {
+    process_t* proc = proc_get_current();
+
+    if (fd < 0 || fd >= MAX_PROC_FDS) {
+        return -1;
+    }
+
+    struct vfs_file_descriptor* descriptor = &proc->fds[fd];
+
+    if (!descriptor || !descriptor->node) {
+        return -1;
+    }
+
+    *out_node = descriptor->node;
+
+    if (vfs_seek(*out_node, offset, 0) < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
 int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offset) {
     if (len == 0) {
         return -1;
@@ -257,19 +279,7 @@ int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offs
 
     struct vfs_node* node = NULL;
     if (fd >= 0) {
-        if (fd >= MAX_PROC_FDS) {
-            return -1;
-        }
-
-        struct vfs_file_descriptor* descriptor = &proc->fds[fd];
-
-        if (!descriptor || !descriptor->node) {
-            return -1;
-        }
-
-        node = descriptor->node;
-
-        if (vfs_seek(node, offset, 0) < 0) {
+        if (sys_mmap_internal_find_and_seek(fd, &node, offset) < 0) {
             return -1;
         }
     }
@@ -356,7 +366,26 @@ int sys_getpid() {
     return proc->pid;
 }
 
-void c_syscall_handler() {
+int sys_chdir(char* path) {
+    if (!path)
+        return -1;
+
+    process_t* proc = proc_get_current();
+    if (!proc)
+        return -1;
+
+    struct vfs_node* new_cwd = vfs_open(path, 0);
+    if (!new_cwd)
+        return -1;
+
+    if (proc->cwd)
+        vfs_close(proc->cwd);
+
+    proc->cwd = new_cwd;
+    return 0;
+}
+
+void c_syscall_routine() {
     uint32_t num, a1, a2, a3, a4, a5;
 
     asm volatile("mov %%eax, %0\n"
@@ -411,6 +440,12 @@ void c_syscall_handler() {
             break;
         case SYSCALL_RENAME:
             ret = sys_rename((char*) a1, (char*) a2);
+            break;
+        case SYSCALL_GETPID:
+            ret = sys_getpid();
+            break;
+        default:
+            log("c_syscall_routine: Unknown syscall number\n", RED);
             break;
     }
 

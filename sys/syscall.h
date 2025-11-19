@@ -32,7 +32,9 @@ typedef enum syscall_num {
     SYSCALL_RMDIR = 11,
     SYSCALL_TRUNCATE = 12,
     SYSCALL_FTRUNCATE = 13,
-    SYSCALL_RENAME = 14
+    SYSCALL_RENAME = 14,
+
+    SYSCALL_GETPID = 15
 } syscall_num_t;
 
 typedef struct syscall_table {

@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdatomic.h>
 #include "../../lib/refcount.h"
-
+#include "../../task/ipc/pipe.h"
 #define VFS_MAX_FILE_NAME 256
 
 #define VFS_FILE 0x0
@@ -13,6 +13,7 @@
 #define VFS_DEV 0x2
 #define VFS_SYMLINK 0x3
 #define VFS_HIDDEN 0x4
+#define VFS_PIPE 0x5
 
 #define VFS_MODE_R 0x1
 #define VFS_MODE_W 0x2
@@ -64,6 +65,7 @@ typedef struct stat {
 } stat_t;
 
 struct vfs_node {
+    pipe_t pipe;
     struct vfs_mountpoint* mountpoint;
     void* data_pointer;
     int vfs_mode;
@@ -122,8 +124,8 @@ int vfs_ctrl(struct vfs_node* node, unsigned long command, unsigned long arg);
 int vfs_seek(struct vfs_node* node, unsigned long offset, unsigned char whence);
 int vfs_stat(char* path, stat_t* st);
 int vfs_fstat(struct vfs_node* node, stat_t* st);
-int vfs_truncate(struct vfs_node* node, uint32_t length);
-int vfs_ftruncate(struct vfs_node* node, uint32_t length);
+int vfs_truncate(struct vfs_node* node, uint32_t new_size);
+int vfs_ftruncate(struct vfs_node* node, uint32_t len);
 int vfs_truncate_path(char* path, uint64_t length);
 int vfs_unlink(char* path);
 int vfs_mkdir(char* path, uint32_t mode);

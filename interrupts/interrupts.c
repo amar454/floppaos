@@ -191,7 +191,7 @@ static void _pit_init() {
     log("pit: init - ok\n", GREEN);
 }
 
-extern void syscall_handler();
+extern void syscall_routine();
 
 // set idt entries for the isr and irq and load them
 static void _idt_init() {
@@ -210,7 +210,7 @@ static void _idt_init() {
     set_idt_entry(32, (uint32_t) irq0, KERNEL_CODE_SEGMENT, 0x8E);
     set_idt_entry(33, (uint32_t) irq1, KERNEL_CODE_SEGMENT, 0x8E);
 
-    set_idt_entry(80, (uint32_t) syscall_handler, KERNEL_CODE_SEGMENT, 0x8E);
+    set_idt_entry(80, (uint32_t) syscall_routine, KERNEL_CODE_SEGMENT, 0x8E);
 
     __asm__ volatile("lidt (%0)" ::"r"(&idtp) : "memory");
     __asm__ volatile("sti");

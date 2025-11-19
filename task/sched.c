@@ -40,56 +40,70 @@ static void idle_thread_loop() {
     }
 }
 
+static void sched_reaper_remove_from_sleep_queue(thread_t* thread) {
+    if (!thread || !sched.sleep_queue) {
+        return;
+    }
+
+    spinlock(&sched.sleep_queue->lock);
+
+    thread_t* previous_thread = NULL;
+    thread_t* current_thread = sched.sleep_queue->head;
+
+    while (current_thread) {
+        thread_t* next_thread = current_thread->next;
+
+        if (current_thread == thread) {
+            if (previous_thread) {
+                previous_thread->next = next_thread;
+            } else {
+                sched.sleep_queue->head = next_thread;
+            }
+
+            if (current_thread == sched.sleep_queue->tail) {
+                sched.sleep_queue->tail = previous_thread;
+            }
+
+            sched.sleep_queue->count--;
+            current_thread->next = NULL;
+            break;
+        }
+
+        previous_thread = current_thread;
+        current_thread = next_thread;
+    }
+
+    spinlock_unlock(&sched.sleep_queue->lock, true);
+}
+
+static void sched_reaper_enqueue_ready(thread_t* thread) {
+    if (!thread)
+        return;
+
+    thread->thread_state = THREAD_READY;
+    sched_enqueue(sched.ready_queue, thread);
+}
+
 void sched_wake_reaper(void) {
     if (!sched.reaper_thread)
         return;
 
-    thread_t* reaper = sched.reaper_thread;
-
+    thread_t* reaper_thread = sched.reaper_thread;
     atomic_store(&reaper_desc.wake_signal.state, 1);
 
-    if (reaper->thread_state == THREAD_RUNNING || reaper->thread_state == THREAD_READY) {
+    if (reaper_thread->thread_state == THREAD_RUNNING || reaper_thread->thread_state == THREAD_READY)
         return;
-    }
 
-    if (reaper->thread_state == THREAD_SLEEPING) {
-        spinlock(&sched.sleep_queue->lock);
-
-        thread_t* prev = NULL;
-        thread_t* curr = sched.sleep_queue->head;
-
-        while (curr) {
-            if (curr == reaper) {
-                if (prev) {
-                    prev->next = curr->next;
-                } else {
-                    sched.sleep_queue->head = curr->next;
-                }
-
-                if (curr == sched.sleep_queue->tail) {
-                    sched.sleep_queue->tail = prev;
-                }
-
-                sched.sleep_queue->count--;
-                curr->next = NULL;
-                break;
-            }
-            prev = curr;
-            curr = curr->next;
-        }
-
-        spinlock_unlock(&sched.sleep_queue->lock, true);
-
-        // requeue in ready list
-        reaper->thread_state = THREAD_READY;
-        sched_enqueue(sched.ready_queue, reaper);
+    if (reaper_thread->thread_state == THREAD_SLEEPING) {
+        sched_reaper_remove_from_sleep_queue(reaper_thread);
+        sched_reaper_enqueue_ready(reaper_thread);
     }
 }
 
 static inline void signal_wait(signal_t* s) {
-    while (atomic_load(&s->state) == 0) {
+    while (atomic_load(&s->state) == 0)
         sched_yield();
-    }
+
     atomic_store(&s->state, 0);
 }
 
@@ -102,33 +116,40 @@ static inline void signal_send(signal_t* s) {
     sched_wake_reaper();
 }
 
-static void reaper_thread_entry(void) {
-    log("reaper: thread started", GREEN);
+static thread_t* sched_reaper_dequeue_dead(void) {
+    spinlock(&reaper_desc.lock);
+    thread_t* dead_thread = sched_dequeue(&reaper_desc.dead_threads);
+    spinlock_unlock(&reaper_desc.lock, true);
+    return dead_thread;
+}
 
+static void sched_reaper_cleanup_thread(thread_t* thread) {
+    if (!thread)
+        return;
+
+    if (thread->kernel_stack)
+        kfree(thread->kernel_stack, 4096);
+
+    if (thread->user && thread->process)
+        sched_remove(thread->process->threads, thread);
+
+    kfree(thread, sizeof(thread_t));
+}
+
+static void reaper_thread_main(void) {
     while (reaper_desc.running) {
         signal_wait(&reaper_desc.wake_signal);
 
         while (1) {
-            spinlock(&reaper_desc.lock);
-            thread_t* dead = sched_dequeue(&reaper_desc.dead_threads);
-            spinlock_unlock(&reaper_desc.lock, true);
-
-            if (!dead)
+            thread_t* dead_thread = sched_reaper_dequeue_dead();
+            if (!dead_thread)
                 break;
 
-            if (dead->kernel_stack)
-                kfree(dead->kernel_stack, 4096);
-
-            if (dead->user && dead->process)
-                sched_remove(dead->process->threads, dead);
-
-            kfree(dead, sizeof(thread_t));
+            sched_reaper_cleanup_thread(dead_thread);
         }
 
         sched_yield();
     }
-
-    log("reaper: exiting", YELLOW);
 }
 
 static thread_t*
@@ -139,19 +160,41 @@ void reaper_init(void) {
 
     spinlock_init(&reaper_desc.lock);
     signal_init(&reaper_desc.wake_signal);
-    reaper_desc.running = 1;
 
+    reaper_desc.running = 1;
     flop_memset(&reaper_desc.dead_threads, 0, sizeof(reaper_desc.dead_threads));
     spinlock_init(&reaper_desc.dead_threads.lock);
-    reaper_desc.dead_threads.head = NULL;
-    reaper_desc.dead_threads.tail = NULL;
-    reaper_desc.dead_threads.count = 0;
     reaper_desc.dead_threads.name = "reaper_dead";
-    reaper_desc.reaper_thread = sched_internal_init_thread(reaper_thread_entry, 1, "reaper", 0, NULL);
+
+    reaper_desc.reaper_thread = sched_internal_init_thread(reaper_thread_main, 1, "reaper", 0, NULL);
     sched_enqueue(sched.ready_queue, reaper_desc.reaper_thread);
     sched.reaper_thread = reaper_desc.reaper_thread;
+}
 
-    log("reaper: initialized", GREEN);
+// Additional useful functions for managing dead-thread queue
+
+void sched_add_dead_thread(thread_t* thread) {
+    if (!thread)
+        return;
+
+    spinlock(&reaper_desc.lock);
+    sched_enqueue(&reaper_desc.dead_threads, thread);
+    spinlock_unlock(&reaper_desc.lock, true);
+
+    signal_send(&reaper_desc.wake_signal);
+}
+
+size_t sched_dead_thread_count(void) {
+    size_t count = 0;
+    spinlock(&reaper_desc.lock);
+    count = reaper_desc.dead_threads.count;
+    spinlock_unlock(&reaper_desc.lock, true);
+    return count;
+}
+
+void sched_stop_reaper(void) {
+    reaper_desc.running = 0;
+    signal_send(&reaper_desc.wake_signal);
 }
 
 static void stealer_thread_entry() {}

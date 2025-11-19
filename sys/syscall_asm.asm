@@ -1,6 +1,7 @@
-global syscall_handler
-extern c_syscall_handler
-syscall_handler:
+global syscall_routine
+section .text
+extern c_syscall_routine
+syscall_routine:
     pusha
     push ds
     push es
@@ -11,7 +12,7 @@ syscall_handler:
     mov ds, ax
     mov es, ax
 
-    call c_syscall_handler
+    call c_syscall_routine
 
     pop gs
     pop fs

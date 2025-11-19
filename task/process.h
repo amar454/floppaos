@@ -23,7 +23,8 @@ typedef enum process_state {
     SLEEPING,
     STOPPED,
     EMBRYO,
-    ZOMBIE
+    ZOMBIE,
+    TERMINATED
 } process_state_t;
 
 typedef struct proc_table {
