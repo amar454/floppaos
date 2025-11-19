@@ -35,7 +35,6 @@ void pipe_close(pipe_t* pipe, int write) {
             free_now = true;
     }
 
-    // Only free when BOTH sides are closed
     if (!pipe->read_fd_open && !pipe->write_fd_open && atomic_load(&pipe->read_refs) == 0 &&
         atomic_load(&pipe->write_refs) == 0) {
         spinlock_unlock(&pipe->lock, true);
@@ -84,7 +83,6 @@ int pipe_read(pipe_t* pipe, char* addr, int len) {
     while (n < len) {
         spinlock(&pipe->lock);
 
-        // empty but writers still exist → block
         if (pipe->read_bytes == pipe->write_bytes && atomic_load(&pipe->write_refs) > 0) {
             if (proc_get_current()->state == TERMINATED) {
                 spinlock_unlock(&pipe->lock, true);
@@ -96,7 +94,6 @@ int pipe_read(pipe_t* pipe, char* addr, int len) {
             continue;
         }
 
-        // empty AND no writers → EOF
         if (pipe->read_bytes == pipe->write_bytes && atomic_load(&pipe->write_refs) == 0) {
             spinlock_unlock(&pipe->lock, true);
             return n;
