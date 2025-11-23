@@ -74,7 +74,7 @@ pid_t sys_fork(void) {
     return child_pid;
 }
 
-int sys_dup(pid_t pid) {
+pid_t sys_dup(pid_t pid) {
     return proc_dup(pid);
 }
 
@@ -538,7 +538,15 @@ void c_syscall_routine() {
         case SYSCALL_DUP:
             ret = sys_dup(a1);
             break;
-
+        case SYSCALL_PIPE:
+            ret = sys_pipe((int*) a1);
+            break;
+        case SYSCALL_CLONE:
+            ret = sys_clone(a1, (void*) a2);
+            break;
+        case SYSCALL_IOCTL:
+            ret = sys_ioctl(a1, a2, (void*) a3);
+            break;
         default:
             log("c_syscall_routine: Unknown syscall number\n", RED);
             break;
