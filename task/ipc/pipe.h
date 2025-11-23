@@ -22,5 +22,6 @@ void pipe_init(pipe_t* pipe);
 void pipe_close(pipe_t* pipe, int write);
 int pipe_write(pipe_t* pipe, char* addr, int len);
 int pipe_read(pipe_t* pipe, char* addr, int len);
-
+bool pipe_dup_read(pipe_t* p);
+bool pipe_dup_write(pipe_t* p);
 #endif // PIPE_H

@@ -197,7 +197,6 @@ extern void syscall_routine();
 static void _idt_init() {
     idtp.limit = (sizeof(idt_entry_t) * IDT_SIZE) - 1;
     idtp.base = (uint32_t) &idt;
-
     for (size_t i = 0; i < IDT_SIZE; i++) {
         set_idt_entry(i, 0, 0, 0);
     }

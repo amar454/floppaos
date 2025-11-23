@@ -110,10 +110,10 @@ int pipe_read(pipe_t* pipe, char* addr, int len) {
     return n;
 }
 
-void pipe_dup_read(pipe_t* p) {
-    refcount_inc_not_zero(&p->read_refs);
+bool pipe_dup_read(pipe_t* p) {
+    return refcount_inc_not_zero(&p->read_refs);
 }
 
-void pipe_dup_write(pipe_t* p) {
-    refcount_inc_not_zero(&p->write_refs);
+bool pipe_dup_write(pipe_t* p) {
+    return refcount_inc_not_zero(&p->write_refs);
 }

@@ -397,6 +397,19 @@ int proc_kill(process_t* process) {
     return 0;
 }
 
+int proc_exit(process_t* process, int status) {
+    if (!process) {
+        return -1;
+    }
+
+    spinlock(&proc_tbl->proc_table_lock);
+
+    process->state = TERMINATED;
+
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+    return 0;
+}
+
 int proc_stop(process_t* process) {
     if (!process) {
         return -1;
@@ -428,16 +441,35 @@ int proc_continue(process_t* process) {
 }
 
 static int proc_copy_fds(process_t* dest, process_t* src) {
-    if (!dest || !src) {
+    if (!dest || !src)
         return -1;
-    }
 
     for (int i = 0; i < MAX_PROC_FDS; ++i) {
         flop_memcpy(&dest->fds[i], &src->fds[i], sizeof(struct vfs_file_descriptor));
-        if (dest->fds[i].node) {
-            refcount_inc_not_zero(&dest->fds[i].node->refcount);
+
+        void* node_ptr = dest->fds[i].node;
+        if (!node_ptr)
+            continue;
+
+        if (((struct vfs_node*) node_ptr)->pipe.data == (void*) &((struct vfs_node*) node_ptr)->pipe) {
+            pipe_t* p = (pipe_t*) node_ptr;
+            int flags = dest->fds[i].node->vfs_mode;
+
+            if ((flags & VFS_MODE_R) || (flags & VFS_MODE_RW)) {
+                if (!pipe_dup_read(p)) { // increase read refcount
+                    return -1;
+                }
+            }
+            if ((flags & VFS_MODE_W) || (flags & VFS_MODE_RW)) {
+                if (!pipe_dup_write(p)) { // increase write refcount
+                    return -1;
+                }
+            }
+        } else {
+            refcount_inc_not_zero(&((struct vfs_node*) node_ptr)->refcount);
         }
     }
+
     return 0;
 }
 
@@ -554,6 +586,35 @@ pid_t proc_fork(process_t* parent) {
     spinlock_unlock(&proc_tbl->proc_table_lock, true);
 
     return child->pid;
+}
+
+pid_t proc_dup(pid_t pid) {
+    process_t* parent = NULL;
+    process_t* child = NULL;
+
+    spinlock(&proc_tbl->proc_table_lock);
+
+    process_t* iter_process = proc_tbl->processes;
+    while (iter_process) {
+        if (iter_process->pid == pid) {
+            parent = iter_process;
+            break;
+        }
+        iter_process = iter_process->siblings;
+    }
+
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+
+    if (!parent) {
+        return -1;
+    }
+
+    pid_t child_pid = proc_fork(parent);
+    if (child_pid < 0) {
+        return -1;
+    }
+
+    return child_pid;
 }
 
 int proc_init() {

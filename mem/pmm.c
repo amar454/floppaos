@@ -25,43 +25,43 @@ You should have received a copy of the GNU General Public License along with Flo
 
 struct buddy_allocator buddy;
 
-static void buddy_split(uintptr_t addr, uint32_t order) {
+static void pmm_buddy_split(uintptr_t addr, uint32_t order) {
     if (order == 0) {
-        log("buddy_split: order=0, nothing to split\n", YELLOW);
+        log("pmm_buddy_split: order=0, nothing to split\n", YELLOW);
         return;
     }
 
     uintptr_t half_size = ((uintptr_t) 1 << (order - 1)) * PAGE_SIZE;
     uintptr_t buddy_addr = addr + half_size;
 
-    struct page* page_a = phys_to_page_index(addr);
-    struct page* page_b = phys_to_page_index(buddy_addr);
+    struct page* page_one = phys_to_page_index(addr);
+    struct page* page_two = phys_to_page_index(buddy_addr);
 
-    if (!page_a || !page_b) {
-        log("buddy_split: invalid page(s)\n", RED);
+    if (!page_one || !page_two) {
+        log("pmm_buddy_split: invalid page(s)\n", RED);
         return;
     }
 
-    page_a->order = order - 1;
-    page_b->order = order - 1;
-    page_a->is_free = 1;
-    page_b->is_free = 1;
+    page_one->order = order - 1;
+    page_two->order = order - 1;
+    page_one->is_free = 1;
+    page_two->is_free = 1;
 
-    page_a->next = buddy.free_list[order - 1];
-    buddy.free_list[order - 1] = page_a;
+    page_one->next = buddy.free_list[order - 1];
+    buddy.free_list[order - 1] = page_one;
 
-    page_b->next = buddy.free_list[order - 1];
-    buddy.free_list[order - 1] = page_b;
+    page_two->next = buddy.free_list[order - 1];
+    buddy.free_list[order - 1] = page_two;
 }
 
-static void buddy_merge(uintptr_t addr, uint32_t order) {
+static void pmm_buddy_merge(uintptr_t addr, uint32_t order) {
     uintptr_t buddy_addr = addr ^ (((uintptr_t) 1 << order) * PAGE_SIZE);
 
     struct page* page = phys_to_page_index(addr);
     struct page* buddy_page = phys_to_page_index(buddy_addr);
 
     if (!page) {
-        log("buddy_merge: invalid page\n", RED);
+        log("pmm_buddy_merge: invalid page\n", RED);
         return;
     }
 
@@ -77,7 +77,7 @@ static void buddy_merge(uintptr_t addr, uint32_t order) {
 
         uintptr_t merged_addr = (addr < buddy_addr) ? addr : buddy_addr;
 
-        buddy_merge(merged_addr, order + 1);
+        pmm_buddy_merge(merged_addr, order + 1);
     } else {
         // can't merge, put this block into its list
         page->order = order;
@@ -91,196 +91,226 @@ static inline uintptr_t align_up(uintptr_t x, uintptr_t a) {
     return (x + (a - 1)) & ~(a - 1);
 }
 
-static uintptr_t boot_reserved_top(multiboot_info_t* mb) {
-    extern char _kernel_end; // from linker
-    uintptr_t top = (uintptr_t) &_kernel_end;
-
-    if (!mb)
-        return align_up(top, PAGE_SIZE);
-
-    // multiboot info structure itself may be placed in low memory
-    if ((uintptr_t) mb > top)
-        top = (uintptr_t) mb;
-
-    if (mb->flags & MULTIBOOT_INFO_MEM_MAP) {
-        uintptr_t mmap_top = (uintptr_t) mb->mmap_addr + (uintptr_t) mb->mmap_length;
-        if (mmap_top > top)
-            top = mmap_top;
-    }
-
-    if (mb->flags & MULTIBOOT_INFO_MODS) {
-        multiboot_module_t* mods = (multiboot_module_t*) (uintptr_t) mb->mods_addr;
-        for (uint32_t i = 0; i < mb->mods_count; i++) {
-            if ((uintptr_t) mods[i].mod_end > top)
-                top = (uintptr_t) mods[i].mod_end;
-        }
-    }
-    return align_up(top, PAGE_SIZE);
+static uintptr_t pmm_kernel_end(void) {
+    extern char _kernel_end;
+    return (uintptr_t) &_kernel_end;
 }
 
-static uint64_t count_usable_pages(multiboot_info_t* mb_info, uintptr_t* out_first_avail, uint64_t* out_total_bytes) {
-    if (!mb_info || !(mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
-        if (out_first_avail)
-            *out_first_avail = 0;
+static bool pmm_has_mmap(multiboot_info_t* mb) {
+    return mb && (mb->flags & MULTIBOOT_INFO_MEM_MAP);
+}
+
+static bool pmm_has_mods(multiboot_info_t* mb) {
+    return mb && (mb->flags & MULTIBOOT_INFO_MODS);
+}
+
+static uint8_t* pmm_mmap_begin(multiboot_info_t* mb) {
+    return (uint8_t*) (uintptr_t) mb->mmap_addr;
+}
+
+static uint8_t* pmm_mmap_end(multiboot_info_t* mb) {
+    return pmm_mmap_begin(mb) + mb->mmap_length;
+}
+
+static multiboot_memory_map_t* pmm_mmap_entry(uint8_t* ptr) {
+    return (multiboot_memory_map_t*) (void*) ptr;
+}
+
+static bool pmm_mmap_entry_valid(multiboot_memory_map_t* entry) {
+    return entry && entry->size != 0;
+}
+
+static uint8_t* pmm_mmap_next(multiboot_memory_map_t* entry) {
+    return (uint8_t*) entry + entry->size + sizeof(entry->size);
+}
+
+static bool pmm_region_usable(multiboot_memory_map_t* entry) {
+    return entry->type == MULTIBOOT_MEMORY_AVAILABLE && entry->addr >= 0x100000ULL;
+}
+
+static uintptr_t pmm_align(uint32_t x) {
+    return align_up(x, PAGE_SIZE);
+}
+
+static uintptr_t pmm_region_start(multiboot_memory_map_t* entry) {
+    return pmm_align((uintptr_t) entry->addr);
+}
+
+static uintptr_t pmm_region_end(multiboot_memory_map_t* entry) {
+    uintptr_t end = (uintptr_t) entry->addr + (uintptr_t) entry->len;
+    return end & ~(PAGE_SIZE - 1);
+}
+
+static uintptr_t pmm_reserved_top(multiboot_info_t* mb) {
+    uintptr_t top = pmm_kernel_end();
+
+    if (mb) {
+        uintptr_t a = (uintptr_t) mb;
+        if (a > top)
+            top = a;
+    }
+
+    if (pmm_has_mmap(mb)) {
+        uintptr_t t = (uintptr_t) mb->mmap_addr + (uintptr_t) mb->mmap_length;
+        if (t > top)
+            top = t;
+    }
+
+    if (pmm_has_mods(mb)) {
+        multiboot_module_t* m = (multiboot_module_t*) (uintptr_t) mb->mods_addr;
+        for (uint32_t i = 0; i < mb->mods_count; i++) {
+            uintptr_t end = (uintptr_t) m[i].mod_end;
+            if (end > top)
+                top = end;
+        }
+    }
+
+    return pmm_align(top);
+}
+
+static uintptr_t pmm_find_page_info_placement(multiboot_info_t* mb, uintptr_t reserved_top, size_t bytes) {
+    if (!pmm_has_mmap(mb))
+        return 0;
+
+    uintptr_t need = pmm_align(bytes);
+    uint8_t* page = pmm_mmap_begin(mb);
+    uint8_t* entry = pmm_mmap_end(mb);
+
+    while (page < entry) {
+        multiboot_memory_map_t* mm = pmm_mmap_entry(page);
+        if (!pmm_mmap_entry_valid(mm))
+            break;
+
+        if (pmm_region_usable(mm)) {
+            uintptr_t rs = pmm_region_start(mm);
+            uintptr_t re = pmm_region_end(mm);
+            uintptr_t start = pmm_align(reserved_top > rs ? reserved_top : rs);
+            if (start < re && (re - start) >= need)
+                return start;
+        }
+
+        page = pmm_mmap_next(mm);
+    }
+    return 0;
+}
+
+static void pmm_add_free(struct page* page, uintptr_t addr) {
+    page->address = addr;
+    page->order = 0;
+    page->is_free = 1;
+    page->next = buddy.free_list[0];
+    buddy.free_list[0] = page;
+}
+
+static bool pmm_addr_in_pageinfo(uintptr_t addr, uintptr_t s, uintptr_t entry) {
+    return addr >= s && addr < entry;
+}
+
+static bool pmm_skip_addr(uintptr_t addr) {
+    return addr < buddy.memory_base || addr >= buddy.memory_end;
+}
+
+static size_t pmm_process_region(multiboot_memory_map_t* mm, uintptr_t s, uintptr_t entry) {
+    size_t added = 0;
+    uintptr_t rs = pmm_region_start(mm);
+    uintptr_t re = pmm_region_end(mm);
+
+    for (uintptr_t a = rs; a < re; a += PAGE_SIZE) {
+        if (pmm_addr_in_pageinfo(a, s, entry))
+            continue;
+        if (pmm_skip_addr(a))
+            continue;
+
+        uint32_t idx = (uint32_t) ((a - buddy.memory_base) / PAGE_SIZE);
+        if (idx >= buddy.total_pages)
+            continue;
+
+        pmm_add_free(&buddy.page_info[idx], a);
+        added++;
+    }
+
+    return added;
+}
+
+void pmm_create_free_list(multiboot_info_t* mb) {
+    if (!pmm_has_mmap(mb))
+        return;
+
+    uintptr_t page_info_slot = (uintptr_t) buddy.page_info;
+    uintptr_t page_info_entry = page_info_slot + pmm_align(buddy.total_pages * sizeof(struct page));
+
+    uint8_t* page = pmm_mmap_begin(mb);
+    uint8_t* end = pmm_mmap_end(mb);
+
+    size_t added = 0;
+
+    while (page < end) {
+        multiboot_memory_map_t* mm = pmm_mmap_entry(page);
+        if (!pmm_mmap_entry_valid(mm))
+            break;
+
+        if (pmm_region_usable(mm))
+            added += pmm_process_region(mm, page_info_slot, page_info_entry);
+
+        page = pmm_mmap_next(mm);
+    }
+}
+
+uint64_t pmm_count_usable_pages(multiboot_info_t* mb, uintptr_t* out_first_usable, uint64_t* out_total_bytes) {
+    if (!mb || !(mb->flags & MULTIBOOT_INFO_MEM_MAP)) {
+        if (out_first_usable)
+            *out_first_usable = 0;
         if (out_total_bytes)
             *out_total_bytes = 0;
         return 0;
     }
 
-    uint8_t* mmap_ptr = (uint8_t*) (uintptr_t) mb_info->mmap_addr;
-    uint8_t* mmap_end = mmap_ptr + mb_info->mmap_length;
-
     uint64_t total_bytes = 0;
-    uint64_t total_pages = 0;
-    uintptr_t first_avail = 0;
+    uintptr_t first_usable = 0;
 
-    while (mmap_ptr < mmap_end) {
-        multiboot_memory_map_t* e = (multiboot_memory_map_t*) (void*) mmap_ptr;
-        if (e->size == 0)
-            break; // sanity ( i have none )
+    uint8_t* ptr = pmm_mmap_begin(mb);
+    uint8_t* end = pmm_mmap_end(mb);
 
-        if (e->type == MULTIBOOT_MEMORY_AVAILABLE && e->addr >= 0x100000ULL) {
-            total_bytes += (uint64_t) e->len;
+    while (ptr < end) {
+        multiboot_memory_map_t* mm = pmm_mmap_entry(ptr);
+        if (!pmm_mmap_entry_valid(mm))
+            break;
 
-            uintptr_t rs = (uintptr_t) e->addr;
-            uintptr_t re = rs + (uintptr_t) e->len;
-
-            // align to pages
-            rs = align_up(rs, PAGE_SIZE);
-            re &= ~(PAGE_SIZE - 1);
+        if (pmm_region_usable(mm)) {
+            uintptr_t rs = pmm_region_start(mm);
+            uintptr_t re = pmm_region_end(mm);
 
             if (re > rs) {
-                size_t pages = (re - rs) / PAGE_SIZE;
-                total_pages += pages;
-                if (first_avail == 0)
-                    first_avail = rs;
+                uint64_t region_bytes = (uint64_t) (re - rs);
+                total_bytes += region_bytes;
+
+                if (first_usable == 0)
+                    first_usable = rs;
             }
         }
 
-        mmap_ptr += e->size + sizeof(e->size);
+        ptr = pmm_mmap_next(mm);
     }
 
-    if (out_first_avail)
-        *out_first_avail = first_avail;
+    if (out_first_usable)
+        *out_first_usable = first_usable;
+
     if (out_total_bytes)
         *out_total_bytes = total_bytes;
-    return total_pages;
+
+    return total_bytes / PAGE_SIZE;
 }
 
-// Find a region (in available mmap entries) that can hold page_info after reserved_top
-static uintptr_t find_page_info_placement(multiboot_info_t* mb, uintptr_t reserved_top, size_t page_info_bytes) {
-    if (!mb || !(mb->flags & MULTIBOOT_INFO_MEM_MAP))
-        return 0;
-
-    uint8_t* mmap_ptr = (uint8_t*) (uintptr_t) mb->mmap_addr;
-    uint8_t* mmap_end = mmap_ptr + mb->mmap_length;
-    uintptr_t need = align_up((uintptr_t) page_info_bytes, PAGE_SIZE);
-
-    while (mmap_ptr < mmap_end) {
-        multiboot_memory_map_t* e = (multiboot_memory_map_t*) (void*) mmap_ptr;
-        if (e->size == 0)
-            break;
-
-        if (e->type == MULTIBOOT_MEMORY_AVAILABLE && e->addr >= 0x100000ULL) {
-            uintptr_t rs = align_up((uintptr_t) e->addr, PAGE_SIZE);
-            uintptr_t re = ((uintptr_t) (e->addr + e->len)) & ~(PAGE_SIZE - 1);
-
-            // candidate start must be >= reserved_top and inside region
-            uintptr_t start = (reserved_top > rs) ? reserved_top : rs;
-            start = align_up(start, PAGE_SIZE);
-
-            if (start < re && (re - start) >= need) {
-                return start;
-            }
-        }
-
-        mmap_ptr += e->size + sizeof(e->size);
-    }
-    return 0;
-}
-
-static void _add_page_to_free_list(struct page* page, uintptr_t address, uint32_t order) {
-    page->address = address;
-    page->order = order;
-    page->is_free = 1;
-    page->next = buddy.free_list[order];
-    buddy.free_list[order] = page;
-}
-
-static void _create_free_list(multiboot_info_t* mb_info) {
-    log("creating free list from multiboot mmap\n", GREEN);
-
-    if (!mb_info || !(mb_info->flags & MULTIBOOT_INFO_MEM_MAP)) {
-        log("no memory map present\n", RED);
-        return;
-    }
-
-    uint8_t* mmap_ptr = (uint8_t*) (uintptr_t) mb_info->mmap_addr;
-    uint8_t* mmap_end = mmap_ptr + mb_info->mmap_length;
-
-    if (mmap_ptr < mmap_end) {
-        multiboot_memory_map_t* first = (multiboot_memory_map_t*) (void*) mmap_ptr;
-        log_uint("mmap first size: ", first->size);
-        log_uint("mmap first addr: ", first->addr);
-        log_uint("mmap first len: ", first->len);
-        log_uint("mmap first type: ", first->type);
-        if (first->size == 0) {
-            log("mmap appears corrupt (size==0)\n", RED);
-            return;
-        }
-    }
-
-    uintptr_t page_info_start = (uintptr_t) buddy.page_info;
-    uintptr_t page_info_end =
-        page_info_start + ((buddy.total_pages * sizeof(struct page) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1));
-
-    size_t added_pages = 0;
-    log("free list: scanning memory map\n", GREEN);
-
-    while (mmap_ptr < mmap_end) {
-        multiboot_memory_map_t* e = (multiboot_memory_map_t*) (void*) mmap_ptr;
-        if (e->size == 0) {
-            log("mmap entry size=0, aborting scan\n", RED);
-            break;
-        }
-
-        if (e->type == MULTIBOOT_MEMORY_AVAILABLE && e->addr >= 0x100000ULL) {
-            uintptr_t region_start = align_up((uintptr_t) e->addr, PAGE_SIZE);
-            uintptr_t region_end = ((uintptr_t) (e->addr + e->len)) & ~(PAGE_SIZE - 1);
-
-            for (uintptr_t addr = region_start; addr < region_end; addr += PAGE_SIZE) {
-                if (addr >= page_info_start && addr < page_info_end)
-                    continue;
-                if (addr < buddy.memory_base)
-                    continue;
-                if (addr >= buddy.memory_end)
-                    continue;
-
-                uint32_t idx = (uint32_t) ((addr - buddy.memory_base) / PAGE_SIZE);
-                if (idx >= buddy.total_pages)
-                    continue;
-
-                struct page* page = &buddy.page_info[idx];
-                _add_page_to_free_list(page, addr, 0);
-                added_pages++;
-            }
-        }
-        mmap_ptr += e->size + sizeof(e->size);
-    }
-    log_uint("free list pages added: ", added_pages);
-    log("free list populated\n", GREEN);
-}
-
-static void buddy_init(uint64_t usable_pages, uintptr_t memory_base_first_usable, multiboot_info_t* mb_info) {
+static void pmm_buddy_init(uint64_t usable_pages, uintptr_t memory_base_first_usable, multiboot_info_t* mb_info) {
     log("buddy: setting up page info array\n", GREEN);
 
     buddy.total_pages = usable_pages;
     buddy.memory_base = memory_base_first_usable;
 
     size_t page_info_bytes = buddy.total_pages * sizeof(struct page);
-    uintptr_t reserved_top = boot_reserved_top(mb_info);
+    uintptr_t reserved_top = pmm_reserved_top(mb_info);
 
-    uintptr_t page_info_addr = find_page_info_placement(mb_info, reserved_top, page_info_bytes);
+    uintptr_t page_info_addr = pmm_find_page_info_placement(mb_info, reserved_top, page_info_bytes);
     if (!page_info_addr) {
         log("buddy: warning - could not find available region for page_info; using reserved_top fallback\n", YELLOW);
         page_info_addr = reserved_top;
@@ -300,7 +330,7 @@ static void buddy_init(uint64_t usable_pages, uintptr_t memory_base_first_usable
     log_address("buddy: memory_end: ", buddy.memory_end);
 
     // build the free list from the multiboot map
-    _create_free_list(mb_info);
+    pmm_create_free_list(mb_info);
 
     log("buddy: init - ok\n", GREEN);
 }
@@ -316,7 +346,7 @@ void pmm_init(multiboot_info_t* mb_info) {
     // get counts & first usable aligned address
     uintptr_t usable_start = 0;
     uint64_t total_memory_bytes = 0;
-    uint64_t usable_pages = count_usable_pages(mb_info, &usable_start, &total_memory_bytes);
+    uint64_t usable_pages = pmm_count_usable_pages(mb_info, &usable_start, &total_memory_bytes);
 
     if (usable_pages == 0 || usable_start == 0) {
         log("pmm: no usable pages found\n", RED);
@@ -327,7 +357,7 @@ void pmm_init(multiboot_info_t* mb_info) {
     log_uint("pmm: total memory bytes (from mmap): ", (uint32_t) (total_memory_bytes & 0xFFFFFFFFU));
     log_address("pmm: first usable addr: ", usable_start);
 
-    buddy_init(usable_pages, usable_start, mb_info);
+    pmm_buddy_init(usable_pages, usable_start, mb_info);
 
     static spinlock_t buddy_lock_initializer = SPINLOCK_INIT;
     buddy.lock = buddy_lock_initializer;
@@ -362,61 +392,88 @@ void pmm_copy_page(void* dst, void* src) {
     spinlock_unlock(&buddy.lock, true);
 }
 
-void* pmm_alloc_pages(uint32_t order, uint32_t count) {
-    spinlock(&buddy.lock);
+static struct page* pmm_fetch_order_block(uint32_t order) {
+    for (uint32_t j = order; j <= MAX_ORDER; j++) {
+        if (buddy.free_list[j]) {
+            struct page* blk = buddy.free_list[j];
+            buddy.free_list[j] = blk->next;
+            return blk;
+        }
+    }
+    return NULL;
+}
 
+static void pmm_determine_split(struct page* blk, uint32_t from_order, uint32_t to_order) {
+    while (from_order > to_order) {
+        from_order--;
+        pmm_buddy_split(blk->address, from_order);
+    }
+}
+
+static void* pmm_alloc_block(uint32_t order) {
+    struct page* blk = pmm_fetch_order_block(order);
+    if (!blk)
+        return NULL;
+
+    blk->is_free = 0;
+    blk->order = order;
+
+    pmm_determine_split(blk, blk->order, order);
+
+    return (void*) blk->address;
+}
+
+static void pmm_free_block(uintptr_t addr, uint32_t order) {
+    struct page* page = phys_to_page_index(addr);
+    if (!page)
+        return;
+
+    page->is_free = 1;
+    pmm_buddy_merge(page->address, order);
+}
+
+void* pmm_alloc_pages(uint32_t order, uint32_t count) {
     if (order > MAX_ORDER || count == 0)
         return NULL;
 
+    spinlock(&buddy.lock);
+
     void* first_page = NULL;
-
-    // iterate through the count of pages requested
+    // allocate 'count' blocks of 'order' pages each
     for (uint32_t i = 0; i < count; i++) {
-        void* page = NULL;
+        void* pg = pmm_alloc_block(order);
 
-        for (uint32_t j = order; j <= MAX_ORDER; j++) {
-            if (buddy.free_list[j]) {
-                struct page* p = buddy.free_list[j];
-                buddy.free_list[j] = p->next;
-                p->is_free = 0;
-                p->order = order;
-                while (j > order) {
-                    j--;
-                    buddy_split(p->address, j);
-                }
-                page = (void*) p->address;
-                break;
-            }
-        }
-        if (!page) {
-            if (first_page) {
+        if (!pg) {
+            // rollback already-allocated pages
+            if (first_page)
                 pmm_free_pages(first_page, order, i);
-            }
+
             log("pmm: Out of memory!\n", RED);
+            spinlock_unlock(&buddy.lock, true);
             return NULL;
         }
-        if (!first_page) {
-            first_page = page;
-        }
+
+        if (!first_page)
+            first_page = pg;
     }
+
     spinlock_unlock(&buddy.lock, true);
     return first_page;
 }
 
 void pmm_free_pages(void* addr, uint32_t order, uint32_t count) {
-    spinlock(&buddy.lock);
     if (!addr || order > MAX_ORDER || count == 0)
         return;
 
-    uintptr_t current_addr = (uintptr_t) addr;
+    spinlock(&buddy.lock);
+
+    uintptr_t cur = (uintptr_t) addr;
+
     for (uint32_t i = 0; i < count; i++) {
-        struct page* page = phys_to_page_index(current_addr);
-        if (!page)
-            return;
-        page->is_free = 1;
-        buddy_merge(page->address, order);
-        current_addr += (1 << order) * PAGE_SIZE;
+        pmm_free_block(cur, order);
+        cur += (1u << order) * PAGE_SIZE;
     }
+
     spinlock_unlock(&buddy.lock, true);
 }
 

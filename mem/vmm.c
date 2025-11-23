@@ -206,17 +206,22 @@ void vmm_init() {
     region_insert(&kernel_region);
     // we do not need to load the kernel region because it has
     // been loaded into cr3 by the paging init function.
+    // however, we set current_region to it.
     log("vmm: init - ok\n", GREEN);
 }
 
-// copy a region's mappings into a new region and add it to the linked list of virtual regions
-vmm_region_t* vmm_copy_pagemap(vmm_region_t* src) {
+uint32_t* vmm_new_copied_pgdir() {
     uintptr_t new_dir_phys = (uintptr_t) pmm_alloc_page();
     if (!new_dir_phys)
         return 0;
     uint32_t* new_dir = (uint32_t*) new_dir_phys;
     flop_memset(new_dir, 0, PAGE_SIZE);
+    return new_dir;
+}
 
+// copy a region's mappings into a new region and add it to the linked list of virtual regions
+vmm_region_t* vmm_copy_pagemap(vmm_region_t* src) {
+    uint32_t* new_dir = vmm_new_copied_pgdir();
     vmm_region_t* dst = (vmm_region_t*) kmalloc(sizeof(vmm_region_t));
     dst->pg_dir = new_dir;
     dst->next = 0;
@@ -265,7 +270,7 @@ vmm_region_t* vmm_copy_pagemap(vmm_region_t* src) {
     }
 
     // point last entry of the new dir to itself (recursively)
-    new_dir[RECURSIVE_PDE] = (new_dir_phys & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
+    new_dir[RECURSIVE_PDE] = ((uintptr_t) new_dir & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
 
     // insert new region into linked list
     region_insert(dst);

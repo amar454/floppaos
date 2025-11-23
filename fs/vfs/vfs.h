@@ -77,6 +77,7 @@ struct vfs_node {
 
 struct vfs_file_descriptor {
     struct vfs_node* node;
+    pipe_t* pipe;
     refcount_t refcount;
 };
 
@@ -102,6 +103,7 @@ struct vfs_op_tbl {
     int (*fstat)(struct vfs_node* node, struct stat* st);
     int (*lstat)(const char* path, struct stat* st);
     int (*truncate)(struct vfs_node*, uint64_t length);
+    int (*ioctl)(struct vfs_node* node, unsigned long cmd, unsigned long arg);
 };
 
 struct vfs_fs {

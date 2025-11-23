@@ -171,8 +171,6 @@ void reaper_init(void) {
     sched.reaper_thread = reaper_desc.reaper_thread;
 }
 
-// Additional useful functions for managing dead-thread queue
-
 void sched_add_dead_thread(thread_t* thread) {
     if (!thread)
         return;

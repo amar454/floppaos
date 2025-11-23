@@ -97,6 +97,9 @@ typedef struct process {
     // NOTE: allocate for name.
     // TODO: this is kinda shit.
     char* name;
+
+    // process pipes
+    pipe_t* pipe;
 } process_t;
 
 process_t* proc_get_current();
@@ -107,5 +110,6 @@ int proc_stop(process_t* process);
 int proc_continue(process_t* process);
 pid_t proc_fork(process_t* parent);
 int proc_init();
-
+int proc_exit(process_t* process, int status);
+pid_t proc_dup(pid_t pid);
 #endif

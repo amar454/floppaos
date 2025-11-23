@@ -13,18 +13,19 @@
 #include "../task/process.h"
 #include "../task/sched.h"
 #include "../drivers/time/floptime.h"
+#include "../drivers/acpi/acpi.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
 #include "syscall.h"
 
-syscall_table_t syscall_table = {.syscall_read = sys_read,
-                                 .syscall_write = sys_write,
-                                 .syscall_fork = sys_fork,
-                                 .syscall_open = sys_open,
-                                 .syscall_close = sys_close,
-                                 .syscall_mmap = sys_mmap,
+syscall_table_t syscall_table = {.sys_read = sys_read,
+                                 .sys_write = sys_write,
+                                 .sys_fork = sys_fork,
+                                 .sys_open = sys_open,
+                                 .sys_close = sys_close,
+                                 .sys_mmap = sys_mmap,
                                  .sys_seek = sys_seek,
                                  .sys_stat = sys_stat,
                                  .sys_fstat = sys_fstat,
@@ -35,7 +36,13 @@ syscall_table_t syscall_table = {.syscall_read = sys_read,
                                  .sys_truncate = sys_truncate,
                                  .sys_ftruncate = sys_ftruncate,
                                  .sys_rename = sys_rename,
-                                 .sys_print = sys_print};
+                                 .sys_print = sys_print,
+                                 .sys_getpid = sys_getpid,
+                                 .sys_chdir = sys_chdir,
+                                 .sys_dup = sys_dup,
+                                 .sys_clone = sys_clone,
+                                 .sys_pipe = sys_pipe,
+                                 .sys_ioctl = sys_ioctl};
 
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5) {
     uint32_t ret;
@@ -65,6 +72,10 @@ pid_t sys_fork(void) {
     }
 
     return child_pid;
+}
+
+int sys_dup(pid_t pid) {
+    return proc_dup(pid);
 }
 
 int sys_open(void* path, uint32_t flags) {
@@ -358,7 +369,7 @@ int sys_rename(char* oldpath, char* newpath) {
     return vfs_rename(oldpath, newpath);
 }
 
-int sys_getpid() {
+pid_t sys_getpid() {
     process_t* proc = proc_get_current();
     if (!proc) {
         return -1;
@@ -374,15 +385,92 @@ int sys_chdir(char* path) {
     if (!proc)
         return -1;
 
-    struct vfs_node* new_cwd = vfs_open(path, 0);
-    if (!new_cwd)
+    struct vfs_node* new_directory = vfs_open(path, 0);
+    if (!new_directory)
         return -1;
 
     if (proc->cwd)
         vfs_close(proc->cwd);
 
-    proc->cwd = new_cwd;
+    proc->cwd = new_directory;
     return 0;
+}
+
+int sys_reboot() {
+    qemu_power_off();
+    return 0;
+}
+
+int sys_pipe(int pipefd[2]) {
+    if (!pipefd)
+        return -1;
+
+    pipe_t* p = kmalloc(sizeof(pipe_t));
+    if (!p)
+        return -1;
+
+    pipe_init(p);
+
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        kfree(p, sizeof(pipe_t));
+        return -1;
+    }
+
+    int read_fd = -1, write_fd = -1;
+    for (int i = 0; i < MAX_PROC_FDS; i++) {
+        if (proc->fds[i].node == NULL) {
+            if (read_fd < 0) {
+                read_fd = i;
+            } else if (write_fd < 0) {
+                write_fd = i;
+                break;
+            }
+        }
+    }
+
+    if (read_fd < 0 || write_fd < 0) {
+        kfree(p, sizeof(pipe_t));
+        return -1;
+    }
+
+    proc->fds[read_fd].pipe = p;
+    proc->fds[write_fd].pipe = p;
+
+    pipefd[0] = read_fd;
+    pipefd[1] = write_fd;
+
+    return 0;
+}
+
+pid_t sys_clone(uint32_t flags, void* stack) {
+    (void) flags;
+    (void) stack;
+
+    process_t* parent = proc_get_current();
+    if (!parent)
+        return -1;
+
+    pid_t child_pid = proc_fork(parent);
+    if (child_pid < 0)
+        return -1;
+
+    return child_pid;
+}
+
+int sys_ioctl(int fd, int request, void* arg) {
+    process_t* proc = proc_get_current();
+    if (!proc || fd < 0 || fd >= MAX_PROC_FDS)
+        return -1;
+
+    struct vfs_file_descriptor* desc = &proc->fds[fd];
+    if (!desc || !desc->node)
+        return -1;
+
+    if (desc->node->ops->ioctl)
+        return desc->node->ops->ioctl(desc->node, request, (unsigned long) arg);
+
+    return -1;
 }
 
 void c_syscall_routine() {
@@ -444,6 +532,13 @@ void c_syscall_routine() {
         case SYSCALL_GETPID:
             ret = sys_getpid();
             break;
+        case SYSCALL_CHDIR:
+            ret = sys_chdir((char*) a1);
+            break;
+        case SYSCALL_DUP:
+            ret = sys_dup(a1);
+            break;
+
         default:
             log("c_syscall_routine: Unknown syscall number\n", RED);
             break;

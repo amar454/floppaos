@@ -33,17 +33,18 @@ typedef enum syscall_num {
     SYSCALL_TRUNCATE = 12,
     SYSCALL_FTRUNCATE = 13,
     SYSCALL_RENAME = 14,
-
-    SYSCALL_GETPID = 15
+    SYSCALL_GETPID = 15,
+    SYSCALL_CHDIR = 16,
+    SYSCALL_DUP = 17
 } syscall_num_t;
 
 typedef struct syscall_table {
-    int (*syscall_read)(int fd, void* buf, size_t count);
-    int (*syscall_write)(int fd, void* buf, size_t count);
-    pid_t (*syscall_fork)(void);
-    int (*syscall_open)(void* path, uint32_t flags);
-    int (*syscall_close)(int fd);
-    int (*syscall_mmap)(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offset);
+    int (*sys_read)(int fd, void* buf, size_t count);
+    int (*sys_write)(int fd, void* buf, size_t count);
+    pid_t (*sys_fork)(void);
+    int (*sys_open)(void* path, uint32_t flags);
+    int (*sys_close)(int fd);
+    int (*sys_mmap)(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offset);
     int (*sys_seek)(int fd, int offset, int whence);
     int (*sys_stat)(char* path, stat_t* st);
     int (*sys_fstat)(int fd, stat_t* st);
@@ -54,6 +55,12 @@ typedef struct syscall_table {
     int (*sys_ftruncate)(int fd, uint64_t length);
     int (*sys_rename)(char* oldpath, char* newpath);
     int (*sys_print)(void* str_ptr);
+    pid_t (*sys_getpid)(void);
+    int (*sys_chdir)(char* path);
+    int (*sys_dup)(int fd);
+    int (*sys_pipe)(int pipefd[2]);
+    pid_t (*sys_clone)(uint32_t flags, void* stack);
+    int (*sys_ioctl)(int fd, int request, void* arg);
 } syscall_table_t;
 
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5);
@@ -105,6 +112,27 @@ int sys_ftruncate(int fd, uint64_t length);
 
 // rename a file
 int sys_rename(char* oldpath, char* newpath);
+
+// get pid of the current running process
+pid_t sys_getpid();
+
+// change cwd
+int sys_chdir(char* path);
+
+// reboot system
+int sys_reboot();
+
+// pipe creation
+int sys_pipe(int pipefd[2]);
+
+// create a child process
+pid_t sys_clone(uint32_t flags, void* stack);
+
+// ioctl on a file descriptor
+int sys_ioctl(int fd, int request, void* arg);
+
+// duplicate a process; returns new pid or -1
+pid_t sys_dup(pid_t pid);
 
 extern syscall_table_t syscall_table;
 

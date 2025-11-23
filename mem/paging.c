@@ -99,24 +99,54 @@ static int paging_init_page_directory() {
     return 0;
 }
 
-static int paging_init_page_tables() {
-    uintptr_t pt0_phys = (uintptr_t) pmm_alloc_page();
-    if (!pt0_phys) {
-        log("pmm_alloc_page failed for pt0\n", RED);
+static int paging_alloc_and_zero_pt(uintptr_t* out_phys, uint32_t** out_virt, const char* name) {
+    *out_phys = (uintptr_t) pmm_alloc_page();
+    if (!*out_phys) {
+        log("pmm_alloc_page failed for ", RED);
+        log(name, RED);
+        log("\n", RED);
         return -1;
     }
-    uint32_t* pt0 = (uint32_t*) kphys_to_virt(pt0_phys);
-    zero_area(pt0);
+
+    *out_virt = (uint32_t*) kphys_to_virt(*out_phys);
+    zero_area(*out_virt);
+    return 0;
+}
+
+static void paging_fill_identity_mapping(uint32_t* pt) {
     for (uint32_t i = 0; i < PAGE_ENTRIES; ++i) {
-        pt0[i] = (uint32_t) (((uintptr_t) i * TABLE_BYTES) & PAGE_MASK) | PAGE_PRESENT | PAGE_RW;
+        pt[i] = (uint32_t) ((((uintptr_t) i * TABLE_BYTES) & PAGE_MASK) | PAGE_PRESENT | PAGE_RW);
     }
-    uintptr_t pt1022_phys = (uintptr_t) pmm_alloc_page();
-    if (!pt1022_phys) {
-        log("pmm_alloc_page failed for pt1022\n", RED);
+}
+
+static int paging_init_first_page_table() {
+    uintptr_t pt0_phys = 0;
+    uint32_t* pt0 = NULL;
+
+    if (paging_alloc_and_zero_pt(&pt0_phys, &pt0, "pt0") < 0)
         return -1;
-    }
-    uint32_t* pt1022 = (uint32_t*) kphys_to_virt(pt1022_phys);
-    zero_area(pt1022);
+
+    paging_fill_identity_mapping(pt0);
+    return 0;
+}
+
+static int paging_init_recursive_page_table_slot() {
+    uintptr_t pt_phys = 0;
+    uint32_t* pt_virt = NULL;
+
+    if (paging_alloc_and_zero_pt(&pt_phys, &pt_virt, "pt1022") < 0)
+        return -1;
+
+    return 0;
+}
+
+static int paging_init_page_tables() {
+    if (paging_init_first_page_table() < 0)
+        return -1;
+
+    if (paging_init_recursive_page_table_slot() < 0)
+        return -1;
+
     return 0;
 }
 
