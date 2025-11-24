@@ -614,6 +614,22 @@ int vfs_unlink(char* path) {
     return r;
 }
 
+int vfs_link(char* oldpath, char* newpath) {
+    if (!oldpath || !newpath)
+        return -1;
+    struct vfs_mountpoint* mp_old = vfs_file_to_mountpoint(oldpath);
+    struct vfs_mountpoint* mp_new = vfs_file_to_mountpoint(newpath);
+    if (!mp_old || !mp_new)
+        return -1;
+    if (mp_old != mp_new)
+        return -1;
+    char* rel_old = oldpath + flopstrlen(mp_old->mount_point);
+    char* rel_new = newpath + flopstrlen(mp_old->mount_point);
+    if (mp_old->filesystem->op_table.link == NULL)
+        return -1;
+    return mp_old->filesystem->op_table.link(mp_old, rel_old, rel_new);
+}
+
 int vfs_mkdir(char* path, uint32_t mode) {
     if (!path)
         return -1;

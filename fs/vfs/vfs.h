@@ -104,6 +104,7 @@ struct vfs_op_tbl {
     int (*lstat)(const char* path, struct stat* st);
     int (*truncate)(struct vfs_node*, uint64_t length);
     int (*ioctl)(struct vfs_node* node, unsigned long cmd, unsigned long arg);
+    int (*link)(struct vfs_mountpoint*, char*, char*);
 };
 
 struct vfs_fs {
@@ -130,6 +131,7 @@ int vfs_truncate(struct vfs_node* node, uint32_t new_size);
 int vfs_ftruncate(struct vfs_node* node, uint32_t len);
 int vfs_truncate_path(char* path, uint64_t length);
 int vfs_unlink(char* path);
+int vfs_link(char* oldpath, char* newpath);
 int vfs_mkdir(char* path, uint32_t mode);
 int vfs_rmdir(char* path);
 int vfs_rename(char* oldpath, char* newpath);

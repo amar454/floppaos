@@ -35,7 +35,28 @@ typedef enum syscall_num {
     SYSCALL_RENAME = 14,
     SYSCALL_GETPID = 15,
     SYSCALL_CHDIR = 16,
-    SYSCALL_DUP = 17
+    SYSCALL_DUP = 17,
+    SYSCALL_PIPE = 18,
+    SYSCALL_CLONE = 19,
+    SYSCALL_IOCTL = 20,
+    SYSCALL_PRINT = 21,
+    SYSCALL_REBOOT = 22,
+    SYSCALL_MUNMAP = 23,
+    SYSCALL_CREAT = 24,
+    SYSCALL_SCHED_YIELD = 25,
+    SYSCALL_KILL = 26,
+    SYSCALL_LINK = 27,
+    SYSCALL_GETUID = 28,
+    SYSCALL_GETGID = 29,
+    SYSCALL_GETEUID = 30,
+    SYSCALL_GETSID = 31,
+    SYSCALL_SETUID = 32,
+    SYSCALL_SETGID = 33,
+    SYSCALL_REGIDT = 34,
+    SYSCALL_GET_PRIORITY_MAX = 35,
+    SYSCALL_GET_PRIORITY_MIN = 36,
+    SYSCALL_FSMOUNT = 37,
+    SYSCALL_COPY_FILE_RANGE = 38
 } syscall_num_t;
 
 typedef struct syscall_table {
@@ -61,6 +82,23 @@ typedef struct syscall_table {
     int (*sys_pipe)(int pipefd[2]);
     pid_t (*sys_clone)(uint32_t flags, void* stack);
     int (*sys_ioctl)(int fd, int request, void* arg);
+    int (*sys_reboot)(void);
+    int (*sys_munmap)(uintptr_t addr, uint32_t len);
+    int (*sys_creat)(char* path, uint32_t mode);
+    int (*sys_sched_yield)(void);
+    int (*sys_kill)(pid_t pid);
+    int (*sys_link)(char* oldpath, char* newpath);
+    uid_t (*sys_getuid)(void);
+    pid_t (*sys_getgid)(void);
+    uid_t (*sys_geteuid)(void);
+    pid_t (*sys_getsid)(void);
+    int (*sys_setuid)(pid_t ruid, uid_t uid);
+    int (*sys_setgid)(pid_t gid, uid_t uid);
+    int (*sys_regidt)(pid_t pid, pid_t gid);
+    int (*sys_get_priority_max)(void);
+    int (*sys_get_priority_min)(void);
+    int (*sys_fsmount)(char* source, char* target, int flags);
+    int (*sys_copy_file_range)(int fd_in, int fd_out, size_t count);
 } syscall_table_t;
 
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5);
@@ -98,6 +136,9 @@ int sys_fstat(int fd, stat_t* st);
 // unlink a file
 int sys_unlink(char* path);
 
+// link a file
+int sys_link(char* oldpath, char* newpath);
+
 // make directory
 int sys_mkdir(char* path, uint32_t mode);
 
@@ -122,7 +163,7 @@ int sys_chdir(char* path);
 // reboot system
 int sys_reboot();
 
-// pipe creation
+// pipe creation, returns 0 or -1
 int sys_pipe(int pipefd[2]);
 
 // create a child process
@@ -133,6 +174,45 @@ int sys_ioctl(int fd, int request, void* arg);
 
 // duplicate a process; returns new pid or -1
 pid_t sys_dup(pid_t pid);
+
+// unmap a memory region
+int sys_munmap(uintptr_t addr, uint32_t len);
+
+// yield the cpu, allowing other processes to run
+int sys_sched_yield(void);
+
+// kill a process by pid, returns 0 or -1
+int sys_kill(pid_t pid);
+
+// open or possibly create a file; returns 0 or -1
+int sys_creat(char* path, uint32_t mode);
+
+// get user id of current process
+uid_t sys_getuid(void);
+
+// get group id of current process
+pid_t sys_getgid(void);
+
+// get effective user id of current process
+uid_t sys_geteuid(void);
+
+// get session id of current process
+pid_t sys_getsid(void);
+
+// set user id of current process
+int sys_setuid(pid_t ruid, uid_t uid);
+
+// set group id of current process
+int sys_setgid(pid_t rgid, pid_t gid);
+
+// set real and group ids of current process
+int sys_regidt(pid_t rgid, pid_t gid);
+
+// mount a filesystem
+int sys_fsmount(char* source, char* target, int flags);
+
+// copy file range from one fd to another in 256 byte chunks
+int sys_copy_file_range(int fd_in, int fd_out, size_t count);
 
 extern syscall_table_t syscall_table;
 

@@ -29,7 +29,6 @@ syscall_table_t syscall_table = {.sys_read = sys_read,
                                  .sys_seek = sys_seek,
                                  .sys_stat = sys_stat,
                                  .sys_fstat = sys_fstat,
-
                                  .sys_unlink = sys_unlink,
                                  .sys_mkdir = sys_mkdir,
                                  .sys_rmdir = sys_rmdir,
@@ -42,7 +41,20 @@ syscall_table_t syscall_table = {.sys_read = sys_read,
                                  .sys_dup = sys_dup,
                                  .sys_clone = sys_clone,
                                  .sys_pipe = sys_pipe,
-                                 .sys_ioctl = sys_ioctl};
+                                 .sys_ioctl = sys_ioctl,
+                                 .sys_reboot = sys_reboot,
+                                 .sys_munmap = sys_munmap,
+                                 .sys_creat = sys_creat,
+                                 .sys_sched_yield = sys_sched_yield,
+                                 .sys_kill = sys_kill,
+                                 .sys_link = sys_link,
+                                 .sys_getuid = sys_getuid,
+                                 .sys_getgid = sys_getgid,
+                                 .sys_geteuid = sys_geteuid,
+                                 .sys_getsid = sys_getsid,
+                                 .sys_setuid = sys_setuid,
+                                 .sys_setgid = sys_setgid,
+                                 .sys_regidt = sys_regidt};
 
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5) {
     uint32_t ret;
@@ -138,6 +150,52 @@ int sys_read(int fd, void* buf, size_t count) {
         return -1;
     }
     return vfs_read(desc->node, buf, count);
+}
+
+int sys_copy_file_range(int fd_in, int fd_out, size_t count) {
+    process_t* proc = proc_get_current();
+
+    if (fd_in < 0 || fd_in >= MAX_PROC_FDS || fd_out < 0 || fd_out >= MAX_PROC_FDS) {
+        return -1;
+    }
+
+    struct vfs_file_descriptor* src = &proc->fds[fd_in];
+    struct vfs_file_descriptor* dst = &proc->fds[fd_out];
+
+    if (!src || !dst || !src->node || !dst->node) {
+        return -1;
+    }
+
+    size_t chunk = 256;
+    if (count < chunk)
+        chunk = count;
+
+    unsigned char* buffer = kmalloc(chunk);
+    if (!buffer)
+        return -1;
+
+    size_t total = 0;
+    while (total < count) {
+        size_t to_read = count - total;
+        if (to_read > chunk)
+            to_read = chunk;
+
+        int r = vfs_read(src->node, buffer, to_read);
+        if (r <= 0)
+            break;
+
+        int w = vfs_write(dst->node, buffer, r);
+        if (w <= 0)
+            break;
+
+        total += w;
+
+        if ((size_t) r < to_read)
+            break;
+    }
+
+    kfree(buffer, sizeof(char) * chunk);
+    return total;
 }
 
 int sys_seek(int fd, int offset, int whence) {
@@ -307,6 +365,68 @@ int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offs
     return map_start_va;
 }
 
+static int sys_munmap_internal_validate(vmm_region_t* region, uintptr_t addr, uint32_t len) {
+    if (!region)
+        return -1;
+
+    if (len == 0)
+        return -1;
+
+    if (addr & (PAGE_SIZE - 1))
+        return -1;
+
+    len = ALIGN_UP(len, PAGE_SIZE);
+
+    return 0;
+}
+
+static void sys_munmap_internal_free_phys(vmm_region_t* region, uintptr_t start_va, uintptr_t end_va) {
+    for (uintptr_t va = start_va; va < end_va; va += PAGE_SIZE) {
+        uintptr_t phys = vmm_resolve(region, va);
+        if (phys) {
+            vmm_unmap(region, va);
+            pmm_free_page((void*) phys);
+        }
+    }
+}
+
+static int sys_munmap_internal_unmap_range(vmm_region_t* region, uintptr_t addr, uint32_t len) {
+    uintptr_t end = addr + len;
+
+    for (uintptr_t va = addr; va < end; va += PAGE_SIZE) {
+        uintptr_t phys = vmm_resolve(region, va);
+        if (!phys) {
+            // not mapped
+            return -1;
+        }
+    }
+
+    sys_munmap_internal_free_phys(region, addr, end);
+    return 0;
+}
+
+static int sys_munmap_internal(process_t* proc, uintptr_t addr, uint32_t len) {
+    if (!proc || !proc->region)
+        return -1;
+
+    vmm_region_t* region = proc->region;
+
+    if (sys_munmap_internal_validate(region, addr, len) < 0)
+        return -1;
+
+    len = ALIGN_UP(len, PAGE_SIZE);
+
+    return sys_munmap_internal_unmap_range(region, addr, len);
+}
+
+int sys_munmap(uintptr_t addr, uint32_t len) {
+    process_t* proc = proc_get_current();
+    if (!proc)
+        return -1;
+
+    return sys_munmap_internal(proc, addr, len);
+}
+
 int sys_stat(char* path, stat_t* st) {
     if (!path || !st)
         return -1;
@@ -377,7 +497,100 @@ pid_t sys_getpid() {
     return proc->pid;
 }
 
-int sys_chdir(char* path) {
+uid_t sys_getuid() {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return (uid_t) -1;
+    }
+    return proc->uid;
+}
+
+pid_t sys_getgid() {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return (uid_t) -1;
+    }
+    return proc->gid;
+}
+
+uid_t sys_geteuid() {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return (uid_t) -1;
+    }
+    return proc->ruid;
+}
+
+pid_t sys_getsid() {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return (uid_t) -1;
+    }
+    return proc->sid;
+}
+
+int sys_setsid(pid_t sid) {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return -1;
+    }
+
+    proc->sid = sid;
+    return 0;
+}
+
+int sys_regidt(pid_t rgid, pid_t gid) {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return -1;
+    }
+
+    if (rgid != (pid_t) -1) {
+        proc->rgid = rgid;
+    }
+
+    if (gid != (pid_t) -1) {
+        proc->gid = gid;
+    }
+
+    return 0;
+}
+
+int sys_setuid(pid_t ruid, uid_t uid) {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return -1;
+    }
+
+    if (ruid != (pid_t) -1) {
+        proc->ruid = ruid;
+    }
+
+    if (uid != (pid_t) -1) {
+        proc->uid = uid;
+    }
+
+    return 0;
+}
+
+int sys_setgid(pid_t rgid, pid_t gid) {
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return -1;
+    }
+
+    if (rgid != (pid_t) -1) {
+        proc->rgid = rgid;
+    }
+
+    if (gid != (pid_t) -1) {
+        proc->gid = gid;
+    }
+
+    return 0;
+}
+
+pid_t sys_chdir(char* path) {
     if (!path)
         return -1;
 
@@ -473,6 +686,74 @@ int sys_ioctl(int fd, int request, void* arg) {
     return -1;
 }
 
+int sys_sched_yield() {
+    sched_yield();
+    return 0;
+}
+
+extern proc_table_t* proc_tbl;
+
+int sys_kill(pid_t pid) {
+    process_t* proc = proc_get_current();
+    if (!proc)
+        return -1;
+
+    process_t* target_proc = proc_get_process_by_pid(pid);
+    if (!target_proc)
+        return -1;
+
+    if (target_proc->parent != proc)
+        return -1;
+
+    spinlock(&proc_tbl->proc_table_lock);
+
+    target_proc->state = TERMINATED;
+
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+    return 0;
+}
+
+int sys_creat(char* path, uint32_t mode) {
+    if (!path)
+        return -1;
+
+    return vfs_open(path, VFS_MODE_CREATE | VFS_MODE_TRUNCATE | VFS_MODE_RW | mode) ? 0 : -1;
+}
+
+int sys_link(char* oldpath, char* newpath) {
+    if (!oldpath || !newpath)
+        return -1;
+
+    return vfs_link(oldpath, newpath);
+}
+
+int sys_get_priority_max() {
+    return MAX_PRIORITY;
+}
+
+int sys_get_priority_min() {
+    return 0;
+}
+
+int sys_fsmount(char* source, char* target, int flags) {
+    return vfs_mount(source, target, flags);
+}
+
+int sys_exit_group(int status) {
+    process_t* proc = proc_get_current();
+    if (!proc)
+        return -1;
+
+    for (int fd = 0; fd < MAX_PROC_FDS; fd++) {
+        if (proc->fds[fd].node) {
+            sys_close(fd);
+        }
+    }
+
+    proc_exit_all_threads(proc);
+    return 0;
+}
+
 void c_syscall_routine() {
     uint32_t num, a1, a2, a3, a4, a5;
 
@@ -546,6 +827,63 @@ void c_syscall_routine() {
             break;
         case SYSCALL_IOCTL:
             ret = sys_ioctl(a1, a2, (void*) a3);
+            break;
+        case SYSCALL_PRINT:
+            ret = sys_print((void*) a1);
+            break;
+        case SYSCALL_REBOOT:
+            ret = sys_reboot();
+            break;
+        case SYSCALL_SEEK:
+            ret = sys_seek(a1, a2, a3);
+            break;
+        case SYSCALL_MUNMAP:
+            ret = sys_munmap(a1, a2);
+            break;
+        case SYSCALL_CREAT:
+            ret = sys_creat((char*) a1, a2);
+            break;
+        case SYSCALL_SCHED_YIELD:
+            ret = sys_sched_yield();
+            break;
+        case SYSCALL_KILL:
+            ret = sys_kill(a1);
+            break;
+        case SYSCALL_LINK:
+            ret = sys_link((char*) a1, (char*) a2);
+            break;
+        case SYSCALL_GETUID:
+            ret = sys_getuid();
+            break;
+        case SYSCALL_GETGID:
+            ret = sys_getgid();
+            break;
+        case SYSCALL_GETEUID:
+            ret = sys_geteuid();
+            break;
+        case SYSCALL_GETSID:
+            ret = sys_getsid();
+            break;
+        case SYSCALL_SETUID:
+            ret = sys_setuid((pid_t) a1, (uid_t) a2);
+            break;
+        case SYSCALL_SETGID:
+            ret = sys_setgid((pid_t) a1, (pid_t) a2);
+            break;
+        case SYSCALL_REGIDT:
+            ret = sys_regidt((pid_t) a1, (pid_t) a2);
+            break;
+        case SYSCALL_GET_PRIORITY_MAX:
+            ret = sys_get_priority_max();
+            break;
+        case SYSCALL_GET_PRIORITY_MIN:
+            ret = sys_get_priority_min();
+            break;
+        case SYSCALL_FSMOUNT:
+            ret = sys_fsmount((char*) a1, (char*) a2, (int) a3);
+            break;
+        case SYSCALL_COPY_FILE_RANGE:
+            ret = sys_copy_file_range((int) a1, (int) a2, (size_t) a3);
             break;
         default:
             log("c_syscall_routine: Unknown syscall number\n", RED);

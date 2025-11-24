@@ -394,6 +394,28 @@ int proc_kill(process_t* process) {
     kfree(process->name, flopstrlen(process->name) + 1);
     kfree(process->threads, sizeof(thread_list_t));
     kfree(process, sizeof(process_t));
+
+    spinlock(&proc_tbl->proc_table_lock);
+    proc_info_local->process_count--;
+    process->state = TERMINATED;
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+    return 0;
+}
+
+int proc_exit_all_threads(process_t* process) {
+    if (!process) {
+        return -1;
+    }
+
+    while (process->threads && process->threads->head) {
+        thread_t* thread = process->threads->head;
+        sched_remove(sched.ready_queue, thread);
+        sched_remove(sched.sleep_queue, thread);
+    }
+
+    spinlock(&proc_tbl->proc_table_lock);
+    process->state = TERMINATED;
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
     return 0;
 }
 
@@ -407,6 +429,7 @@ int proc_exit(process_t* process, int status) {
     process->state = TERMINATED;
 
     spinlock_unlock(&proc_tbl->proc_table_lock, true);
+
     return 0;
 }
 
@@ -693,6 +716,26 @@ proc_info_t* proc_get_proc_info() {
 
 proc_table_t* proc_get_proc_table() {
     return proc_tbl;
+}
+
+process_t* proc_get_process_by_pid(pid_t pid) {
+    if (!proc_tbl) {
+        return NULL;
+    }
+
+    spinlock(&proc_tbl->proc_table_lock);
+
+    process_t* iter_process = proc_tbl->processes;
+    while (iter_process) {
+        if (iter_process->pid == pid) {
+            spinlock_unlock(&proc_tbl->proc_table_lock, true);
+            return iter_process;
+        }
+        iter_process = iter_process->siblings;
+    }
+
+    spinlock_unlock(&proc_tbl->proc_table_lock, true);
+    return NULL;
 }
 
 static void proc_reparent_children(process_t* old_parent, process_t* new_parent) {
