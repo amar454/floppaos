@@ -49,7 +49,7 @@ make qemu
 ```  
 **QEMU** is the only vm floppaos is compatible with, due to issues with multiboot mmap on anything else... sorry
 
-**3. Clean Up**  
+### **3. Clean Up**  
 To remove compiled binaries:  
 ```bash
 make clean

@@ -54,7 +54,11 @@ syscall_table_t syscall_table = {.sys_read = sys_read,
                                  .sys_getsid = sys_getsid,
                                  .sys_setuid = sys_setuid,
                                  .sys_setgid = sys_setgid,
-                                 .sys_regidt = sys_regidt};
+                                 .sys_regidt = sys_regidt,
+                                 .sys_get_priority_max = sys_get_priority_max,
+                                 .sys_get_priority_min = sys_get_priority_min,
+                                 .sys_fsmount = sys_fsmount,
+                                 .sys_copy_file_range = sys_copy_file_range};
 
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5) {
     uint32_t ret;
