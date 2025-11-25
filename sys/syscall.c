@@ -1119,6 +1119,12 @@ void c_syscall_routine() {
                 log("c_syscall_routine: sys_mprotect failed\n", RED);
             }
             break;
+        case SYSCALL_MREMAP:
+            ret = sys_mremap(a1, a2, a3, a4);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_mremap failed\n", RED);
+            }
+            break;
         default:
             log("c_syscall_routine: Unknown syscall number\n", RED);
             break;
