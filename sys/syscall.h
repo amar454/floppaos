@@ -56,7 +56,10 @@ typedef enum syscall_num {
     SYSCALL_GET_PRIORITY_MAX = 35,
     SYSCALL_GET_PRIORITY_MIN = 36,
     SYSCALL_FSMOUNT = 37,
-    SYSCALL_COPY_FILE_RANGE = 38
+    SYSCALL_COPY_FILE_RANGE = 38,
+    SYSCALL_GETCWD = 39,
+    SYSCALL_MPROTECT = 40,
+    SYSCALL_MREMAP = 41
 } syscall_num_t;
 
 typedef struct syscall_table {
@@ -99,6 +102,9 @@ typedef struct syscall_table {
     int (*sys_get_priority_min)(void);
     int (*sys_fsmount)(char* source, char* target, int flags);
     int (*sys_copy_file_range)(int fd_in, int fd_out, size_t count);
+    struct vfs_node* (*sys_getcwd)(void);
+    int (*sys_mprotect)(uintptr_t addr, uint32_t len, uint32_t flags);
+    int (*sys_mremap)(uintptr_t addr, uint32_t old_len, uint32_t new_len, uint32_t flags);
 } syscall_table_t;
 
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5);
@@ -213,6 +219,21 @@ int sys_fsmount(char* source, char* target, int flags);
 
 // copy file range from one fd to another in 256 byte chunks
 int sys_copy_file_range(int fd_in, int fd_out, size_t count);
+
+// get current working directory
+struct vfs_node* sys_getcwd(void);
+
+// change memory protection of a region
+int sys_mprotect(uintptr_t addr, uint32_t len, uint32_t flags);
+
+// remap a memory region
+int sys_mremap(uintptr_t addr, uint32_t old_len, uint32_t new_len, uint32_t flags);
+
+// get max priority value
+int sys_get_priority_max(void);
+
+// get min priority value
+int sys_get_priority_min(void);
 
 extern syscall_table_t syscall_table;
 

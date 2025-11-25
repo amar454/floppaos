@@ -58,7 +58,10 @@ syscall_table_t syscall_table = {.sys_read = sys_read,
                                  .sys_get_priority_max = sys_get_priority_max,
                                  .sys_get_priority_min = sys_get_priority_min,
                                  .sys_fsmount = sys_fsmount,
-                                 .sys_copy_file_range = sys_copy_file_range};
+                                 .sys_copy_file_range = sys_copy_file_range,
+                                 .sys_getcwd = sys_getcwd,
+                                 .sys_mprotect = sys_mprotect,
+                                 .sys_mremap = sys_mremap};
 
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5) {
     uint32_t ret;
@@ -83,6 +86,7 @@ int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a
 pid_t sys_fork(void) {
     process_t* parent = proc_get_current();
     pid_t child_pid = proc_fork(parent);
+
     if (child_pid < 0) {
         return -1;
     }
@@ -150,6 +154,7 @@ int sys_read(int fd, void* buf, size_t count) {
     }
 
     struct vfs_file_descriptor* desc = &proc->fds[fd];
+
     if (!desc) {
         return -1;
     }
@@ -171,31 +176,43 @@ int sys_copy_file_range(int fd_in, int fd_out, size_t count) {
     }
 
     size_t chunk = 256;
-    if (count < chunk)
+
+    if (count < chunk) {
         chunk = count;
+    }
 
     unsigned char* buffer = kmalloc(chunk);
-    if (!buffer)
+
+    if (!buffer) {
         return -1;
+    }
 
     size_t total = 0;
+
     while (total < count) {
         size_t to_read = count - total;
-        if (to_read > chunk)
+
+        if (to_read > chunk) {
             to_read = chunk;
+        }
 
         int r = vfs_read(src->node, buffer, to_read);
-        if (r <= 0)
+
+        if (r <= 0) {
             break;
+        }
 
         int w = vfs_write(dst->node, buffer, r);
-        if (w <= 0)
+
+        if (w <= 0) {
             break;
+        }
 
         total += w;
 
-        if ((size_t) r < to_read)
+        if ((size_t) r < to_read) {
             break;
+        }
     }
 
     kfree(buffer, sizeof(char) * chunk);
@@ -367,6 +384,50 @@ int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offs
     }
 
     return map_start_va;
+}
+
+int sys_mremap(uintptr_t addr, uint32_t old_len, uint32_t new_len, uint32_t flags) {
+    if (old_len == 0 || new_len == 0)
+        return -1;
+
+    old_len = ALIGN_UP(old_len, PAGE_SIZE);
+    new_len = ALIGN_UP(new_len, PAGE_SIZE);
+
+    process_t* proc = proc_get_current();
+    if (!proc || !proc->region)
+        return -1;
+
+    vmm_region_t* region = proc->region;
+
+    if (new_len == old_len) {
+        return addr;
+    } else if (new_len < old_len) {
+        // shrink
+        uintptr_t shrink_start = addr + new_len;
+        uintptr_t shrink_end = addr + old_len;
+        sys_mmap_internal_rb(region, shrink_start, shrink_end);
+        return addr;
+    } else {
+        // expand
+        uintptr_t expand_start = addr + old_len;
+        uintptr_t expand_end = addr + new_len;
+
+        for (uintptr_t va = expand_start; va < expand_end; va += PAGE_SIZE) {
+            void* phys_page = pmm_alloc_page();
+            if (!phys_page) {
+                sys_mmap_internal_rb(region, expand_start, va);
+                return -1;
+            }
+
+            uint8_t* bp = (uint8_t*) phys_page;
+            for (size_t i = 0; i < PAGE_SIZE; i++)
+                bp[i] = 0;
+
+            vmm_map(region, va, (uintptr_t) phys_page, flags);
+        }
+
+        return addr;
+    }
 }
 
 static int sys_munmap_internal_validate(vmm_region_t* region, uintptr_t addr, uint32_t len) {
@@ -758,6 +819,44 @@ int sys_exit_group(int status) {
     return 0;
 }
 
+struct vfs_node* sys_getcwd() {
+    process_t* proc = proc_get_current();
+    if (!proc || !proc->cwd)
+        return NULL;
+
+    return proc->cwd;
+}
+
+int sys_mprotect(uintptr_t addr, uint32_t len, uint32_t flags) {
+    process_t* proc = proc_get_current();
+    if (!proc || !proc->region)
+        return -1;
+
+    vmm_region_t* region = proc->region;
+
+    if (len == 0)
+        return -1;
+
+    if (addr & (PAGE_SIZE - 1))
+        return -1;
+
+    len = ALIGN_UP(len, PAGE_SIZE);
+    uintptr_t end = addr + len;
+
+    for (uintptr_t va = addr; va < end; va += PAGE_SIZE) {
+        uintptr_t phys = vmm_resolve(region, va);
+        if (!phys) {
+            return -1;
+        }
+    }
+
+    for (uintptr_t va = addr; va < end; va += PAGE_SIZE) {
+        vmm_protect(region, va, flags);
+    }
+
+    return 0;
+}
+
 void c_syscall_routine() {
     uint32_t num, a1, a2, a3, a4, a5;
 
@@ -769,125 +868,256 @@ void c_syscall_routine() {
                  "mov %%edi, %5\n"
                  : "=r"(num), "=r"(a1), "=r"(a2), "=r"(a3), "=r"(a4), "=r"(a5));
 
-    uint32_t ret = -1;
+    int ret = -1;
 
     switch (num) {
         case SYSCALL_READ:
             ret = sys_read(a1, (void*) a2, a3);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_read failed\n", RED);
+            }
             break;
         case SYSCALL_WRITE:
             ret = sys_write(a1, (void*) a2, a3);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_write failed\n", RED);
+            }
             break;
         case SYSCALL_OPEN:
             ret = sys_open((char*) a1, a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_open failed\n", RED);
+            }
             break;
         case SYSCALL_CLOSE:
             ret = sys_close(a1);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_close failed\n", RED);
+            }
             break;
         case SYSCALL_FORK:
             ret = sys_fork();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_fork failed\n", RED);
+            }
             break;
         case SYSCALL_MMAP:
             ret = sys_mmap(a1, a2, a3, a4, a5);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_mmap failed\n", RED);
+            }
             break;
         case SYSCALL_STAT:
             ret = sys_stat((char*) a1, (stat_t*) a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_stat failed\n", RED);
+            }
             break;
         case SYSCALL_FSTAT:
             ret = sys_fstat(a1, (stat_t*) a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_fstat failed\n", RED);
+            }
             break;
         case SYSCALL_UNLINK:
             ret = sys_unlink((char*) a1);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_unlink failed\n", RED);
+            }
             break;
         case SYSCALL_MKDIR:
             ret = sys_mkdir((char*) a1, a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_mkdir failed\n", RED);
+            }
             break;
         case SYSCALL_RMDIR:
             ret = sys_rmdir((char*) a1);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_rmdir failed\n", RED);
+            }
             break;
         case SYSCALL_TRUNCATE:
             ret = sys_truncate((char*) a1, a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_truncate failed\n", RED);
+            }
             break;
         case SYSCALL_FTRUNCATE:
             ret = sys_ftruncate(a1, a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_ftruncate failed\n", RED);
+            }
             break;
         case SYSCALL_RENAME:
             ret = sys_rename((char*) a1, (char*) a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_rename failed\n", RED);
+            }
             break;
         case SYSCALL_GETPID:
             ret = sys_getpid();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_getpid failed\n", RED);
+            }
             break;
         case SYSCALL_CHDIR:
             ret = sys_chdir((char*) a1);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_chdir failed\n", RED);
+            }
             break;
         case SYSCALL_DUP:
             ret = sys_dup(a1);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_dup failed\n", RED);
+            }
             break;
         case SYSCALL_PIPE:
             ret = sys_pipe((int*) a1);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_pipe failed\n", RED);
+            }
             break;
         case SYSCALL_CLONE:
             ret = sys_clone(a1, (void*) a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_clone failed\n", RED);
+            }
             break;
         case SYSCALL_IOCTL:
             ret = sys_ioctl(a1, a2, (void*) a3);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_ioctl failed\n", RED);
+            }
             break;
         case SYSCALL_PRINT:
             ret = sys_print((void*) a1);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_print failed\n", RED);
+            }
             break;
         case SYSCALL_REBOOT:
             ret = sys_reboot();
+            // if we get here we're fucked
+            if (ret < 0) {
+                log("c_syscall_routine: sys_reboot failed\n", RED);
+            }
             break;
         case SYSCALL_SEEK:
             ret = sys_seek(a1, a2, a3);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_seek failed\n", RED);
+            }
             break;
         case SYSCALL_MUNMAP:
             ret = sys_munmap(a1, a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_munmap failed\n", RED);
+            }
             break;
         case SYSCALL_CREAT:
             ret = sys_creat((char*) a1, a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_creat failed\n", RED);
+            }
             break;
         case SYSCALL_SCHED_YIELD:
             ret = sys_sched_yield();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_sched_yield failed\n", RED);
+            }
             break;
         case SYSCALL_KILL:
             ret = sys_kill(a1);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_kill failed\n", RED);
+            }
             break;
         case SYSCALL_LINK:
             ret = sys_link((char*) a1, (char*) a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_link failed\n", RED);
+            }
             break;
         case SYSCALL_GETUID:
             ret = sys_getuid();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_getuid failed\n", RED);
+            }
             break;
         case SYSCALL_GETGID:
             ret = sys_getgid();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_getgid failed\n", RED);
+            }
             break;
         case SYSCALL_GETEUID:
             ret = sys_geteuid();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_geteuid failed\n", RED);
+            }
             break;
         case SYSCALL_GETSID:
             ret = sys_getsid();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_getsid failed\n", RED);
+            }
             break;
         case SYSCALL_SETUID:
             ret = sys_setuid((pid_t) a1, (uid_t) a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_setuid failed\n", RED);
+            }
+
             break;
         case SYSCALL_SETGID:
             ret = sys_setgid((pid_t) a1, (pid_t) a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_setgid failed\n", RED);
+            }
             break;
         case SYSCALL_REGIDT:
             ret = sys_regidt((pid_t) a1, (pid_t) a2);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_regidt failed\n", RED);
+            }
             break;
         case SYSCALL_GET_PRIORITY_MAX:
             ret = sys_get_priority_max();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_get_priority_max failed\n", RED);
+            }
             break;
         case SYSCALL_GET_PRIORITY_MIN:
             ret = sys_get_priority_min();
+            if (ret < 0) {
+                log("c_syscall_routine: sys_get_priority_min failed\n", RED);
+            }
             break;
         case SYSCALL_FSMOUNT:
             ret = sys_fsmount((char*) a1, (char*) a2, (int) a3);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_fsmount failed\n", RED);
+            }
             break;
         case SYSCALL_COPY_FILE_RANGE:
             ret = sys_copy_file_range((int) a1, (int) a2, (size_t) a3);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_copy_file_range failed\n", RED);
+            }
+            break;
+        case SYSCALL_GETCWD:
+            struct vfs_node* node = sys_getcwd();
+            if (!node) {
+                log("c_syscall_routine: sys_getcwd failed\n", RED);
+            }
+            break;
+        case SYSCALL_MPROTECT:
+            ret = sys_mprotect(a1, a2, a3);
+            if (ret < 0) {
+                log("c_syscall_routine: sys_mprotect failed\n", RED);
+            }
             break;
         default:
             log("c_syscall_routine: Unknown syscall number\n", RED);
