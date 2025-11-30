@@ -1,21 +1,18 @@
 #ifndef SYSCALL_H
 #define SYSCALL_H
-
-void c_syscall_handler(void);
-
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
-#include "../task/process.h"
-#include "../apps/echo.h"
-#include "../fs/vfs/vfs.h"
-#include "../mem/vmm.h"
-#include "../mem/pmm.h"
-#include "../mem/paging.h"
-#include "../mem/alloc.h"
-#include "../mem/utils.h"
-#include "../mem/slab.h"
+struct syscall_args {
+    uint32_t a1;
+    uint32_t a2;
+    uint32_t a3;
+    uint32_t a4;
+    uint32_t a5;
+};
+
+typedef int (*syscall_function_pointer)(struct syscall_args*);
 
 typedef enum syscall_num {
     SYSCALL_READ = 0,
@@ -63,177 +60,222 @@ typedef enum syscall_num {
 } syscall_num_t;
 
 typedef struct syscall_table {
-    int (*sys_read)(int fd, void* buf, size_t count);
-    int (*sys_write)(int fd, void* buf, size_t count);
-    pid_t (*sys_fork)(void);
-    int (*sys_open)(void* path, uint32_t flags);
-    int (*sys_close)(int fd);
-    int (*sys_mmap)(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offset);
-    int (*sys_seek)(int fd, int offset, int whence);
-    int (*sys_stat)(char* path, stat_t* st);
-    int (*sys_fstat)(int fd, stat_t* st);
-    int (*sys_unlink)(char* path);
-    int (*sys_mkdir)(char* path, uint32_t mode);
-    int (*sys_rmdir)(char* path);
-    int (*sys_truncate)(char* path, uint64_t length);
-    int (*sys_ftruncate)(int fd, uint64_t length);
-    int (*sys_rename)(char* oldpath, char* newpath);
-    int (*sys_print)(void* str_ptr);
-    pid_t (*sys_getpid)(void);
-    int (*sys_chdir)(char* path);
-    int (*sys_dup)(int fd);
-    int (*sys_pipe)(int pipefd[2]);
-    pid_t (*sys_clone)(uint32_t flags, void* stack);
-    int (*sys_ioctl)(int fd, int request, void* arg);
-    int (*sys_reboot)(void);
-    int (*sys_munmap)(uintptr_t addr, uint32_t len);
-    int (*sys_creat)(char* path, uint32_t mode);
-    int (*sys_sched_yield)(void);
-    int (*sys_kill)(pid_t pid);
-    int (*sys_link)(char* oldpath, char* newpath);
-    uid_t (*sys_getuid)(void);
-    pid_t (*sys_getgid)(void);
-    uid_t (*sys_geteuid)(void);
-    pid_t (*sys_getsid)(void);
-    int (*sys_setuid)(pid_t ruid, uid_t uid);
-    int (*sys_setgid)(pid_t gid, uid_t uid);
-    int (*sys_regidt)(pid_t pid, pid_t gid);
-    int (*sys_get_priority_max)(void);
-    int (*sys_get_priority_min)(void);
-    int (*sys_fsmount)(char* source, char* target, int flags);
-    int (*sys_copy_file_range)(int fd_in, int fd_out, size_t count);
-    struct vfs_node* (*sys_getcwd)(void);
-    int (*sys_mprotect)(uintptr_t addr, uint32_t len, uint32_t flags);
-    int (*sys_mremap)(uintptr_t addr, uint32_t old_len, uint32_t new_len, uint32_t flags);
+    int (*sys_read)(struct syscall_args* args);
+    int (*sys_write)(struct syscall_args* args);
+    int (*sys_open)(struct syscall_args* args);
+    int (*sys_close)(struct syscall_args* args);
+    int (*sys_mmap)(struct syscall_args* args);
+    int (*sys_seek)(struct syscall_args* args);
+    int (*sys_stat)(struct syscall_args* args);
+    int (*sys_fstat)(struct syscall_args* args);
+    int (*sys_unlink)(struct syscall_args* args);
+    int (*sys_mkdir)(struct syscall_args* args);
+    int (*sys_rmdir)(struct syscall_args* args);
+    int (*sys_truncate)(struct syscall_args* args);
+    int (*sys_ftruncate)(struct syscall_args* args);
+    int (*sys_rename)(struct syscall_args* args);
+    int (*sys_print)(struct syscall_args* args);
+    int (*sys_chdir)(struct syscall_args* args);
+    int (*sys_dup)(struct syscall_args* args);
+    int (*sys_pipe)(struct syscall_args* args);
+    int (*sys_ioctl)(struct syscall_args* args);
+    int (*sys_reboot)(struct syscall_args* args);
+    int (*sys_munmap)(struct syscall_args* args);
+    int (*sys_creat)(struct syscall_args* args);
+    int (*sys_sched_yield)(struct syscall_args* args);
+    int (*sys_kill)(struct syscall_args* args);
+    int (*sys_link)(struct syscall_args* args);
+    int (*sys_setuid)(struct syscall_args* args);
+    int (*sys_setgid)(struct syscall_args* args);
+    int (*sys_regidt)(struct syscall_args* args);
+    int (*sys_get_priority_max)(struct syscall_args* args);
+    int (*sys_get_priority_min)(struct syscall_args* args);
+    int (*sys_fsmount)(struct syscall_args* args);
+    int (*sys_copy_file_range)(struct syscall_args* args);
+    int (*sys_mprotect)(struct syscall_args* args);
+    int (*sys_mremap)(struct syscall_args* args);
+    struct vfs_node* (*sys_getcwd)(struct syscall_args* args);
+    pid_t (*sys_fork)(struct syscall_args* args);
+    uid_t (*sys_getuid)(struct syscall_args* args);
+    pid_t (*sys_getgid)(struct syscall_args* args);
+    uid_t (*sys_geteuid)(struct syscall_args* args);
+    pid_t (*sys_getpid)(struct syscall_args* args);
+    pid_t (*sys_clone)(struct syscall_args* args);
+    pid_t (*sys_getsid)(struct syscall_args* args);
 } syscall_table_t;
 
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5);
 
-// fork the current running process; returns pid or -1
-pid_t sys_fork(void);
+// 0: read(fd, buf, count)
+int sys_read(struct syscall_args* args);
 
-// open a file; returns fd or -1
-int sys_open(void* path_ptr, uint32_t flags);
+// 1: write(fd, buf, count)
+int sys_write(struct syscall_args* args);
 
-// close fd; returns 0 or -1
-int sys_close(int fd);
+// 2: fork()
+int sys_fork(struct syscall_args* args);
 
-// read from fd; returns bytes read or -1
-int sys_read(int fd, void* buf, size_t count);
+// 3: open(path_ptr, flags)
+int sys_open(struct syscall_args* args);
 
-// write to fd; returns bytes written or -1
-int sys_write(int fd, void* buf, size_t count);
+// 4: close(fd)
+int sys_close(struct syscall_args* args);
 
-// mmap; returns virtual address or -1
-int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offset);
+// 5: mmap(addr, len, flags, fd, offset)
+int sys_mmap(struct syscall_args* args);
 
-// seek to offset
-int sys_seek(int fd, int offset, int whence);
+// 6: seek(fd, offset, whence)
+int sys_seek(struct syscall_args* args);
 
-// print to console
-int sys_print(void* str_ptr);
+// 7: stat(path, st)
+int sys_stat(struct syscall_args* args);
 
-// stat a file
-int sys_stat(char* path, stat_t* st);
+// 8: fstat(fd, st)
+int sys_fstat(struct syscall_args* args);
 
-// fstat a file descriptor
-int sys_fstat(int fd, stat_t* st);
+// 9: unlink(path)
+int sys_unlink(struct syscall_args* args);
 
-// unlink a file
-int sys_unlink(char* path);
+// 10: mkdir(path, mode)
+int sys_mkdir(struct syscall_args* args);
 
-// link a file
-int sys_link(char* oldpath, char* newpath);
+// 11: rmdir(path)
+int sys_rmdir(struct syscall_args* args);
 
-// make directory
-int sys_mkdir(char* path, uint32_t mode);
+// 12: truncate(path, length)
+int sys_truncate(struct syscall_args* args);
 
-// remove directory
-int sys_rmdir(char* path);
+// 13: ftruncate(fd, length)
+int sys_ftruncate(struct syscall_args* args);
 
-// truncate a file
-int sys_truncate(char* path, uint64_t length);
+// 14: rename(oldpath, newpath)
+int sys_rename(struct syscall_args* args);
 
-// ftruncate a file descriptor
-int sys_ftruncate(int fd, uint64_t length);
+// 15: getpid()
+int sys_getpid(struct syscall_args* args);
 
-// rename a file
-int sys_rename(char* oldpath, char* newpath);
+// 16: chdir(path)
+int sys_chdir(struct syscall_args* args);
 
-// get pid of the current running process
-pid_t sys_getpid();
+// 17: dup(pid)
+int sys_dup(struct syscall_args* args);
 
-// change cwd
-int sys_chdir(char* path);
+// 18: pipe(pipefd[2])
+int sys_pipe(struct syscall_args* args);
 
-// reboot system
-int sys_reboot();
+// 19: clone(flags, stack)
+int sys_clone(struct syscall_args* args);
 
-// pipe creation, returns 0 or -1
-int sys_pipe(int pipefd[2]);
+// 20: ioctl(fd, request, arg)
+int sys_ioctl(struct syscall_args* args);
 
-// create a child process
-pid_t sys_clone(uint32_t flags, void* stack);
+// 21: print(str_ptr)
+int sys_print(struct syscall_args* args);
 
-// ioctl on a file descriptor
-int sys_ioctl(int fd, int request, void* arg);
+// 22: reboot()
+int sys_reboot(struct syscall_args* args);
 
-// duplicate a process; returns new pid or -1
-pid_t sys_dup(pid_t pid);
+// 23: munmap(addr, len)
+int sys_munmap(struct syscall_args* args);
 
-// unmap a memory region
-int sys_munmap(uintptr_t addr, uint32_t len);
+// 24: creat(path, mode)
+int sys_creat(struct syscall_args* args);
 
-// yield the cpu, allowing other processes to run
-int sys_sched_yield(void);
+// 25: sched_yield()
+int sys_sched_yield(struct syscall_args* args);
 
-// kill a process by pid, returns 0 or -1
-int sys_kill(pid_t pid);
+// 26: kill(pid)
+int sys_kill(struct syscall_args* args);
 
-// open or possibly create a file; returns 0 or -1
-int sys_creat(char* path, uint32_t mode);
+// 27: link(oldpath, newpath)
+int sys_link(struct syscall_args* args);
 
-// get user id of current process
-uid_t sys_getuid(void);
+// 28: getuid()
+int sys_getuid(struct syscall_args* args);
 
-// get group id of current process
-pid_t sys_getgid(void);
+// 29: getgid()
+int sys_getgid(struct syscall_args* args);
 
-// get effective user id of current process
-uid_t sys_geteuid(void);
+// 30: geteuid()
+int sys_geteuid(struct syscall_args* args);
 
-// get session id of current process
-pid_t sys_getsid(void);
+// 31: getsid()
+int sys_getsid(struct syscall_args* args);
 
-// set user id of current process
-int sys_setuid(pid_t ruid, uid_t uid);
+// 32: setuid(ruid, uid)
+int sys_setuid(struct syscall_args* args);
 
-// set group id of current process
-int sys_setgid(pid_t rgid, pid_t gid);
+// 33: setgid(rgid, gid)
+int sys_setgid(struct syscall_args* args);
 
-// set real and group ids of current process
-int sys_regidt(pid_t rgid, pid_t gid);
+// 34: regidt(rgid, gid)
+int sys_regidt(struct syscall_args* args);
 
-// mount a filesystem
-int sys_fsmount(char* source, char* target, int flags);
+// 35: get_priority_max()
+int sys_get_priority_max(struct syscall_args* args);
 
-// copy file range from one fd to another in 256 byte chunks
-int sys_copy_file_range(int fd_in, int fd_out, size_t count);
+// 36: get_priority_min()
+int sys_get_priority_min(struct syscall_args* args);
 
-// get current working directory
-struct vfs_node* sys_getcwd(void);
+// 37: fsmount(source, target, flags)
+int sys_fsmount(struct syscall_args* args);
 
-// change memory protection of a region
-int sys_mprotect(uintptr_t addr, uint32_t len, uint32_t flags);
+// 38: copy_file_range(fd_in, fd_out, count)
+int sys_copy_file_range(struct syscall_args* args);
 
-// remap a memory region
-int sys_mremap(uintptr_t addr, uint32_t old_len, uint32_t new_len, uint32_t flags);
+// 39: getcwd()
+int sys_getcwd(struct syscall_args* args);
 
-// get max priority value
-int sys_get_priority_max(void);
+// 40: mprotect(addr, len, flags)
+int sys_mprotect(struct syscall_args* args);
 
-// get min priority value
-int sys_get_priority_min(void);
+// 41: mremap(addr, old_len, new_len, flags)
+int sys_mremap(struct syscall_args* args);
+
+syscall_function_pointer syscall_dispatch_table[] = {
+    [SYSCALL_READ] = sys_read,
+    [SYSCALL_WRITE] = sys_write,
+    [SYSCALL_FORK] = sys_fork,
+    [SYSCALL_OPEN] = sys_open,
+    [SYSCALL_CLOSE] = sys_close,
+    [SYSCALL_MMAP] = sys_mmap,
+    [SYSCALL_SEEK] = sys_seek,
+    [SYSCALL_STAT] = sys_stat,
+    [SYSCALL_FSTAT] = sys_fstat,
+    [SYSCALL_UNLINK] = sys_unlink,
+    [SYSCALL_MKDIR] = sys_mkdir,
+    [SYSCALL_RMDIR] = sys_rmdir,
+    [SYSCALL_TRUNCATE] = sys_truncate,
+    [SYSCALL_FTRUNCATE] = sys_ftruncate,
+    [SYSCALL_RENAME] = sys_rename,
+    [SYSCALL_GETPID] = sys_getpid,
+    [SYSCALL_CHDIR] = sys_chdir,
+    [SYSCALL_DUP] = sys_dup,
+    [SYSCALL_PIPE] = sys_pipe,
+    [SYSCALL_CLONE] = sys_clone,
+    [SYSCALL_IOCTL] = sys_ioctl,
+    [SYSCALL_PRINT] = sys_print,
+    [SYSCALL_REBOOT] = sys_reboot,
+    [SYSCALL_MUNMAP] = sys_munmap,
+    [SYSCALL_CREAT] = sys_creat,
+    [SYSCALL_SCHED_YIELD] = sys_sched_yield,
+    [SYSCALL_KILL] = sys_kill,
+    [SYSCALL_LINK] = sys_link,
+    [SYSCALL_GETUID] = sys_getuid,
+    [SYSCALL_GETGID] = sys_getgid,
+    [SYSCALL_GETEUID] = sys_geteuid,
+    [SYSCALL_GETSID] = sys_getsid,
+    [SYSCALL_SETUID] = sys_setuid,
+    [SYSCALL_SETGID] = sys_setgid,
+    [SYSCALL_REGIDT] = sys_regidt,
+    [SYSCALL_GET_PRIORITY_MAX] = sys_get_priority_max,
+    [SYSCALL_GET_PRIORITY_MIN] = sys_get_priority_min,
+    [SYSCALL_FSMOUNT] = sys_fsmount,
+    [SYSCALL_COPY_FILE_RANGE] = sys_copy_file_range,
+    [SYSCALL_GETCWD] = sys_getcwd,
+    [SYSCALL_MPROTECT] = sys_mprotect,
+    [SYSCALL_MREMAP] = sys_mremap,
+};
 
 extern syscall_table_t syscall_table;
 

@@ -1,3 +1,18 @@
+/*
+
+Copyright 2024, 2025 Amar Djulovic <aaamargml@gmail.com>
+
+This file is part of FloppaOS.
+
+FloppaOS is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+FloppaOS is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with FloppaOS. If not, see <https://www.gnu.org/licenses/>.
+
+*/
+
+#include "../apps/echo.h"
 #include "../mem/alloc.h"
 #include "../mem/pmm.h"
 #include "../mem/paging.h"
@@ -20,52 +35,14 @@
 
 #include "syscall.h"
 
-syscall_table_t syscall_table = {.sys_read = sys_read,
-                                 .sys_write = sys_write,
-                                 .sys_fork = sys_fork,
-                                 .sys_open = sys_open,
-                                 .sys_close = sys_close,
-                                 .sys_mmap = sys_mmap,
-                                 .sys_seek = sys_seek,
-                                 .sys_stat = sys_stat,
-                                 .sys_fstat = sys_fstat,
-                                 .sys_unlink = sys_unlink,
-                                 .sys_mkdir = sys_mkdir,
-                                 .sys_rmdir = sys_rmdir,
-                                 .sys_truncate = sys_truncate,
-                                 .sys_ftruncate = sys_ftruncate,
-                                 .sys_rename = sys_rename,
-                                 .sys_print = sys_print,
-                                 .sys_getpid = sys_getpid,
-                                 .sys_chdir = sys_chdir,
-                                 .sys_dup = sys_dup,
-                                 .sys_clone = sys_clone,
-                                 .sys_pipe = sys_pipe,
-                                 .sys_ioctl = sys_ioctl,
-                                 .sys_reboot = sys_reboot,
-                                 .sys_munmap = sys_munmap,
-                                 .sys_creat = sys_creat,
-                                 .sys_sched_yield = sys_sched_yield,
-                                 .sys_kill = sys_kill,
-                                 .sys_link = sys_link,
-                                 .sys_getuid = sys_getuid,
-                                 .sys_getgid = sys_getgid,
-                                 .sys_geteuid = sys_geteuid,
-                                 .sys_getsid = sys_getsid,
-                                 .sys_setuid = sys_setuid,
-                                 .sys_setgid = sys_setgid,
-                                 .sys_regidt = sys_regidt,
-                                 .sys_get_priority_max = sys_get_priority_max,
-                                 .sys_get_priority_min = sys_get_priority_min,
-                                 .sys_fsmount = sys_fsmount,
-                                 .sys_copy_file_range = sys_copy_file_range,
-                                 .sys_getcwd = sys_getcwd,
-                                 .sys_mprotect = sys_mprotect,
-                                 .sys_mremap = sys_mremap};
+// statically make the syscall table at compile time
 
+// perform the syscall software interrupt
+// returns -1 on failure, or the syscall return value
 int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5) {
     uint32_t ret;
 
+    // retrieve syscall number and arguments from registers
     register uint32_t r_eax asm("eax") = num;
     register uint32_t r_ebx asm("ebx") = a1;
     register uint32_t r_ecx asm("ecx") = a2;
@@ -73,6 +50,7 @@ int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a
     register uint32_t r_esi asm("esi") = a4;
     register uint32_t r_edi asm("edi") = a5;
 
+    // perform software interrupt
     __asm__ volatile("int $0x80"
                      : "=a"(ret)
                      : "a"(r_eax), "b"(r_ebx), "c"(r_ecx), "d"(r_edx), "S"(r_esi), "D"(r_edi)
@@ -83,7 +61,14 @@ int syscall(syscall_num_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a
 
 // fork the current running process
 // return pid_t or -1 on failure
-pid_t sys_fork(void) {
+pid_t sys_fork(struct syscall_args* args) {
+    // no arguments
+    if (args->a1 || args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_fork", RED);
+        return -1;
+    }
+
+    // fetch parent and fork process
     process_t* parent = proc_get_current();
     pid_t child_pid = proc_fork(parent);
 
@@ -94,11 +79,37 @@ pid_t sys_fork(void) {
     return child_pid;
 }
 
-pid_t sys_dup(pid_t pid) {
+pid_t sys_dup(struct syscall_args* args) {
+    if (!args->a1) {
+        log("sys: invalid args passed to sys_dup", RED);
+        return -1;
+    }
+
+    pid_t pid = (pid_t) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_dup", RED);
+        return -1;
+    }
+
     return proc_dup(pid);
 }
 
-int sys_open(void* path, uint32_t flags) {
+// open a file; returns fd or -1
+int sys_open(struct syscall_args* args) {
+    if (!args->a1 || !args->a2) {
+        log("sys: invalid args passed to sys_open", RED);
+        return -1;
+    }
+
+    void* path = (void*) args->a1;
+    uint32_t flags = args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_open", RED);
+        return -1;
+    }
+
     if (!path)
         return -1;
 
@@ -106,6 +117,7 @@ int sys_open(void* path, uint32_t flags) {
 
     int fd;
 
+    // iterate through fds to find a free one
     for (fd = 0; fd < MAX_PROC_FDS; fd++) {
         if (proc->fds[fd].node == NULL) {
             break;
@@ -116,6 +128,7 @@ int sys_open(void* path, uint32_t flags) {
         return -1; // no space
     }
 
+    // create file object and return the file descriptor
     struct vfs_node* file = vfs_open(path, flags);
 
     if (!file) {
@@ -126,7 +139,20 @@ int sys_open(void* path, uint32_t flags) {
     return fd;
 }
 
-int sys_close(int fd) {
+// close an open file descriptor; returns 0 or -1
+int sys_close(struct syscall_args* args) {
+    if (!args->a1) {
+        log("sys: invalid args passed to sys_close", RED);
+        return -1;
+    }
+
+    int fd = (int) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_close", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
 
     if (fd < 0 || fd >= MAX_PROC_FDS) {
@@ -139,35 +165,68 @@ int sys_close(int fd) {
         return -1;
     }
 
+    // close the node of the file descriptor
     vfs_close(desc->node);
 
+    // free the descriptor data structure
     kfree(desc, sizeof(struct vfs_file_descriptor));
     proc->fds[fd].node = NULL;
     return 0;
 }
 
-int sys_read(int fd, void* buf, size_t count) {
+// read from fd; returns bytes read or -1
+int sys_read(struct syscall_args* args) {
+    if (!args->a1 || !args->a2 || !args->a3) {
+        log("sys: invalid args passed to sys_read", RED);
+        return -1;
+    }
+
+    int fd = (int) args->a1;
+    void* buf = (void*) args->a2;
+    size_t count = (size_t) args->a3;
+
+    if (args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_read", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
 
     if (fd < 0 || fd >= MAX_PROC_FDS) {
         return -1;
     }
 
+    // fetch the file descriptor
     struct vfs_file_descriptor* desc = &proc->fds[fd];
 
     if (!desc) {
         return -1;
     }
+
+    // read from the node and return read bytes
     return vfs_read(desc->node, buf, count);
 }
 
-int sys_copy_file_range(int fd_in, int fd_out, size_t count) {
+int sys_copy_file_range(struct syscall_args* args) {
+    if (!args->a1 || !args->a2) {
+        log("sys: wrong arguments passed to sys_copy_file_range", RED);
+        return -1;
+    }
+    int fd_in = (int) args->a1;
+    int fd_out = (int) args->a2;
+    size_t count = (size_t) args->a3;
+    if (args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_copy_file_range", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
 
     if (fd_in < 0 || fd_in >= MAX_PROC_FDS || fd_out < 0 || fd_out >= MAX_PROC_FDS) {
         return -1;
     }
 
+    // resolve and create src and dst file descriptors
     struct vfs_file_descriptor* src = &proc->fds[fd_in];
     struct vfs_file_descriptor* dst = &proc->fds[fd_out];
 
@@ -175,6 +234,7 @@ int sys_copy_file_range(int fd_in, int fd_out, size_t count) {
         return -1;
     }
 
+    // iterate through the file range in chunks
     size_t chunk = 256;
 
     if (count < chunk) {
@@ -189,6 +249,7 @@ int sys_copy_file_range(int fd_in, int fd_out, size_t count) {
 
     size_t total = 0;
 
+    // copy chunks until done
     while (total < count) {
         size_t to_read = count - total;
 
@@ -215,39 +276,71 @@ int sys_copy_file_range(int fd_in, int fd_out, size_t count) {
         }
     }
 
+    // free the buffer and return total bytes copied
     kfree(buffer, sizeof(char) * chunk);
     return total;
 }
 
-int sys_seek(int fd, int offset, int whence) {
+// seek to offset; returns new offset or -1
+int sys_seek(struct syscall_args* args) {
+    if (!args->a1 || !args->a2 || !args->a3) {
+        log("sys: wrong arguments given to sys_seek", RED);
+        return -1;
+    }
+
+    int fd = (int) args->a1;
+    int offset = (int) args->a2;
+    int whence = (int) args->a3;
+
+    if (args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_seek", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
 
     if (fd < 0 || fd >= MAX_PROC_FDS) {
         return -1;
     }
 
+    // fetch the file descriptor
     struct vfs_file_descriptor* desc = &proc->fds[fd];
     if (!desc || !desc->node) {
         return -1;
     }
 
+    // seek to offset of fd node
     return vfs_seek(desc->node, offset, whence);
 }
 
-int sys_write(int fd, void* buf, size_t count) {
+// write to fd; returns bytes written or -1
+int sys_write(struct syscall_args* args) {
+    if (!args->a1 || !args->a2 || !args->a3) {
+        log("sys: wrong args passed to sys_close", RED);
+    }
+
+    int fd = (int) args->a1;
+    void* buf = (void*) args->a2;
+    size_t count = (size_t) args->a3;
+
+    if (args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_close", RED);
+    }
+
     process_t* proc = proc_get_current();
 
-    if (fd < 0 || fd >= MAX_PROC_FDS)
+    if (fd < 0 || fd >= MAX_PROC_FDS) {
         return -1;
-
-    if (!buf)
+    }
+    if (!buf) {
         return -1;
-
+    }
     if (fd == 1) {
         echo(buf, WHITE);
         return 0;
     }
 
+    // fetch the file descriptor
     struct vfs_file_descriptor* desc = &proc->fds[fd];
     if (!desc || !desc->node)
         return -1;
@@ -255,19 +348,30 @@ int sys_write(int fd, void* buf, size_t count) {
     return vfs_write(desc->node, buf, count);
 }
 
-int sys_print(void* str_ptr) {
-    if (!str_ptr)
+// print to console
+// returns number of bytes printed or -1 on failure
+int sys_print(struct syscall_args* args) {
+    if (!args->a1) {
+        log("sys: wrong args passed to sys_print", RED);
         return -1;
+    }
 
-    char* s = (char*) str_ptr;
-    size_t len = flopstrlen(s);
+    char* str_ptr = (char*) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_print", RED);
+        return -1;
+    }
+
+    size_t len = flopstrlen(str_ptr);
     if (len == 0)
         return 0;
 
-    // this calls echo, the kernel printing backend
-    return sys_write(1, s, len);
+    struct syscall_args print_args = {.a1 = 1, .a2 = (uint32_t) str_ptr, .a3 = len};
+    return sys_write(&print_args);
 }
 
+// rollback a failed mmap allocation
 static void sys_mmap_internal_rb(vmm_region_t* region, uintptr_t start_va, uintptr_t end_va) {
     for (uintptr_t va = start_va; va < end_va; va += PAGE_SIZE) {
         uintptr_t phys_addr = vmm_resolve(region, va);
@@ -278,32 +382,41 @@ static void sys_mmap_internal_rb(vmm_region_t* region, uintptr_t start_va, uintp
     }
 }
 
+// allocate and map pages for mmap
 static int sys_mmap_internal_alloc(
     vmm_region_t* region, uintptr_t base_vaddr, uint32_t length, uint32_t flags, struct vfs_node* node) {
     uintptr_t end_vaddr = base_vaddr + length;
-
+    // iterate through each page and allocate + map
     for (uintptr_t cur_vaddr = base_vaddr; cur_vaddr < end_vaddr; cur_vaddr += PAGE_SIZE) {
         void* phys_page = pmm_alloc_page();
         if (!phys_page) {
             sys_mmap_internal_rb(region, base_vaddr, cur_vaddr);
             return -1;
         }
-
+        // if we have a node, read data into the page
         if (node) {
             int read_bytes = vfs_read(node, phys_page, PAGE_SIZE);
+            // zero out the rest of the page if we read less than a page
             if (read_bytes < 0) {
                 uint8_t* bp = (uint8_t*) phys_page;
-                for (size_t i = 0; i < PAGE_SIZE; i++)
+                for (size_t i = 0; i < PAGE_SIZE; i++) {
                     bp[i] = 0;
+                };
+                // partially read page
             } else if ((size_t) read_bytes < PAGE_SIZE) {
                 uint8_t* bp = (uint8_t*) phys_page;
-                for (size_t i = read_bytes; i < PAGE_SIZE; i++)
+                for (size_t i = read_bytes; i < PAGE_SIZE; i++) {
                     bp[i] = 0;
+                }
             }
-        } else {
+
+        }
+        // no node, just zero the page
+        else {
             uint8_t* bp = (uint8_t*) phys_page;
-            for (size_t i = 0; i < PAGE_SIZE; i++)
+            for (size_t i = 0; i < PAGE_SIZE; i++) {
                 bp[i] = 0;
+            }
         }
 
         vmm_map(region, cur_vaddr, (uintptr_t) phys_page, flags);
@@ -312,10 +425,12 @@ static int sys_mmap_internal_alloc(
     return 0;
 }
 
+// get the virtual address for mmap
 static int sys_mmap_internal_get_va(vmm_region_t* region, uint32_t requested_va, uint32_t length, uint32_t* out_va) {
     if (!region || !out_va)
         return -1;
 
+    // look for a free virtual range
     if (requested_va == 0) {
         uint32_t found_va = vmm_find_free_range(region, length);
         if (!found_va)
@@ -331,6 +446,7 @@ static int sys_mmap_internal_get_va(vmm_region_t* region, uint32_t requested_va,
     return 0;
 }
 
+// find the vfs_node for mmap and seek to offset
 int sys_mmap_internal_find_and_seek(int fd, struct vfs_node** out_node, uint32_t offset) {
     process_t* proc = proc_get_current();
 
@@ -338,6 +454,7 @@ int sys_mmap_internal_find_and_seek(int fd, struct vfs_node** out_node, uint32_t
         return -1;
     }
 
+    // fetch file descriptor
     struct vfs_file_descriptor* descriptor = &proc->fds[fd];
 
     if (!descriptor || !descriptor->node) {
@@ -346,6 +463,7 @@ int sys_mmap_internal_find_and_seek(int fd, struct vfs_node** out_node, uint32_t
 
     *out_node = descriptor->node;
 
+    // seek to offset and return 0
     if (vfs_seek(*out_node, offset, 0) < 0) {
         return -1;
     }
@@ -353,13 +471,27 @@ int sys_mmap_internal_find_and_seek(int fd, struct vfs_node** out_node, uint32_t
     return 0;
 }
 
-int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offset) {
+// mmap; returns virtual address or -1
+int sys_mmap(struct syscall_args* args) {
+    if (!args->a1 || !args->a2 || !args->a3 || !args->a4 || !args->a5) {
+        log("sys: wrong args passed to sys_mmap", RED);
+        return -1;
+    }
+
+    uintptr_t addr = (uintptr_t) args->a1;
+    uint32_t len = (uint32_t) args->a2;
+    uint32_t flags = (uint32_t) args->a3;
+    int fd = (int) args->a4;
+    uint32_t offset = (uint32_t) args->a5;
+
     if (len == 0) {
         return -1;
     }
 
+    // mmap length must be page aligned
     len = ALIGN_UP(len, PAGE_SIZE);
 
+    // fetch current process and vm region
     process_t* proc = proc_get_current();
     vmm_region_t* region = proc->region;
 
@@ -367,6 +499,7 @@ int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offs
         return -1;
     }
 
+    // find vfs_node if fd is given
     struct vfs_node* node = NULL;
     if (fd >= 0) {
         if (sys_mmap_internal_find_and_seek(fd, &node, offset) < 0) {
@@ -374,31 +507,53 @@ int sys_mmap(uintptr_t addr, uint32_t len, uint32_t flags, int fd, uint32_t offs
         }
     }
 
+    // get the virtual address to map
     uintptr_t map_start_va;
     if (sys_mmap_internal_get_va(region, addr, len, (uint32_t*) &map_start_va) < 0) {
         return -1;
     }
 
+    // allocate and map pages
     if (sys_mmap_internal_alloc(region, map_start_va, len, flags, node) < 0) {
         return -1;
     }
 
+    // return the starting virtual address
     return map_start_va;
 }
 
-int sys_mremap(uintptr_t addr, uint32_t old_len, uint32_t new_len, uint32_t flags) {
+// mremap; returns virtual address or -1
+int sys_mremap(struct syscall_args* args) {
+    if (!args->a1 || !args->a2 || !args->a3 || !args->a4) {
+        log("sys: wrong args passed to sys_mremap", RED);
+        return -1;
+    }
+
+    uintptr_t addr = (uintptr_t) args->a1;
+    uint32_t old_len = (uint32_t) args->a2;
+    uint32_t new_len = (uint32_t) args->a3;
+    uint32_t flags = (uint32_t) args->a4;
+
+    if (args->a5) {
+        log("sys: invalid args passed to sys_mremap", RED);
+        return -1;
+    }
+
     if (old_len == 0 || new_len == 0)
         return -1;
 
+    // page align new and old lengths
     old_len = ALIGN_UP(old_len, PAGE_SIZE);
     new_len = ALIGN_UP(new_len, PAGE_SIZE);
 
+    // fetch current process and vm region
     process_t* proc = proc_get_current();
     if (!proc || !proc->region)
         return -1;
 
     vmm_region_t* region = proc->region;
 
+    // if same length, nothing to do
     if (new_len == old_len) {
         return addr;
     } else if (new_len < old_len) {
@@ -412,24 +567,27 @@ int sys_mremap(uintptr_t addr, uint32_t old_len, uint32_t new_len, uint32_t flag
         uintptr_t expand_start = addr + old_len;
         uintptr_t expand_end = addr + new_len;
 
+        // iterate through each page and allocate + map
         for (uintptr_t va = expand_start; va < expand_end; va += PAGE_SIZE) {
             void* phys_page = pmm_alloc_page();
+            // allocation failed, rollback and return -1
             if (!phys_page) {
                 sys_mmap_internal_rb(region, expand_start, va);
                 return -1;
             }
-
+            // zero out the page
             uint8_t* bp = (uint8_t*) phys_page;
             for (size_t i = 0; i < PAGE_SIZE; i++)
                 bp[i] = 0;
-
+            // map the page
             vmm_map(region, va, (uintptr_t) phys_page, flags);
         }
-
+        // return the starting virtual address
         return addr;
     }
 }
 
+// validate a memory mapping for munmap
 static int sys_munmap_internal_validate(vmm_region_t* region, uintptr_t addr, uint32_t len) {
     if (!region)
         return -1;
@@ -445,6 +603,7 @@ static int sys_munmap_internal_validate(vmm_region_t* region, uintptr_t addr, ui
     return 0;
 }
 
+// free physical pages for munmap; also unmaps them
 static void sys_munmap_internal_free_phys(vmm_region_t* region, uintptr_t start_va, uintptr_t end_va) {
     for (uintptr_t va = start_va; va < end_va; va += PAGE_SIZE) {
         uintptr_t phys = vmm_resolve(region, va);
@@ -455,6 +614,7 @@ static void sys_munmap_internal_free_phys(vmm_region_t* region, uintptr_t start_
     }
 }
 
+// unmap a memory range for munmap
 static int sys_munmap_internal_unmap_range(vmm_region_t* region, uintptr_t addr, uint32_t len) {
     uintptr_t end = addr + len;
 
@@ -470,6 +630,7 @@ static int sys_munmap_internal_unmap_range(vmm_region_t* region, uintptr_t addr,
     return 0;
 }
 
+// fetch region, validate and unmap range for munmap
 static int sys_munmap_internal(process_t* proc, uintptr_t addr, uint32_t len) {
     if (!proc || !proc->region)
         return -1;
@@ -484,59 +645,158 @@ static int sys_munmap_internal(process_t* proc, uintptr_t addr, uint32_t len) {
     return sys_munmap_internal_unmap_range(region, addr, len);
 }
 
-int sys_munmap(uintptr_t addr, uint32_t len) {
-    process_t* proc = proc_get_current();
-    if (!proc)
+// munmap; returns 0 or -1
+int sys_munmap(struct syscall_args* args) {
+    if (!args->a1 || !args->a2) {
+        log("sys: wrong args passed to sys_munmap", RED);
         return -1;
+    }
 
+    uintptr_t addr = (uintptr_t) args->a1;
+    uint32_t len = (uint32_t) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_munmap", RED);
+        return -1;
+    }
+
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return -1;
+    }
     return sys_munmap_internal(proc, addr, len);
 }
 
-int sys_stat(char* path, stat_t* st) {
-    if (!path || !st)
+// stat a file; returns 0 or -1
+int sys_stat(struct syscall_args* args) {
+    if (!args->a1 || !args->a2) {
+        log("sys: wrong args passed to sys_stat", RED);
         return -1;
+    }
 
+    char* path = (char*) args->a1;
+    stat_t* st = (stat_t*) args->a2;
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_stat", RED);
+        return -1;
+    }
     return vfs_stat(path, st);
 }
 
-int sys_fstat(int fd, stat_t* st) {
+// fstat a file descriptor; returns 0 or -1
+int sys_fstat(struct syscall_args* args) {
+    if (!args->a1 || !args->a2) {
+        log("sys: wrong args passed to sys_fstat", RED);
+        return -1;
+    }
+
+    int fd = (int) args->a1;
+    stat_t* st = (stat_t*) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_fstat", RED);
+        return -1;
+    }
     process_t* proc = proc_get_current();
 
-    if (fd < 0 || fd >= MAX_PROC_FDS)
+    if (fd < 0 || fd >= MAX_PROC_FDS) {
         return -1;
+    }
 
     struct vfs_file_descriptor* d = &proc->fds[fd];
-    if (!d || !d->node)
+
+    if (!d || !d->node) {
         return -1;
+    }
 
     return vfs_fstat(d->node, st);
 }
 
-int sys_unlink(char* path) {
-    if (!path)
+// unlink a file; returns 0 or -1
+int sys_unlink(struct syscall_args* args) {
+    if (!args->a1) {
+        log("sys: wrong args passed to sys_unlink", RED);
         return -1;
+    }
+
+    char* path = (char*) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_unlink", RED);
+        return -1;
+    }
+
     return vfs_unlink(path);
 }
 
-int sys_mkdir(char* path, uint32_t mode) {
-    if (!path)
+// create a directory; returns 0 or -1
+int sys_mkdir(struct syscall_args* args) {
+    if (!args->a1 || !args->a2) {
+        log("sys: wrong arguments passed to sys_mkdir", RED);
         return -1;
+    }
+
+    char* path = (char*) args->a1;
+    uint32_t mode = (uint32_t) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_mkdir", RED);
+        return -1;
+    }
+
     return vfs_mkdir(path, mode);
 }
 
-int sys_rmdir(char* path) {
-    if (!path)
+// remove a directory; returns 0 or -1
+int sys_rmdir(struct syscall_args* args) {
+    if (!args->a1) {
+        log("sys: wrong arguments passed to sys_rmdir", RED);
         return -1;
+    }
+
+    char* path = (char*) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_truncate", RED);
+        return -1;
+    }
+
     return vfs_rmdir(path);
 }
 
-int sys_truncate(char* path, uint64_t length) {
-    if (!path)
+// truncate a file; returns 0 or -1
+int sys_truncate(struct syscall_args* args) {
+    if (!args->a1 || !args->a2) {
+        log("sys: wrong arguments passed to sys_truncate", RED);
         return -1;
+    }
+
+    char* path = (char*) args->a1;
+    uint64_t length = (uint32_t) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_truncate", RED);
+        return -1;
+    }
+
     return vfs_truncate_path(path, length);
 }
 
-int sys_ftruncate(int fd, uint64_t length) {
+// ftruncate a file descriptor; returns 0 or -1
+int sys_ftruncate(struct syscall_args* args) {
+    if (!args->a1 || !args->a2) {
+        log("sys: wrong arguments passed to sys_ftruncate", RED);
+        return -1;
+    }
+
+    int fd = (int) args->a1;
+    uint64_t length = (uint64_t) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_ftruncate", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
     if (fd < 0 || fd >= MAX_PROC_FDS)
         return -1;
@@ -548,13 +808,28 @@ int sys_ftruncate(int fd, uint64_t length) {
     return vfs_ftruncate(desc->node, length);
 }
 
-int sys_rename(char* oldpath, char* newpath) {
-    if (!oldpath || !newpath)
+// rename a file; returns 0 or -1
+int sys_rename(struct syscall_args* args) {
+    if (!args || !args->a1 || !args->a2) {
+        log("sys: invalid args passed to sys_rename", RED);
         return -1;
+    }
+
+    char* oldpath = (char*) args->a1;
+    char* newpath = (char*) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_rename", RED);
+        return -1;
+    }
+
     return vfs_rename(oldpath, newpath);
 }
 
-pid_t sys_getpid() {
+// getpid; returns pid_t or -1 on failure
+pid_t sys_getpid(struct syscall_args* args) {
+    (void) args;
+
     process_t* proc = proc_get_current();
     if (!proc) {
         return -1;
@@ -562,7 +837,10 @@ pid_t sys_getpid() {
     return proc->pid;
 }
 
-uid_t sys_getuid() {
+// getuid; returns uid_t or -1 on failure
+uid_t sys_getuid(struct syscall_args* args) {
+    (void) args;
+
     process_t* proc = proc_get_current();
     if (!proc) {
         return (uid_t) -1;
@@ -570,15 +848,21 @@ uid_t sys_getuid() {
     return proc->uid;
 }
 
-pid_t sys_getgid() {
+// get group id; returns gid_t or -1 on failure
+pid_t sys_getgid(struct syscall_args* args) {
+    (void) args;
+
     process_t* proc = proc_get_current();
     if (!proc) {
-        return (uid_t) -1;
+        return (pid_t) -1;
     }
     return proc->gid;
 }
 
-uid_t sys_geteuid() {
+// get effective user id; returns uid_t or -1 on failure
+uid_t sys_geteuid(struct syscall_args* args) {
+    (void) args;
+
     process_t* proc = proc_get_current();
     if (!proc) {
         return (uid_t) -1;
@@ -586,15 +870,31 @@ uid_t sys_geteuid() {
     return proc->ruid;
 }
 
-pid_t sys_getsid() {
+// get session id; returns pid_t or -1 on failure
+pid_t sys_getsid(struct syscall_args* args) {
+    (void) args;
+
     process_t* proc = proc_get_current();
     if (!proc) {
-        return (uid_t) -1;
+        return (pid_t) -1;
     }
     return proc->sid;
 }
 
-int sys_setsid(pid_t sid) {
+// set session id; returns 0 or -1 on failure
+int sys_setsid(struct syscall_args* args) {
+    if (!args) {
+        log("sys: invalid args passed to sys_setsid", RED);
+        return -1;
+    }
+
+    pid_t sid = (pid_t) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_setsid", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
     if (!proc) {
         return -1;
@@ -604,7 +904,21 @@ int sys_setsid(pid_t sid) {
     return 0;
 }
 
-int sys_regidt(pid_t rgid, pid_t gid) {
+// register user and group ids; returns 0 or -1 on failure
+int sys_regidt(struct syscall_args* args) {
+    if (!args) {
+        log("sys: invalid args passed to sys_regidt", RED);
+        return -1;
+    }
+
+    pid_t rgid = (pid_t) args->a1;
+    pid_t gid = (pid_t) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_regidt", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
     if (!proc) {
         return -1;
@@ -621,7 +935,21 @@ int sys_regidt(pid_t rgid, pid_t gid) {
     return 0;
 }
 
-int sys_setuid(pid_t ruid, uid_t uid) {
+// set user id of the current process; returns 0 or -1 on failure
+int sys_setuid(struct syscall_args* args) {
+    if (!args) {
+        log("sys: invalid args passed to sys_setuid", RED);
+        return -1;
+    }
+
+    pid_t ruid = (pid_t) args->a1;
+    uid_t uid = (uid_t) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_setuid", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
     if (!proc) {
         return -1;
@@ -631,14 +959,28 @@ int sys_setuid(pid_t ruid, uid_t uid) {
         proc->ruid = ruid;
     }
 
-    if (uid != (pid_t) -1) {
+    if (uid != (uid_t) -1) {
         proc->uid = uid;
     }
 
     return 0;
 }
 
-int sys_setgid(pid_t rgid, pid_t gid) {
+// set group id of the current process; returns 0 or -1 on failure
+int sys_setgid(struct syscall_args* args) {
+    if (!args) {
+        log("sys: invalid args passed to sys_setgid", RED);
+        return -1;
+    }
+
+    pid_t rgid = (pid_t) args->a1;
+    pid_t gid = (pid_t) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_setgid", RED);
+        return -1;
+    }
+
     process_t* proc = proc_get_current();
     if (!proc) {
         return -1;
@@ -655,38 +997,64 @@ int sys_setgid(pid_t rgid, pid_t gid) {
     return 0;
 }
 
-pid_t sys_chdir(char* path) {
-    if (!path)
+// change working directory; returns 0 or -1 on failure
+int sys_chdir(struct syscall_args* args) {
+    if (!args || !args->a1) {
+        log("sys: invalid args passed to sys_chdir", RED);
         return -1;
+    }
+
+    char* path = (char*) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_chdir", RED);
+        return -1;
+    }
 
     process_t* proc = proc_get_current();
-    if (!proc)
+    if (!proc) {
         return -1;
+    }
 
     struct vfs_node* new_directory = vfs_open(path, 0);
-    if (!new_directory)
+    if (!new_directory) {
         return -1;
+    }
 
-    if (proc->cwd)
+    if (proc->cwd) {
         vfs_close(proc->cwd);
+    }
 
     proc->cwd = new_directory;
     return 0;
 }
 
-int sys_reboot() {
+// reboot the system; does not return
+// uses qemu hypervisor call
+int sys_reboot(struct syscall_args* args) {
+    (void) args;
     qemu_power_off();
     return 0;
 }
 
-int sys_pipe(int pipefd[2]) {
-    if (!pipefd)
+// create a pipe; returns 0 or -1 on failure
+int sys_pipe(struct syscall_args* args) {
+    if (!args || !args->a1) {
+        log("sys: invalid args passed to sys_pipe", RED);
         return -1;
+    }
+
+    int* pipefd = (int*) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_pipe", RED);
+        return -1;
+    }
 
     pipe_t* p = kmalloc(sizeof(pipe_t));
-    if (!p)
+    if (!p) {
         return -1;
-
+    }
     pipe_init(p);
 
     process_t* proc = proc_get_current();
@@ -695,7 +1063,8 @@ int sys_pipe(int pipefd[2]) {
         return -1;
     }
 
-    int read_fd = -1, write_fd = -1;
+    int read_fd = -1;
+    int write_fd = -1;
     for (int i = 0; i < MAX_PROC_FDS; i++) {
         if (proc->fds[i].node == NULL) {
             if (read_fd < 0) {
@@ -721,97 +1090,201 @@ int sys_pipe(int pipefd[2]) {
     return 0;
 }
 
-pid_t sys_clone(uint32_t flags, void* stack) {
+// clone a process; returns pid_t or -1 on failure
+int sys_clone(struct syscall_args* args) {
+    if (!args) {
+        log("sys: invalid args passed to sys_clone", RED);
+        return -1;
+    }
+
+    uint32_t flags = (uint32_t) args->a1;
+    void* stack = (void*) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_clone", RED);
+        return -1;
+    }
+
     (void) flags;
     (void) stack;
 
     process_t* parent = proc_get_current();
-    if (!parent)
+    if (!parent) {
         return -1;
+    }
 
     pid_t child_pid = proc_fork(parent);
-    if (child_pid < 0)
+    if (child_pid < 0) {
         return -1;
-
+    }
     return child_pid;
 }
 
-int sys_ioctl(int fd, int request, void* arg) {
-    process_t* proc = proc_get_current();
-    if (!proc || fd < 0 || fd >= MAX_PROC_FDS)
+// perform an ioctl on a file descriptor; returns result or -1 on failure
+int sys_ioctl(struct syscall_args* args) {
+    if (!args || !args->a1 || !args->a2) {
+        log("sys: invalid args passed to sys_ioctl", RED);
         return -1;
+    }
+
+    int fd = (int) args->a1;
+    int request = (int) args->a2;
+    void* arg = (void*) args->a3;
+
+    if (args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_ioctl", RED);
+        return -1;
+    }
+
+    process_t* proc = proc_get_current();
+    if (!proc || fd < 0 || fd >= MAX_PROC_FDS) {
+        return -1;
+    }
 
     struct vfs_file_descriptor* desc = &proc->fds[fd];
-    if (!desc || !desc->node)
+    if (!desc || !desc->node) {
         return -1;
+    }
 
-    if (desc->node->ops->ioctl)
+    if (desc->node->ops->ioctl) {
         return desc->node->ops->ioctl(desc->node, request, (unsigned long) arg);
-
+    }
     return -1;
 }
 
-int sys_sched_yield() {
+// yield the CPU to another process; returns 0
+int sys_sched_yield(struct syscall_args* args) {
+    (void) args;
     sched_yield();
     return 0;
 }
 
 extern proc_table_t* proc_tbl;
 
-int sys_kill(pid_t pid) {
-    process_t* proc = proc_get_current();
-    if (!proc)
+// kill a process; returns 0 or -1 on failure
+int sys_kill(struct syscall_args* args) {
+    if (!args || !args->a1) {
+        log("sys: invalid args passed to sys_kill", RED);
         return -1;
+    }
+
+    pid_t pid = (pid_t) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_kill", RED);
+        return -1;
+    }
+
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return -1;
+    }
 
     process_t* target_proc = proc_get_process_by_pid(pid);
-    if (!target_proc)
+    if (!target_proc) {
         return -1;
+    }
 
-    if (target_proc->parent != proc)
+    if (target_proc->parent != proc) {
         return -1;
+    }
 
     spinlock(&proc_tbl->proc_table_lock);
-
     target_proc->state = TERMINATED;
-
     spinlock_unlock(&proc_tbl->proc_table_lock, true);
     return 0;
 }
 
-int sys_creat(char* path, uint32_t mode) {
-    if (!path)
+// open or create a file; returns 0 or -1 on failure
+int sys_creat(struct syscall_args* args) {
+    if (!args || !args->a1) {
+        log("sys: invalid args passed to sys_creat", RED);
         return -1;
+    }
+
+    char* path = (char*) args->a1;
+    uint32_t mode = (uint32_t) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_creat", RED);
+        return -1;
+    }
 
     return vfs_open(path, VFS_MODE_CREATE | VFS_MODE_TRUNCATE | VFS_MODE_RW | mode) ? 0 : -1;
 }
 
-int sys_link(char* oldpath, char* newpath) {
-    if (!oldpath || !newpath)
+// create a hard link; returns 0 or -1 on failure
+int sys_link(struct syscall_args* args) {
+    if (!args || !args->a1 || !args->a2) {
+        log("sys: invalid args passed to sys_link", RED);
         return -1;
+    }
+
+    char* oldpath = (char*) args->a1;
+    char* newpath = (char*) args->a2;
+
+    if (args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_link", RED);
+        return -1;
+    }
 
     return vfs_link(oldpath, newpath);
 }
 
-int sys_get_priority_max() {
+// get maximum priority; returns max priority
+int sys_get_priority_max(struct syscall_args* args) {
+    (void) args;
     return MAX_PRIORITY;
 }
 
-int sys_get_priority_min() {
+// get minimum priority; returns min priority
+int sys_get_priority_min(struct syscall_args* args) {
+    (void) args;
     return 0;
 }
 
-int sys_fsmount(char* source, char* target, int flags) {
+// mount a filesystem; returns 0 or -1 on failure
+int sys_fsmount(struct syscall_args* args) {
+    if (!args || !args->a1 || !args->a2) {
+        log("sys: invalid args passed to sys_fsmount", RED);
+        return -1;
+    }
+
+    char* source = (char*) args->a1;
+    char* target = (char*) args->a2;
+    int flags = (int) args->a3;
+
+    if (args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_fsmount", RED);
+        return -1;
+    }
+
     return vfs_mount(source, target, flags);
 }
 
-int sys_exit_group(int status) {
-    process_t* proc = proc_get_current();
-    if (!proc)
+// exit all threads in the current process; returns 0 or -1 on failure
+int sys_exit_group(struct syscall_args* args) {
+    if (!args) {
+        log("sys: invalid args passed to sys_exit_group", RED);
         return -1;
+    }
+
+    int status = (int) args->a1;
+
+    if (args->a2 || args->a3 || args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_exit_group", RED);
+        return -1;
+    }
+
+    process_t* proc = proc_get_current();
+    if (!proc) {
+        return -1;
+    }
 
     for (int fd = 0; fd < MAX_PROC_FDS; fd++) {
         if (proc->fds[fd].node) {
-            sys_close(fd);
+            struct syscall_args args = {.a1 = fd};
+            sys_close(&args);
         }
     }
 
@@ -819,32 +1292,55 @@ int sys_exit_group(int status) {
     return 0;
 }
 
-struct vfs_node* sys_getcwd() {
-    process_t* proc = proc_get_current();
-    if (!proc || !proc->cwd)
-        return NULL;
+// get current working directory; returns vfs_node or NULL on failure
+int sys_getcwd(struct syscall_args* args) {
+    (void) args;
 
-    return proc->cwd;
+    process_t* proc = proc_get_current();
+    if (!proc || !proc->cwd) {
+        return 0;
+    }
+
+    return (int) (uintptr_t) proc->cwd;
 }
 
-int sys_mprotect(uintptr_t addr, uint32_t len, uint32_t flags) {
-    process_t* proc = proc_get_current();
-    if (!proc || !proc->region)
+// protect a memory region; returns 0 or -1 on failure
+int sys_mprotect(struct syscall_args* args) {
+    if (!args || !args->a1 || !args->a2 || !args->a3) {
+        log("sys: invalid args passed to sys_mprotect", RED);
         return -1;
+    }
+
+    uintptr_t addr = (uintptr_t) args->a1;
+    uint32_t len = (uint32_t) args->a2;
+    uint32_t flags = (uint32_t) args->a3;
+
+    if (args->a4 || args->a5) {
+        log("sys: invalid args passed to sys_mprotect", RED);
+        return -1;
+    }
+
+    process_t* proc = proc_get_current();
+    if (!proc || !proc->region) {
+        return -1;
+    }
 
     vmm_region_t* region = proc->region;
 
-    if (len == 0)
+    if (len == 0) {
         return -1;
+    }
 
-    if (addr & (PAGE_SIZE - 1))
+    if (addr & (PAGE_SIZE - 1)) {
         return -1;
+    }
 
     len = ALIGN_UP(len, PAGE_SIZE);
     uintptr_t end = addr + len;
 
     for (uintptr_t va = addr; va < end; va += PAGE_SIZE) {
         uintptr_t phys = vmm_resolve(region, va);
+
         if (!phys) {
             return -1;
         }
@@ -857,9 +1353,11 @@ int sys_mprotect(uintptr_t addr, uint32_t len, uint32_t flags) {
     return 0;
 }
 
+// called by the assembly syscall_routine when handling the 0x80 software interrupt
 void c_syscall_routine() {
     uint32_t num, a1, a2, a3, a4, a5;
-
+    int ret;
+    // fetch args
     asm volatile("mov %%eax, %0\n"
                  "mov %%ebx, %1\n"
                  "mov %%ecx, %2\n"
@@ -868,267 +1366,10 @@ void c_syscall_routine() {
                  "mov %%edi, %5\n"
                  : "=r"(num), "=r"(a1), "=r"(a2), "=r"(a3), "=r"(a4), "=r"(a5));
 
-    int ret = -1;
+    struct syscall_args args = {.a1 = a1, .a2 = a2, .a3 = a3, .a4 = a4, .a5 = a5};
 
-    switch (num) {
-        case SYSCALL_READ:
-            ret = sys_read(a1, (void*) a2, a3);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_read failed\n", RED);
-            }
-            break;
-        case SYSCALL_WRITE:
-            ret = sys_write(a1, (void*) a2, a3);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_write failed\n", RED);
-            }
-            break;
-        case SYSCALL_OPEN:
-            ret = sys_open((char*) a1, a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_open failed\n", RED);
-            }
-            break;
-        case SYSCALL_CLOSE:
-            ret = sys_close(a1);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_close failed\n", RED);
-            }
-            break;
-        case SYSCALL_FORK:
-            ret = sys_fork();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_fork failed\n", RED);
-            }
-            break;
-        case SYSCALL_MMAP:
-            ret = sys_mmap(a1, a2, a3, a4, a5);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_mmap failed\n", RED);
-            }
-            break;
-        case SYSCALL_STAT:
-            ret = sys_stat((char*) a1, (stat_t*) a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_stat failed\n", RED);
-            }
-            break;
-        case SYSCALL_FSTAT:
-            ret = sys_fstat(a1, (stat_t*) a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_fstat failed\n", RED);
-            }
-            break;
-        case SYSCALL_UNLINK:
-            ret = sys_unlink((char*) a1);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_unlink failed\n", RED);
-            }
-            break;
-        case SYSCALL_MKDIR:
-            ret = sys_mkdir((char*) a1, a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_mkdir failed\n", RED);
-            }
-            break;
-        case SYSCALL_RMDIR:
-            ret = sys_rmdir((char*) a1);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_rmdir failed\n", RED);
-            }
-            break;
-        case SYSCALL_TRUNCATE:
-            ret = sys_truncate((char*) a1, a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_truncate failed\n", RED);
-            }
-            break;
-        case SYSCALL_FTRUNCATE:
-            ret = sys_ftruncate(a1, a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_ftruncate failed\n", RED);
-            }
-            break;
-        case SYSCALL_RENAME:
-            ret = sys_rename((char*) a1, (char*) a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_rename failed\n", RED);
-            }
-            break;
-        case SYSCALL_GETPID:
-            ret = sys_getpid();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_getpid failed\n", RED);
-            }
-            break;
-        case SYSCALL_CHDIR:
-            ret = sys_chdir((char*) a1);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_chdir failed\n", RED);
-            }
-            break;
-        case SYSCALL_DUP:
-            ret = sys_dup(a1);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_dup failed\n", RED);
-            }
-            break;
-        case SYSCALL_PIPE:
-            ret = sys_pipe((int*) a1);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_pipe failed\n", RED);
-            }
-            break;
-        case SYSCALL_CLONE:
-            ret = sys_clone(a1, (void*) a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_clone failed\n", RED);
-            }
-            break;
-        case SYSCALL_IOCTL:
-            ret = sys_ioctl(a1, a2, (void*) a3);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_ioctl failed\n", RED);
-            }
-            break;
-        case SYSCALL_PRINT:
-            ret = sys_print((void*) a1);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_print failed\n", RED);
-            }
-            break;
-        case SYSCALL_REBOOT:
-            ret = sys_reboot();
-            // if we get here we're fucked
-            if (ret < 0) {
-                log("c_syscall_routine: sys_reboot failed\n", RED);
-            }
-            break;
-        case SYSCALL_SEEK:
-            ret = sys_seek(a1, a2, a3);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_seek failed\n", RED);
-            }
-            break;
-        case SYSCALL_MUNMAP:
-            ret = sys_munmap(a1, a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_munmap failed\n", RED);
-            }
-            break;
-        case SYSCALL_CREAT:
-            ret = sys_creat((char*) a1, a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_creat failed\n", RED);
-            }
-            break;
-        case SYSCALL_SCHED_YIELD:
-            ret = sys_sched_yield();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_sched_yield failed\n", RED);
-            }
-            break;
-        case SYSCALL_KILL:
-            ret = sys_kill(a1);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_kill failed\n", RED);
-            }
-            break;
-        case SYSCALL_LINK:
-            ret = sys_link((char*) a1, (char*) a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_link failed\n", RED);
-            }
-            break;
-        case SYSCALL_GETUID:
-            ret = sys_getuid();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_getuid failed\n", RED);
-            }
-            break;
-        case SYSCALL_GETGID:
-            ret = sys_getgid();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_getgid failed\n", RED);
-            }
-            break;
-        case SYSCALL_GETEUID:
-            ret = sys_geteuid();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_geteuid failed\n", RED);
-            }
-            break;
-        case SYSCALL_GETSID:
-            ret = sys_getsid();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_getsid failed\n", RED);
-            }
-            break;
-        case SYSCALL_SETUID:
-            ret = sys_setuid((pid_t) a1, (uid_t) a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_setuid failed\n", RED);
-            }
-
-            break;
-        case SYSCALL_SETGID:
-            ret = sys_setgid((pid_t) a1, (pid_t) a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_setgid failed\n", RED);
-            }
-            break;
-        case SYSCALL_REGIDT:
-            ret = sys_regidt((pid_t) a1, (pid_t) a2);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_regidt failed\n", RED);
-            }
-            break;
-        case SYSCALL_GET_PRIORITY_MAX:
-            ret = sys_get_priority_max();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_get_priority_max failed\n", RED);
-            }
-            break;
-        case SYSCALL_GET_PRIORITY_MIN:
-            ret = sys_get_priority_min();
-            if (ret < 0) {
-                log("c_syscall_routine: sys_get_priority_min failed\n", RED);
-            }
-            break;
-        case SYSCALL_FSMOUNT:
-            ret = sys_fsmount((char*) a1, (char*) a2, (int) a3);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_fsmount failed\n", RED);
-            }
-            break;
-        case SYSCALL_COPY_FILE_RANGE:
-            ret = sys_copy_file_range((int) a1, (int) a2, (size_t) a3);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_copy_file_range failed\n", RED);
-            }
-            break;
-        case SYSCALL_GETCWD:
-            struct vfs_node* node = sys_getcwd();
-            if (!node) {
-                log("c_syscall_routine: sys_getcwd failed\n", RED);
-            }
-            break;
-        case SYSCALL_MPROTECT:
-            ret = sys_mprotect(a1, a2, a3);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_mprotect failed\n", RED);
-            }
-            break;
-        case SYSCALL_MREMAP:
-            ret = sys_mremap(a1, a2, a3, a4);
-            if (ret < 0) {
-                log("c_syscall_routine: sys_mremap failed\n", RED);
-            }
-            break;
-        default:
-            log("c_syscall_routine: Unknown syscall number\n", RED);
-            break;
-    }
+    // index the function pointer of the requested syscall
+    ret = syscall_dispatch_table[num](&args);
 
     asm volatile("mov %0, %%eax" ::"r"(ret));
 }

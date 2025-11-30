@@ -79,6 +79,19 @@ static void proc_family_add_child(process_t* parent, process_t* child) {
     parent->children = child;
 }
 
+// Add two children to a parent's children list as twins
+static void proc_twin_child_add(process_t* parent, process_t* child1, process_t* child2) {
+    if (!parent || !child1 || !child2) {
+        return;
+    }
+
+    child1->parent = parent;
+    child2->parent = parent;
+    child1->siblings = child2;
+    child2->siblings = parent->children;
+    parent->children = child1;
+}
+
 // remove child from parent's children list
 static void proc_family_remove_child(process_t* parent, process_t* child) {
     if (!parent || !child) {
@@ -771,7 +784,7 @@ static int proc_terminate_all_threads(process_t* process) {
     return 0;
 }
 
-static int proc_resource_clean(process_t* process) {
+static int proc_clean(process_t* process) {
     if (!process)
         return -1;
 
@@ -831,7 +844,7 @@ static int proc_terminate_process(process_t* process) {
         return -1;
 
     proc_terminate_all_threads(process);
-    proc_resource_clean(process);
+    proc_clean(process);
     proc_remove_process_from_table(process);
 
     spinlock(&proc_tbl->proc_table_lock);

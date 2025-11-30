@@ -12,7 +12,7 @@ You should have received a copy of the GNU General Public License along with Flo
 ---------------------------------------------------------------
 io.c 
 
-I/O functions for FloppaOS, using inline assembly.
+I/O functions for the flopperating system, using inline assembly.
 ---------------------------------------------------------------
 
 */
