@@ -1354,22 +1354,8 @@ int sys_mprotect(struct syscall_args* args) {
 }
 
 // called by the assembly syscall_routine when handling the 0x80 software interrupt
-void c_syscall_routine() {
-    uint32_t num, a1, a2, a3, a4, a5;
-    int ret;
-    // fetch args
-    asm volatile("mov %%eax, %0\n"
-                 "mov %%ebx, %1\n"
-                 "mov %%ecx, %2\n"
-                 "mov %%edx, %3\n"
-                 "mov %%esi, %4\n"
-                 "mov %%edi, %5\n"
-                 : "=r"(num), "=r"(a1), "=r"(a2), "=r"(a3), "=r"(a4), "=r"(a5));
-
+int c_syscall_routine(uint32_t num, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5) {
     struct syscall_args args = {.a1 = a1, .a2 = a2, .a3 = a3, .a4 = a4, .a5 = a5};
 
-    // index the function pointer of the requested syscall
-    ret = syscall_dispatch_table[num](&args);
-
-    asm volatile("mov %0, %%eax" ::"r"(ret));
+    return syscall_dispatch_table[num](&args);
 }
