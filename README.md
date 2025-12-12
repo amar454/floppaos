@@ -5,7 +5,7 @@
 
 ### **Copyright © Amar Djulovic 2024, 2025**  
 
-#### The Flopperating System, or (formally) floppaOS is a lightweight, monolithic, and multitasking hobby operating system. It targets the i386 platform. It is all designed by me and all code was made by me. My goal is simplicity, performance, ease of use, code readabiliy, and nice namespacing. This project is my prized possession and will most likely be a thesis for college.
+#### The Flopperating System, or (formally) floppaOS is a lightweight, monolithic, and multitasking hobby operating system kernel. It targets the i386 platform. It is all designed by me and all code was made by me. My goal is simplicity, performance, ease of use, code readabiliy, and nice namespacing. This project is my prized possession and will most likely be a thesis for college.
 
 ---
 
